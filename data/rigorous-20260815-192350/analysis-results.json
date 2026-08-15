@@ -1,0 +1,37 @@
+{
+  "protocol": "rigorous-v1",
+  "sessions": 5,
+  "total_observations": 1000,
+  "noir": {
+    "median_ms": 0.6820128000000001,
+    "mean_ms": 0.75750586028,
+    "std_ms": 0.25644377649688904,
+    "p95_ms": 1.3210080339999997,
+    "p99_ms": 1.9375581183999997
+  },
+  "gpui": {
+    "median_ms": 1.27767894,
+    "mean_ms": 1.3238836788400001,
+    "std_ms": 0.31501840465121744,
+    "p95_ms": 1.6441780159999997,
+    "p99_ms": 2.6330272131999988
+  },
+  "effect_size": {
+    "hodges_lehmann_diff_ms": -0.57540736,
+    "bootstrap_ci_95_ms": [
+      -0.5844231,
+      -0.5660818999999999
+    ],
+    "relative_improvement_pct": 46.620956278734624
+  },
+  "hypothesis_tests": {
+    "wilcoxon_p": 2.7591285542115576e-151,
+    "paired_t_p": 1.2303740414539121e-272,
+    "tost_equivalence_p": 1.0
+  },
+  "session_consistency": {
+    "favoring_noir": 5,
+    "total_sessions": 5
+  },
+  "conclusion": "significant_meaningful"
+}
