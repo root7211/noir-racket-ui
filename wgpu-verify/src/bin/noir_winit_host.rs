@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::sync::{mpsc, Arc};
@@ -131,6 +131,24 @@ struct CompiledDataRegisterTable {
     atlas_page: u32,
     glyph_ids: Vec<u32>,
 }
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum DataRegisterTableWire {
+    Table(DataRegisterTable),
+    Disabled(bool),
+}
+
+fn deserialize_data_register_table_option<'de, D>(deserializer: D) -> std::result::Result<Option<DataRegisterTable>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match DataRegisterTableWire::deserialize(deserializer)? {
+        DataRegisterTableWire::Table(table) => Ok(Some(table)),
+        DataRegisterTableWire::Disabled(false) => Ok(None),
+        DataRegisterTableWire::Disabled(true) => Err(serde::de::Error::custom("data_register_table may be an object or false, never true")),
+    }
+}
 #[derive(Clone, Debug, Deserialize)]
 struct DeclaredDataUpdate { index: usize, value: String }
 #[derive(Clone, Debug, Deserialize)]
@@ -243,6 +261,7 @@ struct VirtualListPlan {
     logical_data_ids: Vec<String>,
     logical_labels: Vec<String>,
     initial_ring_slots: Vec<usize>,
+    #[serde(default, deserialize_with = "deserialize_data_register_table_option")]
     data_register_table: Option<DataRegisterTable>,
     data_update_batches: Vec<DeclaredDataUpdateBatch>,
     visible_rows: usize,
@@ -1251,7 +1270,7 @@ impl Host {
         let size = window.inner_size();
         let instance = wgpu::Instance::default();
         let surface = instance.create_surface(window.clone()).context("create wgpu surface")?;
-        let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions { power_preference: wgpu::PowerPreference::HighPerformance, compatible_surface: Some(&surface), force_fallback_adapter: false }).await.context("request surface adapter")?;
+        let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions { power_preference: wgpu::PowerPreference::HighPerformance, compatible_surface: Some(&surface), force_fallback_adapter: false, apply_limit_buckets: false }).await.context("request surface adapter")?;
         let adapter_info = adapter.get_info();
         let timestamp_features = wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS;
         let timestamp_supported = adapter.features().contains(timestamp_features);
@@ -1263,10 +1282,10 @@ impl Host {
         let subgroup_supported = subgroup_adapter_supported && subgroup_wgsl_supported;
         let mut requested_features = if timestamp_supported { timestamp_features } else { wgpu::Features::empty() };
         if subgroup_supported { requested_features |= wgpu::Features::SUBGROUP; }
-        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor { label: Some("noir-winit-host-device"), required_features: requested_features, required_limits: wgpu::Limits::downlevel_defaults() }, None).await?;
+        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor { label: Some("noir-winit-host-device"), required_features: requested_features, required_limits: wgpu::Limits::downlevel_defaults(), experimental_features: Default::default(), memory_hints: Default::default(), trace: Default::default() }).await?;
         let caps = surface.get_capabilities(&adapter);
         let format = caps.formats.iter().copied().find(|f| f.is_srgb()).unwrap_or(caps.formats[0]);
-        let config = wgpu::SurfaceConfiguration { usage: wgpu::TextureUsages::RENDER_ATTACHMENT, format, width: size.width.max(1), height: size.height.max(1), present_mode: wgpu::PresentMode::Fifo, alpha_mode: caps.alpha_modes[0], view_formats: vec![], desired_maximum_frame_latency: 2 };
+        let config = wgpu::SurfaceConfiguration { usage: wgpu::TextureUsages::RENDER_ATTACHMENT, format, color_space: wgpu::SurfaceColorSpace::Auto, width: size.width.max(1), height: size.height.max(1), present_mode: wgpu::PresentMode::Fifo, alpha_mode: caps.alpha_modes[0], view_formats: vec![], desired_maximum_frame_latency: 2 };
         surface.configure(&device, &config);
 
         compiler_abi_contracts(&scene)?;
@@ -2059,9 +2078,9 @@ impl Host {
         let slice = timer.readback_buffer.slice(..);
         let (sender, receiver) = mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |result| { let _ = sender.send(result); });
-        self.device.poll(wgpu::Maintain::Wait);
+        if self.device.poll(wgpu::PollType::wait_indefinitely()).is_err() { return None; }
         receiver.recv().ok()?.ok()?;
-        let mapped = slice.get_mapped_range();
+        let mapped = match slice.get_mapped_range() { Ok(mapped) => mapped, Err(_) => { timer.readback_buffer.unmap(); return None; } };
         if mapped.len() != 16 { drop(mapped); timer.readback_buffer.unmap(); return None; }
         let values: &[u64] = bytemuck::cast_slice(&mapped);
         let elapsed = values[1].checked_sub(values[0]).map(|ticks| ticks as f64 * timer.timestamp_period_ns as f64);
@@ -2075,7 +2094,7 @@ impl Host {
         let mut encoder=self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor{label:Some("noir-full-replay-canvas")});
         self.encode_packet_activity(&mut encoder, 0);
         if measure_gpu { if let Some(timer)=self.gpu_timer.as_ref() { encoder.write_timestamp(&timer.query_set, 0); } }
-        { let mut pass=encoder.begin_render_pass(&wgpu::RenderPassDescriptor{label:Some("noir-full-replay-canvas-pass"),color_attachments:&[Some(wgpu::RenderPassColorAttachment{view:&self.canvas_view,resolve_target:None,ops:wgpu::Operations{load:wgpu::LoadOp::Clear(wgpu::Color{r:0.008,g:0.012,b:0.025,a:1.0}),store:wgpu::StoreOp::Store}})],depth_stencil_attachment:None,timestamp_writes:None,occlusion_query_set:None});
+        { let mut pass=encoder.begin_render_pass(&wgpu::RenderPassDescriptor{label:Some("noir-full-replay-canvas-pass"),color_attachments:&[Some(wgpu::RenderPassColorAttachment{view:&self.canvas_view,resolve_target:None,depth_slice:None,ops:wgpu::Operations{load:wgpu::LoadOp::Clear(wgpu::Color{r:0.008,g:0.012,b:0.025,a:1.0}),store:wgpu::StoreOp::Store}})],depth_stencil_attachment:None,timestamp_writes:None,occlusion_query_set: None, multiview_mask: None});
             self.draw_ranges(&mut pass,std::iter::once(&all));
             self.draw_all_glyph_packets(&mut pass);
         }
@@ -2094,7 +2113,7 @@ impl Host {
         let all=DrawRange{first_instance:0,instance_count:self.instances.len() as u32};
         let mut encoder=self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor{label:Some("noir-full-canvas")});
         self.encode_packet_activity(&mut encoder, 0);
-        { let mut pass=encoder.begin_render_pass(&wgpu::RenderPassDescriptor{label:Some("noir-full-canvas-pass"),color_attachments:&[Some(wgpu::RenderPassColorAttachment{view:&self.canvas_view,resolve_target:None,ops:wgpu::Operations{load:wgpu::LoadOp::Clear(wgpu::Color{r:0.008,g:0.012,b:0.025,a:1.0}),store:wgpu::StoreOp::Store}})],depth_stencil_attachment:None,timestamp_writes:None,occlusion_query_set:None});
+        { let mut pass=encoder.begin_render_pass(&wgpu::RenderPassDescriptor{label:Some("noir-full-canvas-pass"),color_attachments:&[Some(wgpu::RenderPassColorAttachment{view:&self.canvas_view,resolve_target:None,depth_slice:None,ops:wgpu::Operations{load:wgpu::LoadOp::Clear(wgpu::Color{r:0.008,g:0.012,b:0.025,a:1.0}),store:wgpu::StoreOp::Store}})],depth_stencil_attachment:None,timestamp_writes:None,occlusion_query_set: None, multiview_mask: None});
           self.draw_ranges(&mut pass,std::iter::once(&all)); self.draw_all_glyph_packets(&mut pass); }
         self.queue.submit(Some(encoder.finish())); self.canvas_dirty=false;
     }
@@ -2107,7 +2126,7 @@ impl Host {
         let mut encoder=self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor{label:Some("noir-selected-tile-canvas")});
         self.encode_packet_activity(&mut encoder, request.packet_worklist_index);
         if measure_gpu { if let Some(timer)=self.gpu_timer.as_ref() { encoder.write_timestamp(&timer.query_set, 0); } }
-        { let mut pass=encoder.begin_render_pass(&wgpu::RenderPassDescriptor{label:Some("noir-selected-tile-canvas-pass"),color_attachments:&[Some(wgpu::RenderPassColorAttachment{view:&self.canvas_view,resolve_target:None,ops:wgpu::Operations{load:wgpu::LoadOp::Load,store:wgpu::StoreOp::Store}})],depth_stencil_attachment:None,timestamp_writes:None,occlusion_query_set:None});
+        { let mut pass=encoder.begin_render_pass(&wgpu::RenderPassDescriptor{label:Some("noir-selected-tile-canvas-pass"),color_attachments:&[Some(wgpu::RenderPassColorAttachment{view:&self.canvas_view,resolve_target:None,depth_slice:None,ops:wgpu::Operations{load:wgpu::LoadOp::Load,store:wgpu::StoreOp::Store}})],depth_stencil_attachment:None,timestamp_writes:None,occlusion_query_set: None, multiview_mask: None});
           for (tile_index, tile) in schedule.tiles.iter().enumerate() {
               if selected_mask & (1u64 << tile_index) == 0 { continue; }
               stats.tile_count += 1;
@@ -2536,16 +2555,16 @@ impl Host {
             (plan.id.clone(), plan.scroll_scissor.clone(), row_draw_ranges, row_glyph_subranges)
         };
         let transition = VirtualScrollTransition { from_slot: viewport_slot, to_slot: viewport_slot, visible_row_tile_ids: Vec::new(), instance_y_patches: Vec::new(), glyph_y_patches: Vec::new(), glyph_id_patches: Vec::new(), scissor };
-        let scissor_x = (transition.scissor.x.max(0.0) as u32).min(self.config.width.saturating_sub(1));
-        let scissor_y = (transition.scissor.y.max(0.0) as u32).min(self.config.height.saturating_sub(1));
-        let scissor_width = (transition.scissor.width.max(1.0) as u32).min(self.config.width.saturating_sub(scissor_x)).max(1);
-        let scissor_height = (transition.scissor.height.max(1.0) as u32).min(self.config.height.saturating_sub(scissor_y)).max(1);
+        let scissor_x = (transition.scissor.x.max(0.0).round() as u32).min(self.config.width.saturating_sub(1));
+        let scissor_y = (transition.scissor.y.max(0.0).round() as u32).min(self.config.height.saturating_sub(1));
+        let scissor_width = (transition.scissor.width.max(1.0).round() as u32).min(self.config.width.saturating_sub(scissor_x)).max(1);
+        let scissor_height = (transition.scissor.height.max(1.0).round() as u32).min(self.config.height.saturating_sub(scissor_y)).max(1);
         let submitted_quad_instances = row_draw_ranges.iter().map(|range| range.instance_count).sum::<u32>();
         let submitted_glyph_placements = row_glyph_subranges.iter().map(|range| range.count).sum::<u32>();
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("noir-virtual-list-scroll") });
         self.encode_packet_activity(&mut encoder, RenderRequest::NO_PACKETS);
         {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("noir-virtual-list-scroll-pass"), color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &self.canvas_view, resolve_target: None, ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store } })], depth_stencil_attachment: None, timestamp_writes: None, occlusion_query_set: None });
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("noir-virtual-list-scroll-pass"), color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &self.canvas_view, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store } })], depth_stencil_attachment: None, timestamp_writes: None, occlusion_query_set: None, multiview_mask: None});
             pass.set_scissor_rect(scissor_x, scissor_y, scissor_width, scissor_height);
             pass.set_pipeline(&self.static_pipeline); pass.set_vertex_buffer(0, self.unit_quad.slice(..)); pass.set_vertex_buffer(1, self.clear_buffer.slice(..)); pass.draw(0..6, 0..1);
             self.draw_ranges(&mut pass, row_draw_ranges.iter());
@@ -3062,10 +3081,10 @@ impl Host {
         if self.canvas_dirty {
             self.redraw_canvas_requests();
         }
-        let output=match self.surface.get_current_texture(){Ok(v)=>v,Err(wgpu::SurfaceError::Lost|wgpu::SurfaceError::Outdated)=>{self.surface.configure(&self.device,&self.config);return Ok(())},Err(wgpu::SurfaceError::Timeout)=>return Ok(()),Err(e)=>return Err(anyhow::anyhow!(e))};
+        let output=match self.surface.get_current_texture(){wgpu::CurrentSurfaceTexture::Success(v)|wgpu::CurrentSurfaceTexture::Suboptimal(v)=>v,wgpu::CurrentSurfaceTexture::Lost|wgpu::CurrentSurfaceTexture::Outdated=>{self.surface.configure(&self.device,&self.config);return Ok(())},wgpu::CurrentSurfaceTexture::Timeout|wgpu::CurrentSurfaceTexture::Occluded=>return Ok(()),wgpu::CurrentSurfaceTexture::Validation=>return Err(anyhow::anyhow!("wgpu surface validation failure"))};
         let view=output.texture.create_view(&wgpu::TextureViewDescriptor::default()); let mut encoder=self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor{label:Some("noir-present")});
-        { let mut pass=encoder.begin_render_pass(&wgpu::RenderPassDescriptor{label:Some("noir-present-pass"),color_attachments:&[Some(wgpu::RenderPassColorAttachment{view:&view,resolve_target:None,ops:wgpu::Operations{load:wgpu::LoadOp::Clear(wgpu::Color::BLACK),store:wgpu::StoreOp::Store}})],depth_stencil_attachment:None,timestamp_writes:None,occlusion_query_set:None}); pass.set_pipeline(&self.blit_pipeline); pass.set_bind_group(0,&self.blit_bind_group,&[]); pass.draw(0..3,0..1); }
-        self.queue.submit(Some(encoder.finish())); output.present(); Ok(())
+        { let mut pass=encoder.begin_render_pass(&wgpu::RenderPassDescriptor{label:Some("noir-present-pass"),color_attachments:&[Some(wgpu::RenderPassColorAttachment{view:&view,resolve_target:None,depth_slice:None,ops:wgpu::Operations{load:wgpu::LoadOp::Clear(wgpu::Color::BLACK),store:wgpu::StoreOp::Store}})],depth_stencil_attachment:None,timestamp_writes:None,occlusion_query_set: None, multiview_mask: None}); pass.set_pipeline(&self.blit_pipeline); pass.set_bind_group(0,&self.blit_bind_group,&[]); pass.draw(0..3,0..1); }
+        self.queue.submit(Some(encoder.finish())); self.queue.present(output); Ok(())
     }
     fn resize(&mut self,size:PhysicalSize<u32>){if size.width==0||size.height==0{return};self.size=size;self.config.width=size.width;self.config.height=size.height;self.surface.configure(&self.device,&self.config);}
 }
@@ -3179,8 +3198,8 @@ fn write_freshness_diagnostic(
 }
 
 fn make_static_pipeline(device:&wgpu::Device, format:wgpu::TextureFormat)->wgpu::RenderPipeline{
- let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor{label:Some("noir-static-quad"),source:wgpu::ShaderSource::Wgsl(include_str!("../host_quad.wgsl").into())}); let layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{label:Some("noir-static-layout"),bind_group_layouts:&[],push_constant_ranges:&[]});
- device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{label:Some("noir-static-pipeline"),layout:Some(&layout),vertex:wgpu::VertexState{module:&shader,entry_point:"vs_main",buffers:&[unit_layout(),static_instance_layout()],compilation_options:Default::default()},fragment:Some(wgpu::FragmentState{module:&shader,entry_point:"fs_main",targets:&[Some(wgpu::ColorTargetState{format,blend:Some(wgpu::BlendState::ALPHA_BLENDING),write_mask:wgpu::ColorWrites::ALL})],compilation_options:Default::default()}),primitive:wgpu::PrimitiveState::default(),depth_stencil:None,multisample:wgpu::MultisampleState::default(),multiview:None})
+ let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor{label:Some("noir-static-quad"),source:wgpu::ShaderSource::Wgsl(include_str!("../host_quad.wgsl").into())}); let layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{label:Some("noir-static-layout"),bind_group_layouts:&[],immediate_size:0});
+ device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{label:Some("noir-static-pipeline"),layout:Some(&layout),vertex:wgpu::VertexState{module:&shader,entry_point:Some("vs_main"),buffers:&[Some(unit_layout()),Some(static_instance_layout())],compilation_options:Default::default()},fragment:Some(wgpu::FragmentState{module:&shader,entry_point:Some("fs_main"),targets:&[Some(wgpu::ColorTargetState{format,blend:Some(wgpu::BlendState::ALPHA_BLENDING),write_mask:wgpu::ColorWrites::ALL})],compilation_options:Default::default()}),primitive:wgpu::PrimitiveState::default(),depth_stencil:None,multisample:wgpu::MultisampleState::default(),multiview_mask:None,cache:None})
 }
 fn dispatch_packet_activity<'a>(pass: &mut wgpu::ComputePass<'a>, activity: &'a PacketActivityResources, worklist_index: usize) {
     let dynamic_offset = (worklist_index as u32)
@@ -3195,10 +3214,10 @@ fn readback_bytes(device: &wgpu::Device, buffer: &wgpu::Buffer, size: u64) -> Re
     let slice = buffer.slice(..size);
     let (sender, receiver) = mpsc::channel();
     slice.map_async(wgpu::MapMode::Read, move |result| { let _ = sender.send(result); });
-    device.poll(wgpu::Maintain::Wait);
+    device.poll(wgpu::PollType::wait_indefinitely()).context("packet differential device poll failed")?;
     receiver.recv().context("packet differential readback channel closed")??;
-    let bytes = slice.get_mapped_range().to_vec();
-    drop(slice);
+    let bytes = slice.get_mapped_range().context("read packet activity mapped range")?.to_vec();
+    let _ = slice;
     buffer.unmap();
     Ok(bytes)
 }
@@ -3293,24 +3312,24 @@ fn make_packet_activity_resources(device: &wgpu::Device, glyph_buffer: &wgpu::Bu
         PacketActivityVariant::Subgroup => (include_str!("../host_packet_activity_subgroup.wgsl"), "packet_activity_subgroup", "noir-packet-activity-subgroup-shader"),
     };
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some(label), source: wgpu::ShaderSource::Wgsl(shader_source.into()) });
-    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("noir-subgroup-packet-activity-pipeline-layout"), bind_group_layouts: &[&bind_group_layout], push_constant_ranges: &[] });
-    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor { label: Some("noir-subgroup-packet-activity-pipeline"), layout: Some(&layout), module: &shader, entry_point, compilation_options: Default::default() });
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("noir-subgroup-packet-activity-pipeline-layout"), bind_group_layouts: &[Some(&bind_group_layout)], immediate_size: 0 });
+    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor { label: Some("noir-subgroup-packet-activity-pipeline"), layout: Some(&layout), module: &shader, entry_point: Some(entry_point), compilation_options: Default::default(), cache: None });
     println!("compiler resident packet worklist table: lists={} payload_bytes={} stride_bytes={} hot_path_uploads=0", worklists.len(), payload_size, worklist_stride);
     Some(PacketActivityResources { variant, _descriptor_buffer: descriptor_buffer, activity_buffer, _worklist_buffer: worklist_buffer, worklist_stride: worklist_stride as u32, worklist_count: worklists.len() as u32, indirect_buffer, bind_group, pipeline, packet_count: packets.len() as u32 })
 }
 
 fn make_text_resources(device:&wgpu::Device,queue:&wgpu::Queue,format:wgpu::TextureFormat,glyph_buffer:&wgpu::Buffer)->Result<(wgpu::BindGroup,wgpu::RenderPipeline)> {
          let atlas=device.create_texture(&wgpu::TextureDescriptor{label:Some("noir-glyph-atlas-pages"),size:wgpu::Extent3d{width:ATLAS_WIDTH,height:ATLAS_HEIGHT,depth_or_array_layers:ATLAS_PAGES},mip_level_count:1,sample_count:1,dimension:wgpu::TextureDimension::D2,format:wgpu::TextureFormat::R8Unorm,usage:wgpu::TextureUsages::TEXTURE_BINDING|wgpu::TextureUsages::COPY_DST,view_formats:&[]});
- queue.write_texture(wgpu::ImageCopyTexture{texture:&atlas,mip_level:0,origin:wgpu::Origin3d{x:0,y:0,z:0},aspect:wgpu::TextureAspect::All},&digit_atlas_pixels(),wgpu::ImageDataLayout{offset:0,bytes_per_row:Some(ATLAS_WIDTH),rows_per_image:Some(ATLAS_HEIGHT)},wgpu::Extent3d{width:ATLAS_WIDTH,height:ATLAS_HEIGHT,depth_or_array_layers:1});
- queue.write_texture(wgpu::ImageCopyTexture{texture:&atlas,mip_level:0,origin:wgpu::Origin3d{x:0,y:0,z:1},aspect:wgpu::TextureAspect::All},&ascii_atlas_pixels(),wgpu::ImageDataLayout{offset:0,bytes_per_row:Some(ATLAS_WIDTH),rows_per_image:Some(ATLAS_HEIGHT)},wgpu::Extent3d{width:ATLAS_WIDTH,height:ATLAS_HEIGHT,depth_or_array_layers:1});
+ queue.write_texture(wgpu::TexelCopyTextureInfo{texture:&atlas,mip_level:0,origin:wgpu::Origin3d{x:0,y:0,z:0},aspect:wgpu::TextureAspect::All},&digit_atlas_pixels(),wgpu::TexelCopyBufferLayout{offset:0,bytes_per_row:Some(ATLAS_WIDTH),rows_per_image:Some(ATLAS_HEIGHT)},wgpu::Extent3d{width:ATLAS_WIDTH,height:ATLAS_HEIGHT,depth_or_array_layers:1});
+ queue.write_texture(wgpu::TexelCopyTextureInfo{texture:&atlas,mip_level:0,origin:wgpu::Origin3d{x:0,y:0,z:1},aspect:wgpu::TextureAspect::All},&ascii_atlas_pixels(),wgpu::TexelCopyBufferLayout{offset:0,bytes_per_row:Some(ATLAS_WIDTH),rows_per_image:Some(ATLAS_HEIGHT)},wgpu::Extent3d{width:ATLAS_WIDTH,height:ATLAS_HEIGHT,depth_or_array_layers:1});
  let view=atlas.create_view(&wgpu::TextureViewDescriptor{dimension:Some(wgpu::TextureViewDimension::D2Array),..Default::default()}); let sampler=device.create_sampler(&wgpu::SamplerDescriptor{label:Some("noir-digit-atlas-sampler"),mag_filter:wgpu::FilterMode::Nearest,min_filter:wgpu::FilterMode::Nearest,..Default::default()});
  let bgl=device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor{label:Some("noir-glyph-bgl"),entries:&[wgpu::BindGroupLayoutEntry{binding:0,visibility:wgpu::ShaderStages::VERTEX,ty:wgpu::BindingType::Buffer{ty:wgpu::BufferBindingType::Storage{read_only:true},has_dynamic_offset:false,min_binding_size:None},count:None},wgpu::BindGroupLayoutEntry{binding:1,visibility:wgpu::ShaderStages::FRAGMENT,ty:wgpu::BindingType::Texture{multisampled:false,view_dimension:wgpu::TextureViewDimension::D2Array,sample_type:wgpu::TextureSampleType::Float{filterable:true}},count:None},wgpu::BindGroupLayoutEntry{binding:2,visibility:wgpu::ShaderStages::FRAGMENT,ty:wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),count:None}]});
  let bind_group=device.create_bind_group(&wgpu::BindGroupDescriptor{label:Some("noir-glyph-bind"),layout:&bgl,entries:&[wgpu::BindGroupEntry{binding:0,resource:glyph_buffer.as_entire_binding()},wgpu::BindGroupEntry{binding:1,resource:wgpu::BindingResource::TextureView(&view)},wgpu::BindGroupEntry{binding:2,resource:wgpu::BindingResource::Sampler(&sampler)}]});
- let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor{label:Some("noir-glyph-placement-shader"),source:wgpu::ShaderSource::Wgsl(include_str!("../host_placement.wgsl").into())}); let layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{label:Some("noir-glyph-placement-layout"),bind_group_layouts:&[&bgl],push_constant_ranges:&[]});
- let pipeline=device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{label:Some("noir-glyph-placement-pipeline"),layout:Some(&layout),vertex:wgpu::VertexState{module:&shader,entry_point:"vs_main",buffers:&[unit_layout(),glyph_placement_layout()],compilation_options:Default::default()},fragment:Some(wgpu::FragmentState{module:&shader,entry_point:"fs_main",targets:&[Some(wgpu::ColorTargetState{format,blend:Some(wgpu::BlendState::ALPHA_BLENDING),write_mask:wgpu::ColorWrites::ALL})],compilation_options:Default::default()}),primitive:wgpu::PrimitiveState::default(),depth_stencil:None,multisample:wgpu::MultisampleState::default(),multiview:None});
+ let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor{label:Some("noir-glyph-placement-shader"),source:wgpu::ShaderSource::Wgsl(include_str!("../host_placement.wgsl").into())}); let layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{label:Some("noir-glyph-placement-layout"),bind_group_layouts:&[Some(&bgl)],immediate_size:0});
+ let pipeline=device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{label:Some("noir-glyph-placement-pipeline"),layout:Some(&layout),vertex:wgpu::VertexState{module:&shader,entry_point:Some("vs_main"),buffers:&[Some(unit_layout()),Some(glyph_placement_layout())],compilation_options:Default::default()},fragment:Some(wgpu::FragmentState{module:&shader,entry_point:Some("fs_main"),targets:&[Some(wgpu::ColorTargetState{format,blend:Some(wgpu::BlendState::ALPHA_BLENDING),write_mask:wgpu::ColorWrites::ALL})],compilation_options:Default::default()}),primitive:wgpu::PrimitiveState::default(),depth_stencil:None,multisample:wgpu::MultisampleState::default(),multiview_mask:None,cache:None});
  Ok((bind_group,pipeline))
 }
-fn make_canvas_and_blit(device:&wgpu::Device,format:wgpu::TextureFormat,width:u32,height:u32)->(wgpu::Texture,wgpu::TextureView,wgpu::BindGroup,wgpu::RenderPipeline){let canvas=device.create_texture(&wgpu::TextureDescriptor{label:Some("noir-canvas"),size:wgpu::Extent3d{width,height,depth_or_array_layers:1},mip_level_count:1,sample_count:1,dimension:wgpu::TextureDimension::D2,format,usage:wgpu::TextureUsages::RENDER_ATTACHMENT|wgpu::TextureUsages::TEXTURE_BINDING,view_formats:&[]});let view=canvas.create_view(&Default::default());let sampler=device.create_sampler(&wgpu::SamplerDescriptor{mag_filter:wgpu::FilterMode::Nearest,min_filter:wgpu::FilterMode::Nearest,..Default::default()});let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor{label:Some("noir-blit"),source:wgpu::ShaderSource::Wgsl(include_str!("../host_blit.wgsl").into())});let bgl=device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor{label:Some("noir-canvas-bgl"),entries:&[wgpu::BindGroupLayoutEntry{binding:0,visibility:wgpu::ShaderStages::FRAGMENT,ty:wgpu::BindingType::Texture{multisampled:false,view_dimension:wgpu::TextureViewDimension::D2,sample_type:wgpu::TextureSampleType::Float{filterable:true}},count:None},wgpu::BindGroupLayoutEntry{binding:1,visibility:wgpu::ShaderStages::FRAGMENT,ty:wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),count:None}]});let bg=device.create_bind_group(&wgpu::BindGroupDescriptor{label:Some("noir-canvas-bg"),layout:&bgl,entries:&[wgpu::BindGroupEntry{binding:0,resource:wgpu::BindingResource::TextureView(&view)},wgpu::BindGroupEntry{binding:1,resource:wgpu::BindingResource::Sampler(&sampler)}]});let layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{label:Some("noir-blit-layout"),bind_group_layouts:&[&bgl],push_constant_ranges:&[]});let pipe=device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{label:Some("noir-blit-pipe"),layout:Some(&layout),vertex:wgpu::VertexState{module:&shader,entry_point:"vs_main",buffers:&[],compilation_options:Default::default()},fragment:Some(wgpu::FragmentState{module:&shader,entry_point:"fs_main",targets:&[Some(wgpu::ColorTargetState{format,blend:None,write_mask:wgpu::ColorWrites::ALL})],compilation_options:Default::default()}),primitive:wgpu::PrimitiveState::default(),depth_stencil:None,multisample:wgpu::MultisampleState::default(),multiview:None});(canvas,view,bg,pipe)}
+fn make_canvas_and_blit(device:&wgpu::Device,format:wgpu::TextureFormat,width:u32,height:u32)->(wgpu::Texture,wgpu::TextureView,wgpu::BindGroup,wgpu::RenderPipeline){let canvas=device.create_texture(&wgpu::TextureDescriptor{label:Some("noir-canvas"),size:wgpu::Extent3d{width,height,depth_or_array_layers:1},mip_level_count:1,sample_count:1,dimension:wgpu::TextureDimension::D2,format,usage:wgpu::TextureUsages::RENDER_ATTACHMENT|wgpu::TextureUsages::TEXTURE_BINDING,view_formats:&[]});let view=canvas.create_view(&Default::default());let sampler=device.create_sampler(&wgpu::SamplerDescriptor{mag_filter:wgpu::FilterMode::Nearest,min_filter:wgpu::FilterMode::Nearest,..Default::default()});let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor{label:Some("noir-blit"),source:wgpu::ShaderSource::Wgsl(include_str!("../host_blit.wgsl").into())});let bgl=device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor{label:Some("noir-canvas-bgl"),entries:&[wgpu::BindGroupLayoutEntry{binding:0,visibility:wgpu::ShaderStages::FRAGMENT,ty:wgpu::BindingType::Texture{multisampled:false,view_dimension:wgpu::TextureViewDimension::D2,sample_type:wgpu::TextureSampleType::Float{filterable:true}},count:None},wgpu::BindGroupLayoutEntry{binding:1,visibility:wgpu::ShaderStages::FRAGMENT,ty:wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),count:None}]});let bg=device.create_bind_group(&wgpu::BindGroupDescriptor{label:Some("noir-canvas-bg"),layout:&bgl,entries:&[wgpu::BindGroupEntry{binding:0,resource:wgpu::BindingResource::TextureView(&view)},wgpu::BindGroupEntry{binding:1,resource:wgpu::BindingResource::Sampler(&sampler)}]});let layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{label:Some("noir-blit-layout"),bind_group_layouts:&[Some(&bgl)],immediate_size:0});let pipe=device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{label:Some("noir-blit-pipe"),layout:Some(&layout),vertex:wgpu::VertexState{module:&shader,entry_point:Some("vs_main"),buffers:&[],compilation_options:Default::default()},fragment:Some(wgpu::FragmentState{module:&shader,entry_point:Some("fs_main"),targets:&[Some(wgpu::ColorTargetState{format,blend:None,write_mask:wgpu::ColorWrites::ALL})],compilation_options:Default::default()}),primitive:wgpu::PrimitiveState::default(),depth_stencil:None,multisample:wgpu::MultisampleState::default(),multiview_mask:None,cache:None});(canvas,view,bg,pipe)}
 fn unit_layout<'a>()->wgpu::VertexBufferLayout<'a>{wgpu::VertexBufferLayout{array_stride:8,step_mode:wgpu::VertexStepMode::Vertex,attributes:&[wgpu::VertexAttribute{format:wgpu::VertexFormat::Float32x2,offset:0,shader_location:0}]}}
 fn static_instance_layout<'a>()->wgpu::VertexBufferLayout<'a>{wgpu::VertexBufferLayout{array_stride:44,step_mode:wgpu::VertexStepMode::Instance,attributes:&[wgpu::VertexAttribute{format:wgpu::VertexFormat::Float32x2,offset:0,shader_location:1},wgpu::VertexAttribute{format:wgpu::VertexFormat::Float32x2,offset:8,shader_location:2},wgpu::VertexAttribute{format:wgpu::VertexFormat::Float32x4,offset:16,shader_location:3},wgpu::VertexAttribute{format:wgpu::VertexFormat::Uint32,offset:32,shader_location:4},wgpu::VertexAttribute{format:wgpu::VertexFormat::Uint32,offset:36,shader_location:5},wgpu::VertexAttribute{format:wgpu::VertexFormat::Uint32,offset:40,shader_location:6}]}}
 

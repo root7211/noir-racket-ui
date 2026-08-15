@@ -12,7 +12,7 @@
 |---|---|
 | 适配器 | 至少记录一块目标部署GPU；研究对照最好覆盖AMD、NVIDIA、Intel。 |
 | 后端 | 优先使用Vulkan；确认日志中的adapter不是llvmpipe/lavapipe。 |
-| 构建 | release；Noir主线维持Rust 1.75约束。GPUI comparator使用其独立新stable工具链。 |
+| 构建 | release；Noir主线使用仓库固定的Rust 1.87与wgpu 30。GPUI comparator继续使用其独立工具链。 |
 | 预热 | 校准至少20次；每个正式workload至少200有效样本，分至少3个独立session。 |
 | 采样顺序 | Noir/GPUI按交替顺序运行，避免温度、频率和cache漂移偏向一方。 |
 
@@ -29,8 +29,14 @@ NOIR_ENTRY_MODULE=examples/data-register-table-10000.rkt \
   PLTCOLLECTS="$PWD:" \
   racket tools/export-dashboard.rkt out/data-register-table-10000.scene.json
 
-# Rust/wgpu host
+# Rust 1.87 / wgpu 30 host（rust-toolchain.toml会固定项目工具链）
 cargo build --release --manifest-path wgpu-verify/Cargo.toml --bin noir_winit_host
+
+# 先验证wgpu 30实际枚举到了物理Vulkan adapter；不需要窗口或Scene。
+cargo run --release --manifest-path wgpu-verify/Cargo.toml --bin noir_wgpu_probe
+
+# WSL环境先记录DXG、ICD、vulkaninfo和wgpu枚举；详见WSL_DOZEN_GPU_DIAGNOSTICS.md。
+./tools/diagnose_wsl_vulkan.sh
 
 # 不要求物理显示时，可验证所有已冻结的Scene ABI与X11输入路径
 ./tools/verify_frozen_list_abi.sh
@@ -119,6 +125,9 @@ BENCHMARKS/<device>-environment.md
 ## 6. 发布前检查
 
 ```bash
+# probe必须至少报告一个Vulkan DiscreteGpu或IntegratedGpu；Cpu/llvmpipe不合格。
+./wgpu-verify/target/release/noir_wgpu_probe
+
 # 适配器必须不是软件适配器。
 grep -E 'adapter|llvmpipe|lavapipe' out/real-gpu-wgpu-benchmark.json
 

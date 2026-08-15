@@ -19,7 +19,7 @@ PLTCOLLECTS="$PWD:/usr/share/racket/collects" racket tests/run.rkt
 
 ## 真实 GPU 性能测量
 
-当前仓库的 llvmpipe/Vulkan 数据用于验证编译期工作范围与回归协议，不能直接代表物理GPU性能。请阅读 [真实 GPU 性能测量指南](REAL_GPU_BENCHMARKING.md)，其中定义了真实adapter验证、device-specific calibration、长列表/scrollbar/keyboard路径、GPUI公平对照与结果提交格式。
+当前仓库的 llvmpipe/Vulkan 数据用于验证编译期工作范围与回归协议，不能直接代表物理GPU性能。主线现在固定为Rust 1.87与wgpu 30；请先运行 `cargo run --release --manifest-path wgpu-verify/Cargo.toml --bin noir_wgpu_probe` 确认真实Vulkan适配器，再阅读 [真实 GPU 性能测量指南](REAL_GPU_BENCHMARKING.md)。WSL用户还应先执行 [`tools/diagnose_wsl_vulkan.sh`](tools/diagnose_wsl_vulkan.sh) 并遵循 [WSL / Dozen 诊断指南](WSL_DOZEN_GPU_DIAGNOSTICS.md)。
 
 ## 用户看到的语言
 
