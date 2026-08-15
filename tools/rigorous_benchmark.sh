@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # rigorous_benchmark.sh - 统计学正确的 Noir vs GPUI 基准测试
 set -euo pipefail
+set -o pipefail
 
 SESSIONS=5
 WARMUP_BATCHES=50
@@ -70,19 +71,21 @@ run_batch() {
     
     # 等待所有事件完成
     for _ in $(seq 1 300); do
-        count=$(grep -c "$expected" "$log" 2>/dev/null || echo 0)
+        count=$(grep -c "$expected" "$log" 2>/dev/null || printf "0")
         if [[ "$count" -ge "$clicks" ]]; then break; fi
         sleep 0.01
     done
     end=$(date +%s%N)
     
-    count=$(grep -c "$expected" "$log" 2>/dev/null || echo 0)
+    count=$(grep -c "$expected" "$log" 2>/dev/null || printf "0")
     kill "$app_pid" 2>/dev/null || true
     wait "$app_pid" 2>/dev/null || true
     rm -f "$log"
     
     if [[ "$count" -ne "$clicks" ]]; then
-        echo "WARNING: $framework batch incomplete: $count/$clicks events" >&2
+        echo "{\"session_id\":\"$SESSION_ID\",\"framework\":\"$framework\",\"batch_id\":$batch_id,\"expected\":$clicks,\"actual\":$count,\"status\":\"incomplete\"}" \
+          >> "$OUTPUT_DIR/incomplete-batches.jsonl"
+        echo "WARNING: $framework batch $batch_id incomplete: $count/$clicks events" >&2
         return 1
     fi
     
@@ -94,13 +97,32 @@ for session in $(seq 1 $SESSIONS); do
     SESSION_ID="session-$(printf "%02d" $session)"
     echo "=== Starting $SESSION_ID ($(date)) ===" | tee -a "$OUTPUT_DIR/progress.log"
     
+    # 采集详细环境元数据
+    ADAPTER_INFO=$(WGPU_BACKEND=vulkan "$NOIR_BIN" --help 2>&1 >/dev/null | head -1 || echo "N/A")
+    GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    NOIR_SHA256=$(sha256sum "$NOIR_BIN" 2>/dev/null | awk '{print $1}' || echo "N/A")
+    GPUI_SHA256=$(sha256sum "$GPUI_BIN" 2>/dev/null | awk '{print $1}' || echo "N/A")
+    CPU_GOVERNOR=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo "unknown")
+    
     # 记录 session 环境
     cat > "$OUTPUT_DIR/${SESSION_ID}-env.json" << EOF
 {
   "session_id": "$SESSION_ID",
   "session_number": $session,
-  "cpu_governor": "$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo 'unknown')",
-  "start_time": "$(date -Iseconds)"
+  "start_time": "$(date -Iseconds)",
+  "adapter": {
+    "probe_output": "$ADAPTER_INFO"
+  },
+  "system": {
+    "os": "$(uname -s) $(uname -r)",
+    "cpu_governor": "$CPU_GOVERNOR",
+    "power_state": "unknown"
+  },
+  "build": {
+    "git_commit": "$GIT_COMMIT",
+    "noir_binary_sha256": "$NOIR_SHA256",
+    "gpui_binary_sha256": "$GPUI_SHA256"
+  }
 }
 EOF
     
