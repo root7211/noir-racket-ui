@@ -862,7 +862,7 @@ scene-glyph-draw-packets
   (struct c-state (id initial source) #:transparent)
   (struct c-action (id state op value source) #:transparent)
   ;; state 为 #f 表示编译期静态 shaped text；glyph-ids/advances/page 是后端可直接消费的资源计划。
-  (struct c-binding (node-id state offset byte-length glyph-count atlas-page glyph-ids glyph-advances face-id) #:transparent)
+  (struct c-binding (node-id state mutable? offset byte-length glyph-count atlas-page glyph-ids glyph-advances face-id) #:transparent)
   ;; progress 的 value 不触发 layout solve，而是映射到预分配 QuadInstance 的 size.x。
   (struct c-instance-binding (node-id state max-value layout) #:transparent)
   (struct c-event (slot node-id action action-index action-ids transaction-op transaction-index x y width height z-index instance-offset
@@ -1106,9 +1106,14 @@ scene-glyph-draw-packets
               (struct-copy c-coalesced-batch batch
                            [strategy-id 'coalesced]
                            [candidate-costs (hash 'coalesced 0.0)]
+                           ;; No replay profile is an explicit compile-time condition, not a
+                           ;; runtime gap. Select the canonical coalesced baseline and emit
+                           ;; its winner so the host can still prove executor/Scene agreement.
                            [selection-proof (hash 'mode 'profile-unavailable
                                                   'profile_id active-profile-id
-                                                  'semantic_group replay-semantic-group)])
+                                                  'semantic_group replay-semantic-group
+                                                  'selection_metric 'static-default
+                                                  'winner 'coalesced)])
               (let* ([costs
                       (for/hash ([candidate (in-list candidates)])
                         (values (string->symbol (format "~a" (profile-ref candidate 'strategy_id #f)))
@@ -1188,13 +1193,17 @@ scene-glyph-draw-packets
     (struct-copy c-coalesced-batch batch
                  [strategy-id 'coalesced]
                  [candidate-costs (hash 'coalesced 0.0)]
-                 ;; 保持 Rust 已验证的 profile-unavailable ABI；附加字段仅加强审计。
-                 [selection-proof (hash 'mode 'profile-unavailable
-                                        'profile_id active-profile-id
-                                        'semantic_group replay-semantic-group
-                                        'reason reason
-                                        'admission_policy (c-profile-admission-policy active-profile-admission)
-                                        'freshness_status (c-profile-admission-status active-profile-admission))]))
+                  ;; No fresh calibration may change the strategy at runtime. The
+                  ;; compiler emits the canonical coalesced fallback winner together
+                  ;; with the admission reason so host replay can prove the fixed path.
+                  [selection-proof (hash 'mode 'profile-unavailable
+                                         'profile_id active-profile-id
+                                         'semantic_group replay-semantic-group
+                                         'selection_metric 'static-default
+                                         'winner 'coalesced
+                                         'reason reason
+                                         'admission_policy (c-profile-admission-policy active-profile-admission)
+                                         'freshness_status (c-profile-admission-status active-profile-admission))]))
   (define (annotate-profile-admission batch)
     (define proof (c-coalesced-batch-selection-proof batch))
     (struct-copy c-coalesced-batch batch
@@ -2120,7 +2129,7 @@ scene-glyph-draw-packets
        (define update-values (map (lambda (value-stx) (component-literal-string 'data-update-batch value-stx)) (syntax->list #'(update-value ...))))
        (for ([value (in-list update-values)])
          (unless (and (<= (string-length value) max-chars-value)
-                      (for/and ([ch (in-string value)]) (or (char=? ch #\space) (char<=? #\A ch #\Z))))
+                      (for/and ([ch (in-string value)]) (or (char=? ch #\space) (char-numeric? ch) (char<=? #\A ch #\Z))))
            (raise-syntax-error 'data-update-batch "updates require fixed-width uppercase ASCII values" stx)))
        (define row-ids (map syntax-e (syntax->list #'(row-id ...))))
        (define row-labels (map (lambda (label-stx) (component-literal-string 'row-template label-stx)) (syntax->list #'(row-label ...))))
@@ -2411,7 +2420,20 @@ scene-glyph-draw-packets
 
   ;; buffer range 在 compiler 中顺序分配；runtime 只接收 offset/length，
   ;; 不负责寻址或重新布局。这正是局部更新语义的第一层证据。
+  ;; Compact data-register rows own fixed glyph cells that are mutable through the
+  ;; register ABI, not through a declared UI state. This marks that distinct source
+  ;; of mutability without adding a runtime lookup or a synthetic state dependency.
+  (define (compact-register-text-node-ids root)
+    (for/fold ([ids (set)]) ([list-node (in-list (walk-nodes root))]
+                              #:when (and (eq? (c-node-tag list-node) 'virtual-list)
+                                          (hash-ref (c-node-props list-node) 'data-register-table #f)))
+      (for/fold ([row-ids ids]) ([child (in-list (c-node-children list-node))])
+        (for/fold ([next-ids row-ids]) ([descendant (in-list (walk-nodes child))]
+                                      #:when (eq? (c-node-tag descendant) 'text))
+          (set-add next-ids (c-node-id descendant))))))
+
   (define (collect-glyph-bindings root)
+    (define compact-register-ids (compact-register-text-node-ids root))
     (let loop ([nodes (walk-nodes root)] [offset 0] [result '()])
       (cond
         [(null? nodes) (reverse result)]
@@ -2425,7 +2447,7 @@ scene-glyph-draw-packets
             (define glyph-count (hash-ref (c-node-props node) 'max-chars))
             (define charset (hash-ref (c-node-props node) 'charset 'digits))
             (define byte-length (* glyph-count glyph-instance-bytes))
-            (define binding (c-binding (c-node-id node) state-id offset byte-length glyph-count
+            (define binding (c-binding (c-node-id node) state-id #t offset byte-length glyph-count
                                        (if (eq? charset 'ascii-upper) ascii-atlas-page digit-atlas-page)
                                        (if (eq? charset 'ascii-upper) (make-list glyph-count (encode-glyph ascii-atlas-page 0)) '())
                                        (make-list glyph-count 1.0)
@@ -2439,7 +2461,7 @@ scene-glyph-draw-packets
                   (shape-static-ascii 'text static-value (c-node-source node))))
             (define glyph-count (length glyph-ids))
             (define byte-length (* glyph-count glyph-instance-bytes))
-            (define binding (c-binding (c-node-id node) #f offset byte-length glyph-count
+            (define binding (c-binding (c-node-id node) #f (set-member? compact-register-ids (c-node-id node)) offset byte-length glyph-count
                                        page glyph-ids advances face-id))
             (loop (cdr nodes) (+ offset byte-length) (cons binding result))]
            [else (loop (cdr nodes) offset result)])])))
@@ -3141,7 +3163,7 @@ scene-glyph-draw-packets
                            slot node-id glyph-index glyph-id (c-binding-atlas-page binding)
                            glyph-byte-offset (quotient glyph-byte-offset 4)
                            glyph-pos glyph-size (atlas-uv binding glyph-id) advance
-                           (and state-id #t) state-id (and state-id (hash-ref state-indexes state-id))
+                            (c-binding-mutable? binding) state-id (and state-id (hash-ref state-indexes state-id))
                            (c-composite-clip-stack-id composite)
                            (c-composite-clip-rect composite)
                            (c-composite-z-layer composite)
@@ -4582,7 +4604,7 @@ scene-glyph-draw-packets
       (for ([entry (in-list updates)])
         (define value (cdr entry))
         (unless (and (<= (string-length value) width)
-                     (for/and ([ch (in-string value)]) (or (char=? ch #\space) (char<=? #\A ch #\Z))))
+                     (for/and ([ch (in-string value)]) (or (char=? ch #\space) (char-numeric? ch) (char<=? #\A ch #\Z))))
           (raise-syntax-error 'log-browser "append records must be fixed-width uppercase ASCII" (c-log-browser-spec-source spec))))
       (define detail-id (c-log-browser-spec-detail-id spec))
       (define detail-layout (hash-ref layout-by-id detail-id

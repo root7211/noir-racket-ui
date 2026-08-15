@@ -213,6 +213,25 @@ struct CompiledDataRegisterTable {
     glyph_ids: Vec<u32>,
 }
 
+// Compact data registers accept a compiler-proved ASCII subset. Digits select the
+// existing page-0 legacy atlas; uppercase letters and spaces select page 1. The
+// glyph placement address and quad stay fixed, so this is a glyph-ID patch only.
+fn legacy_register_glyph_id(ch: char) -> Result<u32> {
+    match ch {
+        ' ' => Ok(1u32 << 16),
+        '0'..='9' => Ok(ch as u32 - '0' as u32),
+        'A'..='Z' => Ok((1u32 << 16) | (1 + (ch as u32 - 'A' as u32))),
+        _ => anyhow::bail!("compact data register only admits uppercase ASCII, digits, and spaces"),
+    }
+}
+
+fn compact_register_glyphs(value: &str, register_width: usize) -> Result<Vec<u32>> {
+    anyhow::ensure!(value.len() <= register_width, "compact data register exceeds fixed width");
+    let mut glyphs = value.chars().map(legacy_register_glyph_id).collect::<Result<Vec<_>>>()?;
+    glyphs.resize(register_width, 1u32 << 16);
+    Ok(glyphs)
+}
+
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum DataRegisterTableWire {
@@ -2371,10 +2390,9 @@ impl Host {
             let table = plan.data_register_table.as_ref().context("data register patch requires compact data-register-table")?;
             (table.register_width, plan.logical_capacity, plan.row_glyph_slots.clone(), plan.current_viewport_slot, plan.visible_rows, plan.physical_slots)
         };
-        anyhow::ensure!(logical_index < logical_capacity && value.chars().all(|ch| ch == ' ' || ch.is_ascii_uppercase()) && value.len() <= register_width,
-                        "data-register patch violates fixed capacity/uppercase ASCII contract");
-        let mut glyphs = value.chars().map(|ch| if ch == ' ' { 1u32 << 16 } else { (1u32 << 16) | (1 + (ch as u32 - 'A' as u32)) }).collect::<Vec<_>>();
-        glyphs.resize(register_width, 1u32 << 16);
+        anyhow::ensure!(logical_index < logical_capacity,
+                        "data-register patch logical index exceeds fixed capacity");
+        let glyphs = compact_register_glyphs(value, register_width)?;
         {
             let table = self.virtual_lists[list_index].data_register_table.as_mut().expect("admitted compact table");
             let start = logical_index * register_width;
@@ -2402,10 +2420,9 @@ impl Host {
         let mut visible_rows_to_patch = Vec::new();
         let mut arena_only = 0usize;
         for (logical_index, value) in updates {
-            anyhow::ensure!(seen.insert(*logical_index) && *logical_index < logical_capacity && value.chars().all(|ch| ch == ' ' || ch.is_ascii_uppercase()) && value.len() <= register_width,
-                            "data-update-batch violates fixed index, width, or uppercase ASCII proof");
-            let mut glyphs = value.chars().map(|ch| if ch == ' ' { 1u32 << 16 } else { (1u32 << 16) | (1 + (ch as u32 - 'A' as u32)) }).collect::<Vec<_>>();
-            glyphs.resize(register_width, 1u32 << 16);
+            anyhow::ensure!(seen.insert(*logical_index) && *logical_index < logical_capacity,
+                            "data-update-batch violates fixed logical index proof");
+            let glyphs = compact_register_glyphs(value, register_width)?;
             let table = self.virtual_lists[list_index].data_register_table.as_mut().expect("admitted compact table");
             let start = logical_index * register_width;
             table.glyph_ids[start..start + register_width].copy_from_slice(&glyphs);
@@ -2414,6 +2431,15 @@ impl Host {
                 for (glyph_index, slot) in glyph_slots[physical].iter().enumerate() { self.patch_scroll_glyph_id(slot * GLYPH_CELL_BYTES, glyphs[glyph_index]); }
                 visible_rows_to_patch.push(*logical_index);
             } else { arena_only += 1; }
+        }
+        // Application-level status metadata remains outside the frozen list ABI. If this
+        // list has a declared status dashboard, the same verified update batch refreshes
+        // its color source before reusing the existing row-color patch addresses.
+        if let Some(plan_index) = self.log_browser_plans.iter().position(|plan| plan.list_index == list_index) {
+            for (logical_index, value) in updates {
+                self.log_levels[plan_index][*logical_index] = Self::log_level_from_record(value);
+            }
+            self.sync_log_browser_row_colors(list_index);
         }
         if !visible_rows_to_patch.is_empty() { self.enqueue_render(RenderRequest::scroll(list_index, current), "data-update-batch-visible-fusion"); }
         println!("data-update-batch: list={} updates={} visible={} arena-only={} gpu-glyph-writes={} render-request={}", list_id, updates.len(), visible_rows_to_patch.len(), arena_only, visible_rows_to_patch.len() * glyph_slots[0].len(), !visible_rows_to_patch.is_empty());
@@ -2940,7 +2966,14 @@ impl Host {
             observed_winner_write_bytes: applied.winner_writes.iter().map(|write| write.byte_length).sum(),
             self_consistent,
         };
-        anyhow::ensure!(consistency.self_consistent, "compiler-selected replay {batch_id} diverged from proof/executor/submission contract");
+        anyhow::ensure!(consistency.self_consistent,
+                        "compiler-selected replay {batch_id} diverged: mask {} != {}; tiles {} != {}; draws {} != {}; instances {} != {}; winner-bytes {} != {}; proof={:?} executor={}",
+                        consistency.expected_tile_mask_hex, consistency.observed_tile_mask_hex,
+                        consistency.expected_tile_count, consistency.observed_tile_count,
+                        consistency.expected_glyph_draw_count, consistency.observed_glyph_draw_count,
+                        consistency.expected_glyph_instance_count, consistency.observed_glyph_instance_count,
+                        consistency.expected_winner_write_bytes, consistency.observed_winner_write_bytes,
+                        consistency.proof_winner, consistency.actual_executor);
         Ok((observed_stats, gpu_elapsed_ns, cpu_event_to_submit_ns, expected_write_bytes, consistency))
     }
 
@@ -3884,10 +3917,8 @@ fn compiler_virtual_list_plans(scene: &Scene) -> Result<Vec<CompiledVirtualListP
                             "compact data-register-table for {} has invalid capacity/atlas proof", plan.id);
             anyhow::ensure!(plan.logical_data_ids.is_empty() && plan.logical_labels.is_empty() && plan.scroll_transitions.is_empty(),
                             "compact data-register-table {} must not serialize logical labels or per-viewport transitions", table.id);
-            anyhow::ensure!(table.seed.chars().all(|ch| ch == ' ' || ch.is_ascii_uppercase()) && table.seed.len() <= table.register_width,
-                            "compact data-register-table {} has invalid uppercase ASCII seed", table.id);
-            let mut seed_glyphs = table.seed.chars().map(|ch| if ch == ' ' { 1u32 << 16 } else { (1u32 << 16) | (1 + (ch as u32 - 'A' as u32)) }).collect::<Vec<_>>();
-            seed_glyphs.resize(table.register_width, 1u32 << 16);
+            let seed_glyphs = compact_register_glyphs(&table.seed, table.register_width)
+                .with_context(|| format!("compact data-register-table {} has invalid legacy glyph seed", table.id))?;
             let mut glyph_ids = Vec::with_capacity(table.capacity * table.register_width);
             for _ in 0..table.capacity { glyph_ids.extend_from_slice(&seed_glyphs); }
             Some(CompiledDataRegisterTable { id: table.id.clone(), register_width: table.register_width, atlas_page: table.atlas_page, glyph_ids })
@@ -4034,8 +4065,10 @@ fn compiler_virtual_list_plans(scene: &Scene) -> Result<Vec<CompiledVirtualListP
                                 "virtual list {} has invalid data-update-batch table binding or duplicate ID", plan.id);
                 let mut indices = HashSet::new();
                 for update in &batch.updates {
-                    anyhow::ensure!(indices.insert(update.index) && update.index < logical_capacity && update.value.len() <= table.register_width && update.value.chars().all(|ch| ch == ' ' || ch.is_ascii_uppercase()),
-                                    "data-update-batch {} violates fixed register proof", batch.id);
+                    anyhow::ensure!(indices.insert(update.index) && update.index < logical_capacity,
+                                    "data-update-batch {} violates fixed logical index proof", batch.id);
+                    compact_register_glyphs(&update.value, table.register_width)
+                        .with_context(|| format!("data-update-batch {} violates fixed legacy glyph domain/width proof", batch.id))?;
                 }
             }
         } else {
@@ -4233,9 +4266,10 @@ fn compiler_log_browser_plans(
         anyhow::ensure!(artifact.append_batch_id == format!("{}-append", artifact.id),
                         "log browser {} append batch ID is not canonical", artifact.id);
         for update in &artifact.append_updates {
-            anyhow::ensure!(update.index < list.logical_capacity && update.value.len() <= table.register_width
-                            && update.value.chars().all(|ch| ch == ' ' || ch.is_ascii_uppercase()),
-                            "log browser {} append update escapes fixed uppercase register capacity", artifact.id);
+            anyhow::ensure!(update.index < list.logical_capacity,
+                            "log browser {} append update escapes fixed logical capacity", artifact.id);
+            compact_register_glyphs(&update.value, table.register_width)
+                .with_context(|| format!("log browser {} append update escapes fixed legacy glyph domain/width", artifact.id))?;
         }
         let detail_placements = scene.glyph_placement_plan.iter()
             .filter(|placement| placement.node == artifact.detail_node_id)
@@ -5250,6 +5284,14 @@ fn validate_tile_glyph_ranges(scene: &Scene) -> Result<(usize, u32)> {
 fn placement_instances(scene:&Scene)->Result<Vec<GlyphPlacementInstance>>{
     anyhow::ensure!(!scene.glyph_placement_plan.is_empty(), "Scene has no compiler glyph placement plan");
     anyhow::ensure!(scene.glyph_placement_plan.len()==scene.resource_budget.glyph_capacity, "compiler glyph placement count disagrees with glyph capacity");
+    // A compact data-register is a second, compiler-proved mutability source: it
+    // may patch only the preallocated glyph cells of its physical row ring. Build
+    // the admitted address set once during startup proof; no runtime event path
+    // reconstructs or searches it.
+    let compact_register_slots = scene.virtual_list_plans.iter()
+        .filter(|plan| plan.data_register_table.is_some())
+        .flat_map(|plan| plan.row_glyph_slots.iter().flatten().copied())
+        .collect::<HashSet<_>>();
     let mut instances=Vec::with_capacity(scene.glyph_placement_plan.len());
     for(entry_slot,entry)in scene.glyph_placement_plan.iter().enumerate(){
         anyhow::ensure!(entry.slot==entry_slot, "placement {} ({}) has non-dense slot {}", entry.node, entry.glyph_index, entry.slot);
@@ -5258,8 +5300,14 @@ fn placement_instances(scene:&Scene)->Result<Vec<GlyphPlacementInstance>>{
         anyhow::ensure!(entry.glyph_id>>16==entry.atlas_page, "placement {} glyph ID page mismatch", entry.node);
         anyhow::ensure!(entry.advance>0.0, "placement {} has non-positive advance", entry.node);
         if entry.dynamic {
-            let state_index = entry.state_index.context("dynamic glyph placement lacks compiler state_index")?;
-            anyhow::ensure!(state_index < scene.state_slots.len(), "dynamic glyph placement {} state_index is outside State Slot table", entry.node);
+            if let Some(state_index) = entry.state_index {
+                anyhow::ensure!(state_index < scene.state_slots.len(), "dynamic glyph placement {} state_index is outside State Slot table", entry.node);
+            } else {
+                anyhow::ensure!(compact_register_slots.contains(&entry.slot)
+                                && entry.atlas_page == 1
+                                && entry.face_id.is_none(),
+                                "state-free dynamic placement {} is not an admitted compact data-register legacy glyph", entry.node);
+            }
         } else {
             anyhow::ensure!(entry.state_index.is_none(), "static glyph placement {} must not carry State Slot index", entry.node);
         }
