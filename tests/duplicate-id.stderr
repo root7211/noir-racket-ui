@@ -1,0 +1,10 @@
+tests/duplicate-id.rkt:6:3: ui: duplicate stable UI id: repeated
+  in: (text #:id repeated "right")
+  location...:
+   tests/duplicate-id.rkt:6:3
+  context...:
+   /home/ubuntu/noir_review/noir-racket-ui/noir/ui/main.rkt:150:2: register-id
+   /home/ubuntu/noir_review/noir-racket-ui/noir/ui/main.rkt:170:2: parse-text
+   /home/ubuntu/noir_review/noir-racket-ui/noir/ui/main.rkt:164:2: parse-layout
+   /usr/share/racket/collects/syntax/parse/private/parse-interp.rkt:643:50
+   /usr/share/racket/collects/syntax/wrap-modbeg.rkt:46:4

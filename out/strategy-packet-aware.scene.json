@@ -1,0 +1,3208 @@
+{
+  "actions": {
+    "advance-progress": {
+      "damage": [
+        {
+          "height": 22,
+          "instance_offset": 308,
+          "kind": "rect",
+          "node": "throughput",
+          "width": 572,
+          "x": 34,
+          "y": 180
+        }
+      ],
+      "gpu_updates": [],
+      "instance_updates": [
+        {
+          "byte_length": 4,
+          "field": "size.x",
+          "kind": "instance-patch",
+          "node": "throughput",
+          "offset": 316,
+          "scale": 0.017875000000000002,
+          "state": "progress"
+        }
+      ],
+      "tile_ids": [
+        2
+      ],
+      "writes": [
+        {
+          "op": "add",
+          "state": "progress",
+          "value": 32
+        }
+      ]
+    },
+    "refresh-fps": {
+      "damage": [],
+      "gpu_updates": [
+        {
+          "byte_length": 96,
+          "glyph_count": 3,
+          "glyph_id_offsets": [
+            800,
+            832,
+            864
+          ],
+          "kind": "text-run",
+          "node": "fps",
+          "offset": 800,
+          "state": "frame-rate"
+        }
+      ],
+      "instance_updates": [],
+      "tile_ids": [
+        0
+      ],
+      "writes": [
+        {
+          "op": "add",
+          "state": "frame-rate",
+          "value": 84
+        }
+      ]
+    },
+    "refresh-latency": {
+      "damage": [],
+      "gpu_updates": [
+        {
+          "byte_length": 96,
+          "glyph_count": 3,
+          "glyph_id_offsets": [
+            896,
+            928,
+            960
+          ],
+          "kind": "text-run",
+          "node": "latency",
+          "offset": 896,
+          "state": "latency-ms"
+        }
+      ],
+      "instance_updates": [],
+      "tile_ids": [
+        1
+      ],
+      "writes": [
+        {
+          "op": "add",
+          "state": "latency-ms",
+          "value": 7
+        }
+      ]
+    }
+  },
+  "animation_tracks": [
+    {
+      "color_from": [
+        0.045,
+        0.52,
+        0.3,
+        1
+      ],
+      "color_offset": 544,
+      "color_to": [
+        0.08,
+        0.72,
+        0.47,
+        1
+      ],
+      "damage": {
+        "height": 46,
+        "instance_offset": 528,
+        "kind": "rect",
+        "node": "refresh-fps-button",
+        "width": 174.66666666666666,
+        "x": 46,
+        "y": 230
+      },
+      "duration_ms": 80,
+      "easing": "ease-out",
+      "id": "release-refresh-fps-button",
+      "instance_offset": 528,
+      "node": "refresh-fps-button",
+      "pos_from": [
+        -0.85625,
+        -0.5444444444444445
+      ],
+      "pos_offset": 528,
+      "pos_to": [
+        -0.85625,
+        -0.5333333333333334
+      ]
+    },
+    {
+      "color_from": [
+        0.045,
+        0.52,
+        0.3,
+        1
+      ],
+      "color_offset": 588,
+      "color_to": [
+        0.08,
+        0.72,
+        0.47,
+        1
+      ],
+      "damage": {
+        "height": 46,
+        "instance_offset": 572,
+        "kind": "rect",
+        "node": "refresh-latency-button",
+        "width": 174.66666666666666,
+        "x": 228.66666666666666,
+        "y": 230
+      },
+      "duration_ms": 80,
+      "easing": "ease-out",
+      "id": "release-refresh-latency-button",
+      "instance_offset": 572,
+      "node": "refresh-latency-button",
+      "pos_from": [
+        -0.28541666666666665,
+        -0.5444444444444445
+      ],
+      "pos_offset": 572,
+      "pos_to": [
+        -0.28541666666666665,
+        -0.5333333333333334
+      ]
+    },
+    {
+      "color_from": [
+        0.045,
+        0.52,
+        0.3,
+        1
+      ],
+      "color_offset": 632,
+      "color_to": [
+        0.08,
+        0.72,
+        0.47,
+        1
+      ],
+      "damage": {
+        "height": 46,
+        "instance_offset": 616,
+        "kind": "rect",
+        "node": "advance-progress-button",
+        "width": 174.66666666666666,
+        "x": 411.3333333333333,
+        "y": 230
+      },
+      "duration_ms": 80,
+      "easing": "ease-out",
+      "id": "release-advance-progress-button",
+      "instance_offset": 616,
+      "node": "advance-progress-button",
+      "pos_from": [
+        0.28541666666666665,
+        -0.5444444444444445
+      ],
+      "pos_offset": 616,
+      "pos_to": [
+        0.28541666666666665,
+        -0.5333333333333334
+      ]
+    }
+  ],
+  "conflict_graph": [
+    {
+      "left": "release-refresh-fps-button",
+      "overlaps": [
+        {
+          "byte_length": 16,
+          "offset": 544
+        }
+      ],
+      "right": "hover-refresh-fps-button",
+      "winner": "hover-refresh-fps-button"
+    },
+    {
+      "left": "release-refresh-fps-button",
+      "overlaps": [
+        {
+          "byte_length": 8,
+          "offset": 528
+        },
+        {
+          "byte_length": 16,
+          "offset": 544
+        }
+      ],
+      "right": "pressed-refresh-fps-button",
+      "winner": "pressed-refresh-fps-button"
+    },
+    {
+      "left": "release-refresh-latency-button",
+      "overlaps": [
+        {
+          "byte_length": 16,
+          "offset": 588
+        }
+      ],
+      "right": "hover-refresh-latency-button",
+      "winner": "hover-refresh-latency-button"
+    },
+    {
+      "left": "release-refresh-latency-button",
+      "overlaps": [
+        {
+          "byte_length": 8,
+          "offset": 572
+        },
+        {
+          "byte_length": 16,
+          "offset": 588
+        }
+      ],
+      "right": "pressed-refresh-latency-button",
+      "winner": "pressed-refresh-latency-button"
+    },
+    {
+      "left": "release-advance-progress-button",
+      "overlaps": [
+        {
+          "byte_length": 16,
+          "offset": 632
+        }
+      ],
+      "right": "hover-advance-progress-button",
+      "winner": "hover-advance-progress-button"
+    },
+    {
+      "left": "release-advance-progress-button",
+      "overlaps": [
+        {
+          "byte_length": 8,
+          "offset": 616
+        },
+        {
+          "byte_length": 16,
+          "offset": 632
+        }
+      ],
+      "right": "pressed-advance-progress-button",
+      "winner": "pressed-advance-progress-button"
+    },
+    {
+      "left": "hover-refresh-fps-button",
+      "overlaps": [
+        {
+          "byte_length": 16,
+          "offset": 544
+        }
+      ],
+      "right": "pressed-refresh-fps-button",
+      "winner": "pressed-refresh-fps-button"
+    },
+    {
+      "left": "hover-refresh-latency-button",
+      "overlaps": [
+        {
+          "byte_length": 16,
+          "offset": 588
+        }
+      ],
+      "right": "pressed-refresh-latency-button",
+      "winner": "pressed-refresh-latency-button"
+    },
+    {
+      "left": "hover-advance-progress-button",
+      "overlaps": [
+        {
+          "byte_length": 16,
+          "offset": 632
+        }
+      ],
+      "right": "pressed-advance-progress-button",
+      "winner": "pressed-advance-progress-button"
+    }
+  ],
+  "dynamic_node_count": 3,
+  "event_map": [
+    {
+      "action": "refresh-fps",
+      "base_color": [
+        0.08,
+        0.72,
+        0.47,
+        1
+      ],
+      "base_pos": [
+        -0.85625,
+        -0.5333333333333334
+      ],
+      "height": 46,
+      "hover_color": [
+        0.15,
+        0.86,
+        0.58,
+        1
+      ],
+      "instance_offset": 528,
+      "node": "refresh-fps-button",
+      "pressed_color": [
+        0.045,
+        0.52,
+        0.3,
+        1
+      ],
+      "pressed_pos": [
+        -0.85625,
+        -0.5444444444444445
+      ],
+      "slot": 0,
+      "width": 174.66666666666666,
+      "x": 46,
+      "y": 230,
+      "z_index": 0
+    },
+    {
+      "action": "refresh-latency",
+      "base_color": [
+        0.08,
+        0.72,
+        0.47,
+        1
+      ],
+      "base_pos": [
+        -0.28541666666666665,
+        -0.5333333333333334
+      ],
+      "height": 46,
+      "hover_color": [
+        0.15,
+        0.86,
+        0.58,
+        1
+      ],
+      "instance_offset": 572,
+      "node": "refresh-latency-button",
+      "pressed_color": [
+        0.045,
+        0.52,
+        0.3,
+        1
+      ],
+      "pressed_pos": [
+        -0.28541666666666665,
+        -0.5444444444444445
+      ],
+      "slot": 1,
+      "width": 174.66666666666666,
+      "x": 228.66666666666666,
+      "y": 230,
+      "z_index": 1
+    },
+    {
+      "action": "advance-progress",
+      "base_color": [
+        0.08,
+        0.72,
+        0.47,
+        1
+      ],
+      "base_pos": [
+        0.28541666666666665,
+        -0.5333333333333334
+      ],
+      "height": 46,
+      "hover_color": [
+        0.15,
+        0.86,
+        0.58,
+        1
+      ],
+      "instance_offset": 616,
+      "node": "advance-progress-button",
+      "pressed_color": [
+        0.045,
+        0.52,
+        0.3,
+        1
+      ],
+      "pressed_pos": [
+        0.28541666666666665,
+        -0.5444444444444445
+      ],
+      "slot": 2,
+      "width": 174.66666666666666,
+      "x": 411.3333333333333,
+      "y": 230,
+      "z_index": 2
+    }
+  ],
+  "frame_coalesced_batches": [
+    {
+      "candidate_costs": {
+        "coalesced": 0
+      },
+      "conflict_edges": [
+        {
+          "left": "hover-refresh-fps-button",
+          "overlaps": [
+            {
+              "byte_length": 16,
+              "offset": 544
+            }
+          ],
+          "right": "pressed-refresh-fps-button",
+          "winner": "pressed-refresh-fps-button"
+        }
+      ],
+      "eliminated_writes": [
+        {
+          "byte_length": 16,
+          "offset": 544,
+          "task_id": "hover-refresh-fps-button",
+          "winner": "pressed-refresh-fps-button"
+        }
+      ],
+      "execution_order": [
+        "hover-refresh-fps-button",
+        "pressed-refresh-fps-button"
+      ],
+      "id": "coalesced-press-refresh-fps-button",
+      "merged_tile_ids": [
+        3
+      ],
+      "selection_proof": {
+        "mode": "non-activate-batch",
+        "profile_id": "noir-vulkan-gpu-matrix-v1"
+      },
+      "strategy_id": "coalesced",
+      "task_ids": [
+        "hover-refresh-fps-button",
+        "pressed-refresh-fps-button"
+      ],
+      "winner_writes": [
+        {
+          "byte_length": 8,
+          "offset": 528,
+          "task_id": "pressed-refresh-fps-button"
+        },
+        {
+          "byte_length": 16,
+          "offset": 544,
+          "task_id": "pressed-refresh-fps-button"
+        }
+      ]
+    },
+    {
+      "candidate_costs": {
+        "full-redraw": 3,
+        "packet-aware": 1,
+        "coalesced": 2
+      },
+      "conflict_edges": [],
+      "eliminated_writes": [],
+      "execution_order": [
+        "release-refresh-fps-button",
+        "refresh-fps"
+      ],
+      "id": "coalesced-activate-refresh-fps-button",
+      "merged_tile_ids": [
+        0,
+        3
+      ],
+      "selection_proof": {
+        "mode": "profile-guided",
+        "profile_id": "dispatcher-test-packet-aware",
+        "semantic_group": "complete-activate-v1",
+        "selection_metric": "gpu_median_ns",
+        "source_batch": "coalesced-activate-refresh-fps-button",
+        "winner": "packet-aware",
+        "tie_break_order": [
+          "full-redraw",
+          "packet-aware",
+          "coalesced"
+        ]
+      },
+      "strategy_id": "packet-aware",
+      "task_ids": [
+        "release-refresh-fps-button",
+        "refresh-fps"
+      ],
+      "winner_writes": [
+        {
+          "byte_length": 8,
+          "offset": 528,
+          "task_id": "release-refresh-fps-button"
+        },
+        {
+          "byte_length": 16,
+          "offset": 544,
+          "task_id": "release-refresh-fps-button"
+        },
+        {
+          "byte_length": 4,
+          "offset": 800,
+          "task_id": "refresh-fps"
+        },
+        {
+          "byte_length": 4,
+          "offset": 832,
+          "task_id": "refresh-fps"
+        },
+        {
+          "byte_length": 4,
+          "offset": 864,
+          "task_id": "refresh-fps"
+        }
+      ]
+    },
+    {
+      "candidate_costs": {
+        "coalesced": 0
+      },
+      "conflict_edges": [
+        {
+          "left": "hover-refresh-latency-button",
+          "overlaps": [
+            {
+              "byte_length": 16,
+              "offset": 588
+            }
+          ],
+          "right": "pressed-refresh-latency-button",
+          "winner": "pressed-refresh-latency-button"
+        }
+      ],
+      "eliminated_writes": [
+        {
+          "byte_length": 16,
+          "offset": 588,
+          "task_id": "hover-refresh-latency-button",
+          "winner": "pressed-refresh-latency-button"
+        }
+      ],
+      "execution_order": [
+        "hover-refresh-latency-button",
+        "pressed-refresh-latency-button"
+      ],
+      "id": "coalesced-press-refresh-latency-button",
+      "merged_tile_ids": [
+        4
+      ],
+      "selection_proof": {
+        "mode": "non-activate-batch",
+        "profile_id": "noir-vulkan-gpu-matrix-v1"
+      },
+      "strategy_id": "coalesced",
+      "task_ids": [
+        "hover-refresh-latency-button",
+        "pressed-refresh-latency-button"
+      ],
+      "winner_writes": [
+        {
+          "byte_length": 8,
+          "offset": 572,
+          "task_id": "pressed-refresh-latency-button"
+        },
+        {
+          "byte_length": 16,
+          "offset": 588,
+          "task_id": "pressed-refresh-latency-button"
+        }
+      ]
+    },
+    {
+      "candidate_costs": {
+        "full-redraw": 3,
+        "packet-aware": 1,
+        "coalesced": 2
+      },
+      "conflict_edges": [],
+      "eliminated_writes": [],
+      "execution_order": [
+        "release-refresh-latency-button",
+        "refresh-latency"
+      ],
+      "id": "coalesced-activate-refresh-latency-button",
+      "merged_tile_ids": [
+        1,
+        4
+      ],
+      "selection_proof": {
+        "mode": "profile-guided",
+        "profile_id": "dispatcher-test-packet-aware",
+        "semantic_group": "complete-activate-v1",
+        "selection_metric": "gpu_median_ns",
+        "source_batch": "coalesced-activate-refresh-latency-button",
+        "winner": "packet-aware",
+        "tie_break_order": [
+          "full-redraw",
+          "packet-aware",
+          "coalesced"
+        ]
+      },
+      "strategy_id": "packet-aware",
+      "task_ids": [
+        "release-refresh-latency-button",
+        "refresh-latency"
+      ],
+      "winner_writes": [
+        {
+          "byte_length": 8,
+          "offset": 572,
+          "task_id": "release-refresh-latency-button"
+        },
+        {
+          "byte_length": 16,
+          "offset": 588,
+          "task_id": "release-refresh-latency-button"
+        },
+        {
+          "byte_length": 4,
+          "offset": 896,
+          "task_id": "refresh-latency"
+        },
+        {
+          "byte_length": 4,
+          "offset": 928,
+          "task_id": "refresh-latency"
+        },
+        {
+          "byte_length": 4,
+          "offset": 960,
+          "task_id": "refresh-latency"
+        }
+      ]
+    },
+    {
+      "candidate_costs": {
+        "coalesced": 0
+      },
+      "conflict_edges": [
+        {
+          "left": "hover-advance-progress-button",
+          "overlaps": [
+            {
+              "byte_length": 16,
+              "offset": 632
+            }
+          ],
+          "right": "pressed-advance-progress-button",
+          "winner": "pressed-advance-progress-button"
+        }
+      ],
+      "eliminated_writes": [
+        {
+          "byte_length": 16,
+          "offset": 632,
+          "task_id": "hover-advance-progress-button",
+          "winner": "pressed-advance-progress-button"
+        }
+      ],
+      "execution_order": [
+        "hover-advance-progress-button",
+        "pressed-advance-progress-button"
+      ],
+      "id": "coalesced-press-advance-progress-button",
+      "merged_tile_ids": [
+        5
+      ],
+      "selection_proof": {
+        "mode": "non-activate-batch",
+        "profile_id": "noir-vulkan-gpu-matrix-v1"
+      },
+      "strategy_id": "coalesced",
+      "task_ids": [
+        "hover-advance-progress-button",
+        "pressed-advance-progress-button"
+      ],
+      "winner_writes": [
+        {
+          "byte_length": 8,
+          "offset": 616,
+          "task_id": "pressed-advance-progress-button"
+        },
+        {
+          "byte_length": 16,
+          "offset": 632,
+          "task_id": "pressed-advance-progress-button"
+        }
+      ]
+    },
+    {
+      "candidate_costs": {
+        "full-redraw": 3,
+        "packet-aware": 1,
+        "coalesced": 2
+      },
+      "conflict_edges": [],
+      "eliminated_writes": [],
+      "execution_order": [
+        "release-advance-progress-button",
+        "advance-progress"
+      ],
+      "id": "coalesced-activate-advance-progress-button",
+      "merged_tile_ids": [
+        2,
+        5
+      ],
+      "selection_proof": {
+        "mode": "profile-guided",
+        "profile_id": "dispatcher-test-packet-aware",
+        "semantic_group": "complete-activate-v1",
+        "selection_metric": "gpu_median_ns",
+        "source_batch": "coalesced-activate-advance-progress-button",
+        "winner": "packet-aware",
+        "tie_break_order": [
+          "full-redraw",
+          "packet-aware",
+          "coalesced"
+        ]
+      },
+      "strategy_id": "packet-aware",
+      "task_ids": [
+        "release-advance-progress-button",
+        "advance-progress"
+      ],
+      "winner_writes": [
+        {
+          "byte_length": 8,
+          "offset": 616,
+          "task_id": "release-advance-progress-button"
+        },
+        {
+          "byte_length": 16,
+          "offset": 632,
+          "task_id": "release-advance-progress-button"
+        },
+        {
+          "byte_length": 4,
+          "offset": 316,
+          "task_id": "advance-progress"
+        }
+      ]
+    }
+  ],
+  "frame_schedule": [
+    {
+      "id": "release-refresh-fps-button",
+      "kind": "release",
+      "priority": 10,
+      "tile_ids": [
+        3
+      ],
+      "writes": [
+        {
+          "byte_length": 8,
+          "offset": 528
+        },
+        {
+          "byte_length": 16,
+          "offset": 544
+        }
+      ]
+    },
+    {
+      "id": "release-refresh-latency-button",
+      "kind": "release",
+      "priority": 10,
+      "tile_ids": [
+        4
+      ],
+      "writes": [
+        {
+          "byte_length": 8,
+          "offset": 572
+        },
+        {
+          "byte_length": 16,
+          "offset": 588
+        }
+      ]
+    },
+    {
+      "id": "release-advance-progress-button",
+      "kind": "release",
+      "priority": 10,
+      "tile_ids": [
+        5
+      ],
+      "writes": [
+        {
+          "byte_length": 8,
+          "offset": 616
+        },
+        {
+          "byte_length": 16,
+          "offset": 632
+        }
+      ]
+    },
+    {
+      "id": "hover-refresh-fps-button",
+      "kind": "hover",
+      "priority": 20,
+      "tile_ids": [
+        3
+      ],
+      "writes": [
+        {
+          "byte_length": 16,
+          "offset": 544
+        }
+      ]
+    },
+    {
+      "id": "hover-refresh-latency-button",
+      "kind": "hover",
+      "priority": 20,
+      "tile_ids": [
+        4
+      ],
+      "writes": [
+        {
+          "byte_length": 16,
+          "offset": 588
+        }
+      ]
+    },
+    {
+      "id": "hover-advance-progress-button",
+      "kind": "hover",
+      "priority": 20,
+      "tile_ids": [
+        5
+      ],
+      "writes": [
+        {
+          "byte_length": 16,
+          "offset": 632
+        }
+      ]
+    },
+    {
+      "id": "pressed-refresh-fps-button",
+      "kind": "pressed",
+      "priority": 30,
+      "tile_ids": [
+        3
+      ],
+      "writes": [
+        {
+          "byte_length": 8,
+          "offset": 528
+        },
+        {
+          "byte_length": 16,
+          "offset": 544
+        }
+      ]
+    },
+    {
+      "id": "pressed-refresh-latency-button",
+      "kind": "pressed",
+      "priority": 30,
+      "tile_ids": [
+        4
+      ],
+      "writes": [
+        {
+          "byte_length": 8,
+          "offset": 572
+        },
+        {
+          "byte_length": 16,
+          "offset": 588
+        }
+      ]
+    },
+    {
+      "id": "pressed-advance-progress-button",
+      "kind": "pressed",
+      "priority": 30,
+      "tile_ids": [
+        5
+      ],
+      "writes": [
+        {
+          "byte_length": 8,
+          "offset": 616
+        },
+        {
+          "byte_length": 16,
+          "offset": 632
+        }
+      ]
+    },
+    {
+      "id": "refresh-fps",
+      "kind": "action",
+      "priority": 40,
+      "tile_ids": [
+        0
+      ],
+      "writes": [
+        {
+          "byte_length": 4,
+          "offset": 800
+        },
+        {
+          "byte_length": 4,
+          "offset": 832
+        },
+        {
+          "byte_length": 4,
+          "offset": 864
+        }
+      ]
+    },
+    {
+      "id": "refresh-latency",
+      "kind": "action",
+      "priority": 40,
+      "tile_ids": [
+        1
+      ],
+      "writes": [
+        {
+          "byte_length": 4,
+          "offset": 896
+        },
+        {
+          "byte_length": 4,
+          "offset": 928
+        },
+        {
+          "byte_length": 4,
+          "offset": 960
+        }
+      ]
+    },
+    {
+      "id": "advance-progress",
+      "kind": "action",
+      "priority": 40,
+      "tile_ids": [
+        2
+      ],
+      "writes": [
+        {
+          "byte_length": 4,
+          "offset": 316
+        }
+      ]
+    }
+  ],
+  "glyph_draw_packets": [
+    {
+      "atlas_page": 1,
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "bounds": [
+        102.63999999999999,
+        73.32,
+        537.36,
+        17.36
+      ],
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "first_glyph_byte_offset": 0,
+      "first_placement": 0,
+      "glyph_byte_length": 800,
+      "id": "glyph-packet-page1-slot0-24",
+      "nodes": [
+        "title"
+      ],
+      "placement_count": 25,
+      "z_layer": 0
+    },
+    {
+      "atlas_page": 0,
+      "batch_key": "glyph-atlas|page:0|clip:root|blend:alpha",
+      "bounds": [
+        77.92000000000002,
+        129.32,
+        502.75999999999993,
+        17.360000000000014
+      ],
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": true,
+      "first_glyph_byte_offset": 800,
+      "first_placement": 25,
+      "glyph_byte_length": 192,
+      "id": "glyph-packet-page0-slot25-30",
+      "nodes": [
+        "fps",
+        "latency"
+      ],
+      "placement_count": 6,
+      "z_layer": 0
+    }
+  ],
+  "glyph_placement_plan": [
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.5246913580246914,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 0,
+      "glyph_id": 65550,
+      "glyph_index": 0,
+      "glyph_word_offset": 0,
+      "ndc_pos": [
+        -0.67925,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 0,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.5617283950617284,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 32,
+      "glyph_id": 65551,
+      "glyph_index": 1,
+      "glyph_word_offset": 8,
+      "ndc_pos": [
+        -0.60775,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 1,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.3395061728395062,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 64,
+      "glyph_id": 65545,
+      "glyph_index": 2,
+      "glyph_word_offset": 16,
+      "ndc_pos": [
+        -0.53625,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 2,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.6728395061728395,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 96,
+      "glyph_id": 65554,
+      "glyph_index": 3,
+      "glyph_word_offset": 24,
+      "ndc_pos": [
+        -0.46475,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 3,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.006172839506172839,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 128,
+      "glyph_id": 65536,
+      "glyph_index": 4,
+      "glyph_word_offset": 32,
+      "ndc_pos": [
+        -0.39325,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 4,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.11728395061728394,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 160,
+      "glyph_id": 65539,
+      "glyph_index": 5,
+      "glyph_word_offset": 40,
+      "ndc_pos": [
+        -0.32175,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 5,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.043209876543209874,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 192,
+      "glyph_id": 65537,
+      "glyph_index": 6,
+      "glyph_word_offset": 48,
+      "ndc_pos": [
+        -0.25025,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 6,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.7839506172839507,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 224,
+      "glyph_id": 65557,
+      "glyph_index": 7,
+      "glyph_word_offset": 56,
+      "ndc_pos": [
+        -0.17874999999999996,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 7,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.7098765432098766,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 256,
+      "glyph_id": 65555,
+      "glyph_index": 8,
+      "glyph_word_offset": 64,
+      "ndc_pos": [
+        -0.10724999999999996,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 8,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.043209876543209874,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 288,
+      "glyph_id": 65537,
+      "glyph_index": 9,
+      "glyph_word_offset": 72,
+      "ndc_pos": [
+        -0.03574999999999995,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 9,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.4506172839506173,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 320,
+      "glyph_id": 65548,
+      "glyph_index": 10,
+      "glyph_word_offset": 80,
+      "ndc_pos": [
+        0.03575000000000006,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 10,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.006172839506172839,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 352,
+      "glyph_id": 65536,
+      "glyph_index": 11,
+      "glyph_word_offset": 88,
+      "ndc_pos": [
+        0.10725000000000007,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 11,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.2654320987654321,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 384,
+      "glyph_id": 65543,
+      "glyph_index": 12,
+      "glyph_word_offset": 96,
+      "ndc_pos": [
+        0.17875000000000008,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 12,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.5987654320987654,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 416,
+      "glyph_id": 65552,
+      "glyph_index": 13,
+      "glyph_word_offset": 104,
+      "ndc_pos": [
+        0.2502500000000001,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 13,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.7839506172839507,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 448,
+      "glyph_id": 65557,
+      "glyph_index": 14,
+      "glyph_word_offset": 112,
+      "ndc_pos": [
+        0.3217500000000001,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 14,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.006172839506172839,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 480,
+      "glyph_id": 65536,
+      "glyph_index": 15,
+      "glyph_word_offset": 120,
+      "ndc_pos": [
+        0.3932500000000002,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 15,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.15432098765432098,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 512,
+      "glyph_id": 65540,
+      "glyph_index": 16,
+      "glyph_word_offset": 128,
+      "ndc_pos": [
+        0.4647500000000001,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 16,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.043209876543209874,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 544,
+      "glyph_id": 65537,
+      "glyph_index": 17,
+      "glyph_word_offset": 136,
+      "ndc_pos": [
+        0.53625,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 17,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.7098765432098766,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 576,
+      "glyph_id": 65555,
+      "glyph_index": 18,
+      "glyph_word_offset": 144,
+      "ndc_pos": [
+        0.6077500000000001,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 18,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.30246913580246915,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 608,
+      "glyph_id": 65544,
+      "glyph_index": 19,
+      "glyph_word_offset": 152,
+      "ndc_pos": [
+        0.6792500000000002,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 19,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.08024691358024691,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 640,
+      "glyph_id": 65538,
+      "glyph_index": 20,
+      "glyph_word_offset": 160,
+      "ndc_pos": [
+        0.7507500000000001,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 20,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.5617283950617284,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 672,
+      "glyph_id": 65551,
+      "glyph_index": 21,
+      "glyph_word_offset": 168,
+      "ndc_pos": [
+        0.82225,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 21,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.043209876543209874,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 704,
+      "glyph_id": 65537,
+      "glyph_index": 22,
+      "glyph_word_offset": 176,
+      "ndc_pos": [
+        0.8937500000000002,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 22,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.6728395061728395,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 736,
+      "glyph_id": 65554,
+      "glyph_index": 23,
+      "glyph_word_offset": 184,
+      "ndc_pos": [
+        0.9652500000000003,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 23,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 1,
+      "atlas_uv": [
+        0.15432098765432098,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:1|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": false,
+      "glyph_byte_offset": 768,
+      "glyph_id": 65540,
+      "glyph_index": 24,
+      "glyph_word_offset": 192,
+      "ndc_pos": [
+        1.03675,
+        0.49622222222222223
+      ],
+      "ndc_size": [
+        0.04147,
+        0.09644444444444444
+      ],
+      "node": "title",
+      "slot": 24,
+      "state": false,
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 0,
+      "atlas_uv": [
+        0.006172839506172839,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:0|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": true,
+      "glyph_byte_offset": 800,
+      "glyph_id": 0,
+      "glyph_index": 0,
+      "glyph_word_offset": 200,
+      "ndc_pos": [
+        -0.7565,
+        0.18511111111111112
+      ],
+      "ndc_size": [
+        0.16070833333333334,
+        0.09644444444444444
+      ],
+      "node": "fps",
+      "slot": 25,
+      "state": "frame-rate",
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 0,
+      "atlas_uv": [
+        0.22839506172839505,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:0|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": true,
+      "glyph_byte_offset": 832,
+      "glyph_id": 6,
+      "glyph_index": 1,
+      "glyph_word_offset": 208,
+      "ndc_pos": [
+        -0.4794166666666666,
+        0.18511111111111112
+      ],
+      "ndc_size": [
+        0.16070833333333334,
+        0.09644444444444444
+      ],
+      "node": "fps",
+      "slot": 26,
+      "state": "frame-rate",
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 0,
+      "atlas_uv": [
+        0.006172839506172839,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:0|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": true,
+      "glyph_byte_offset": 864,
+      "glyph_id": 0,
+      "glyph_index": 2,
+      "glyph_word_offset": 216,
+      "ndc_pos": [
+        -0.20233333333333325,
+        0.18511111111111112
+      ],
+      "ndc_size": [
+        0.16070833333333334,
+        0.09644444444444444
+      ],
+      "node": "fps",
+      "slot": 27,
+      "state": "frame-rate",
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 0,
+      "atlas_uv": [
+        0.006172839506172839,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:0|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": true,
+      "glyph_byte_offset": 896,
+      "glyph_id": 0,
+      "glyph_index": 0,
+      "glyph_word_offset": 224,
+      "ndc_pos": [
+        0.09975,
+        0.18511111111111112
+      ],
+      "ndc_size": [
+        0.16070833333333334,
+        0.09644444444444444
+      ],
+      "node": "latency",
+      "slot": 28,
+      "state": "latency-ms",
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 0,
+      "atlas_uv": [
+        0.006172839506172839,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:0|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": true,
+      "glyph_byte_offset": 928,
+      "glyph_id": 0,
+      "glyph_index": 1,
+      "glyph_word_offset": 232,
+      "ndc_pos": [
+        0.37683333333333335,
+        0.18511111111111112
+      ],
+      "ndc_size": [
+        0.16070833333333334,
+        0.09644444444444444
+      ],
+      "node": "latency",
+      "slot": 29,
+      "state": "latency-ms",
+      "z_layer": 0
+    },
+    {
+      "advance": 1,
+      "atlas_page": 0,
+      "atlas_uv": [
+        0.30246913580246915,
+        0.125,
+        0.018518518518518517,
+        0.625
+      ],
+      "batch_key": "glyph-atlas|page:0|clip:root|blend:alpha",
+      "clip_rect": [
+        0,
+        0,
+        640,
+        360
+      ],
+      "clip_stack_id": "root",
+      "dynamic": true,
+      "glyph_byte_offset": 960,
+      "glyph_id": 8,
+      "glyph_index": 2,
+      "glyph_word_offset": 240,
+      "ndc_pos": [
+        0.6539166666666667,
+        0.18511111111111112
+      ],
+      "ndc_size": [
+        0.16070833333333334,
+        0.09644444444444444
+      ],
+      "node": "latency",
+      "slot": 30,
+      "state": "latency-ms",
+      "z_layer": 0
+    }
+  ],
+  "layout_plan": [
+    {
+      "atlas_page": 0,
+      "color": [
+        0.035,
+        0.055,
+        0.095,
+        1
+      ],
+      "glyph_advances": [],
+      "glyph_count": 0,
+      "glyph_ids": [],
+      "glyph_offset": 0,
+      "height": 42,
+      "id": "dashboard",
+      "instance_offset": 0,
+      "ndc_pos": [
+        -0.95,
+        0.6777777777777778
+      ],
+      "ndc_size": [
+        1.9,
+        0.23333333333333334
+      ],
+      "tag": "column",
+      "vertex_count": 6,
+      "width": 608,
+      "x": 16,
+      "y": 16
+    },
+    {
+      "atlas_page": 1,
+      "color": [
+        0.84,
+        0.9,
+        1,
+        1
+      ],
+      "glyph_advances": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "glyph_count": 25,
+      "glyph_ids": [
+        65550,
+        65551,
+        65545,
+        65554,
+        65536,
+        65539,
+        65537,
+        65557,
+        65555,
+        65537,
+        65548,
+        65536,
+        65543,
+        65552,
+        65557,
+        65536,
+        65540,
+        65537,
+        65555,
+        65544,
+        65538,
+        65551,
+        65537,
+        65554,
+        65540
+      ],
+      "glyph_offset": 0,
+      "height": 28,
+      "id": "title",
+      "instance_offset": 44,
+      "ndc_pos": [
+        -0.89375,
+        0.4666666666666667
+      ],
+      "ndc_size": [
+        1.7875,
+        0.15555555555555556
+      ],
+      "tag": "text",
+      "vertex_count": 150,
+      "width": 572,
+      "x": 34,
+      "y": 68
+    },
+    {
+      "atlas_page": 0,
+      "color": [
+        0.135,
+        0.17,
+        0.225,
+        1
+      ],
+      "glyph_advances": [],
+      "glyph_count": 0,
+      "glyph_ids": [],
+      "glyph_offset": 0,
+      "height": 64,
+      "id": "metrics",
+      "instance_offset": 88,
+      "ndc_pos": [
+        -0.89375,
+        0.05555555555555558
+      ],
+      "ndc_size": [
+        1.7875,
+        0.35555555555555557
+      ],
+      "tag": "row",
+      "vertex_count": 6,
+      "width": 572,
+      "x": 34,
+      "y": 106
+    },
+    {
+      "atlas_page": 0,
+      "color": [
+        0.84,
+        0.9,
+        1,
+        1
+      ],
+      "glyph_advances": [
+        1,
+        1,
+        1
+      ],
+      "glyph_count": 3,
+      "glyph_ids": [],
+      "glyph_offset": 800,
+      "height": 28,
+      "id": "fps",
+      "instance_offset": 132,
+      "ndc_pos": [
+        -0.85625,
+        0.15555555555555556
+      ],
+      "ndc_size": [
+        0.83125,
+        0.15555555555555556
+      ],
+      "tag": "text",
+      "vertex_count": 18,
+      "width": 266,
+      "x": 46,
+      "y": 124
+    },
+    {
+      "atlas_page": 0,
+      "color": [
+        0.84,
+        0.9,
+        1,
+        1
+      ],
+      "glyph_advances": [
+        1,
+        1,
+        1
+      ],
+      "glyph_count": 3,
+      "glyph_ids": [],
+      "glyph_offset": 896,
+      "height": 28,
+      "id": "latency",
+      "instance_offset": 176,
+      "ndc_pos": [
+        0,
+        0.15555555555555556
+      ],
+      "ndc_size": [
+        0.83125,
+        0.15555555555555556
+      ],
+      "tag": "text",
+      "vertex_count": 18,
+      "width": 266,
+      "x": 320,
+      "y": 124
+    },
+    {
+      "atlas_page": 0,
+      "color": [
+        0.135,
+        0.17,
+        0.225,
+        1
+      ],
+      "glyph_advances": [],
+      "glyph_count": 0,
+      "glyph_ids": [],
+      "glyph_offset": 0,
+      "height": 22,
+      "id": "progress-shell",
+      "instance_offset": 220,
+      "ndc_pos": [
+        -0.89375,
+        -0.12222222222222223
+      ],
+      "ndc_size": [
+        1.7875,
+        0.12222222222222222
+      ],
+      "tag": "stack",
+      "vertex_count": 6,
+      "width": 572,
+      "x": 34,
+      "y": 180
+    },
+    {
+      "atlas_page": 0,
+      "color": [
+        0.16,
+        0.195,
+        0.25,
+        1
+      ],
+      "glyph_advances": [],
+      "glyph_count": 0,
+      "glyph_ids": [],
+      "glyph_offset": 0,
+      "height": 22,
+      "id": "progress-layer",
+      "instance_offset": 264,
+      "ndc_pos": [
+        -0.89375,
+        -0.12222222222222223
+      ],
+      "ndc_size": [
+        1.7875,
+        0.12222222222222222
+      ],
+      "tag": "stack",
+      "vertex_count": 6,
+      "width": 572,
+      "x": 34,
+      "y": 180
+    },
+    {
+      "atlas_page": 0,
+      "color": [
+        0.25,
+        0.86,
+        0.62,
+        1
+      ],
+      "glyph_advances": [],
+      "glyph_count": 0,
+      "glyph_ids": [],
+      "glyph_offset": 0,
+      "height": 22,
+      "id": "throughput",
+      "instance_offset": 308,
+      "ndc_pos": [
+        -0.89375,
+        -0.12222222222222223
+      ],
+      "ndc_size": [
+        0.7150000000000001,
+        0.12222222222222222
+      ],
+      "tag": "progress",
+      "vertex_count": 6,
+      "width": 572,
+      "x": 34,
+      "y": 180
+    },
+    {
+      "atlas_page": 0,
+      "color": [
+        0.95,
+        0.3,
+        0.38,
+        1
+      ],
+      "glyph_advances": [],
+      "glyph_count": 0,
+      "glyph_ids": [],
+      "glyph_offset": 0,
+      "height": 22,
+      "id": "tooltip-a",
+      "instance_offset": 352,
+      "ndc_pos": [
+        -0.89375,
+        -0.12222222222222223
+      ],
+      "ndc_size": [
+        0.375,
+        0.12222222222222222
+      ],
+      "tag": "overlay",
+      "vertex_count": 6,
+      "width": 120,
+      "x": 34,
+      "y": 180
+    },
+    {
+      "atlas_page": 0,
+      "color": [
+        0.95,
+        0.3,
+        0.38,
+        1
+      ],
+      "glyph_advances": [],
+      "glyph_count": 0,
+      "glyph_ids": [],
+      "glyph_offset": 0,
+      "height": 22,
+      "id": "tooltip-b",
+      "instance_offset": 396,
+      "ndc_pos": [
+        -0.33125000000000004,
+        -0.12222222222222223
+      ],
+      "ndc_size": [
+        0.375,
+        0.12222222222222222
+      ],
+      "tag": "overlay",
+      "vertex_count": 6,
+      "width": 120,
+      "x": 214,
+      "y": 180
+    },
+    {
+      "atlas_page": 0,
+      "color": [
+        0.95,
+        0.3,
+        0.38,
+        1
+      ],
+      "glyph_advances": [],
+      "glyph_count": 0,
+      "glyph_ids": [],
+      "glyph_offset": 0,
+      "height": 22,
+      "id": "tooltip-c",
+      "instance_offset": 440,
+      "ndc_pos": [
+        0.23124999999999996,
+        -0.12222222222222223
+      ],
+      "ndc_size": [
+        0.375,
+        0.12222222222222222
+      ],
+      "tag": "overlay",
+      "vertex_count": 6,
+      "width": 120,
+      "x": 394,
+      "y": 180
+    },
+    {
+      "atlas_page": 0,
+      "color": [
+        0.135,
+        0.17,
+        0.225,
+        1
+      ],
+      "glyph_advances": [],
+      "glyph_count": 0,
+      "glyph_ids": [],
+      "glyph_offset": 0,
+      "height": 64,
+      "id": "actions",
+      "instance_offset": 484,
+      "ndc_pos": [
+        -0.89375,
+        -0.5333333333333334
+      ],
+      "ndc_size": [
+        1.7875,
+        0.35555555555555557
+      ],
+      "tag": "row",
+      "vertex_count": 6,
+      "width": 572,
+      "x": 34,
+      "y": 212
+    },
+    {
+      "atlas_page": 0,
+      "color": [
+        0.08,
+        0.72,
+        0.47,
+        1
+      ],
+      "glyph_advances": [],
+      "glyph_count": 0,
+      "glyph_ids": [],
+      "glyph_offset": 0,
+      "height": 46,
+      "id": "refresh-fps-button",
+      "instance_offset": 528,
+      "ndc_pos": [
+        -0.85625,
+        -0.5333333333333334
+      ],
+      "ndc_size": [
+        0.5458333333333333,
+        0.25555555555555554
+      ],
+      "tag": "button",
+      "vertex_count": 6,
+      "width": 174.66666666666666,
+      "x": 46,
+      "y": 230
+    },
+    {
+      "atlas_page": 0,
+      "color": [
+        0.08,
+        0.72,
+        0.47,
+        1
+      ],
+      "glyph_advances": [],
+      "glyph_count": 0,
+      "glyph_ids": [],
+      "glyph_offset": 0,
+      "height": 46,
+      "id": "refresh-latency-button",
+      "instance_offset": 572,
+      "ndc_pos": [
+        -0.28541666666666665,
+        -0.5333333333333334
+      ],
+      "ndc_size": [
+        0.5458333333333333,
+        0.25555555555555554
+      ],
+      "tag": "button",
+      "vertex_count": 6,
+      "width": 174.66666666666666,
+      "x": 228.66666666666666,
+      "y": 230
+    },
+    {
+      "atlas_page": 0,
+      "color": [
+        0.08,
+        0.72,
+        0.47,
+        1
+      ],
+      "glyph_advances": [],
+      "glyph_count": 0,
+      "glyph_ids": [],
+      "glyph_offset": 0,
+      "height": 46,
+      "id": "advance-progress-button",
+      "instance_offset": 616,
+      "ndc_pos": [
+        0.28541666666666665,
+        -0.5333333333333334
+      ],
+      "ndc_size": [
+        0.5458333333333333,
+        0.25555555555555554
+      ],
+      "tag": "button",
+      "vertex_count": 6,
+      "width": 174.66666666666666,
+      "x": 411.3333333333333,
+      "y": 230
+    }
+  ],
+  "render_schedules": [
+    {
+      "coverage": 0.23298611111111106,
+      "full_redraw": false,
+      "id": "concurrent-frame",
+      "profile_id": "noir-vulkan-gpu-matrix-v1",
+      "task_ids": [
+        "release-refresh-fps-button",
+        "release-refresh-latency-button",
+        "release-advance-progress-button",
+        "hover-refresh-fps-button",
+        "hover-refresh-latency-button",
+        "hover-advance-progress-button",
+        "pressed-refresh-fps-button",
+        "pressed-refresh-latency-button",
+        "pressed-advance-progress-button",
+        "refresh-fps",
+        "refresh-latency",
+        "advance-progress"
+      ],
+      "tiles": [
+        {
+          "candidate_costs": {
+            "complete-lower-range": 10329.501708984375,
+            "fragment": 5252.486755710178,
+            "full-tile-redraw": 1e+30
+          },
+          "draw_ranges": [
+            {
+              "batch_key": "shared-quad-atlas|clip:root|fragment:0|blend:opaque",
+              "blend_mode": "opaque",
+              "clip_rect": [
+                34,
+                106,
+                572,
+                64
+              ],
+              "clip_stack_id": "root|fragment:0",
+              "first_instance": 2,
+              "instance_count": 2,
+              "opaque": true,
+              "vertex_count": 18,
+              "z_layer": 0
+            }
+          ],
+          "fallback_reason": "cost-model-minimum",
+          "glyph_packet_ranges": [
+            {
+              "bounds": [
+                77.92000000000002,
+                129.32,
+                228.76,
+                17.360000000000014
+              ],
+              "dynamic": true,
+              "first_placement": 25,
+              "packet_id": "glyph-packet-page0-slot25-30",
+              "packet_index": 1,
+              "placement_count": 3
+            }
+          ],
+          "height": 28,
+          "nodes": [
+            "fps"
+          ],
+          "selected_strategy": "fragment",
+          "width": 266,
+          "x": 46,
+          "y": 124
+        },
+        {
+          "candidate_costs": {
+            "complete-lower-range": 15045.27294921875,
+            "fragment": 9968.257995944554,
+            "full-tile-redraw": 1e+30
+          },
+          "draw_ranges": [
+            {
+              "batch_key": "shared-quad-atlas|clip:root|fragment:0|blend:opaque",
+              "blend_mode": "opaque",
+              "clip_rect": [
+                34,
+                106,
+                572,
+                64
+              ],
+              "clip_stack_id": "root|fragment:0",
+              "first_instance": 2,
+              "instance_count": 1,
+              "opaque": true,
+              "vertex_count": 18,
+              "z_layer": 0
+            },
+            {
+              "batch_key": "shared-quad-atlas|clip:root|fragment:0|blend:opaque",
+              "blend_mode": "opaque",
+              "clip_rect": [
+                320,
+                124,
+                266,
+                28
+              ],
+              "clip_stack_id": "root|fragment:0",
+              "first_instance": 4,
+              "instance_count": 1,
+              "opaque": true,
+              "vertex_count": 18,
+              "z_layer": 0
+            }
+          ],
+          "fallback_reason": "cost-model-minimum",
+          "glyph_packet_ranges": [
+            {
+              "bounds": [
+                351.92,
+                129.32,
+                228.75999999999993,
+                17.360000000000014
+              ],
+              "dynamic": true,
+              "first_placement": 28,
+              "packet_id": "glyph-packet-page0-slot25-30",
+              "packet_index": 1,
+              "placement_count": 3
+            }
+          ],
+          "height": 28,
+          "nodes": [
+            "latency"
+          ],
+          "selected_strategy": "fragment",
+          "width": 266,
+          "x": 320,
+          "y": 124
+        },
+        {
+          "candidate_costs": {
+            "complete-lower-range": 31868.020282321508,
+            "fragment": 1e+30,
+            "full-tile-redraw": 29442.049538341427
+          },
+          "draw_ranges": [
+            {
+              "batch_key": "shared-quad-atlas|clip:root|blend:opaque",
+              "blend_mode": "opaque",
+              "clip_rect": [
+                0,
+                0,
+                640,
+                360
+              ],
+              "clip_stack_id": "root",
+              "first_instance": 5,
+              "instance_count": 1,
+              "opaque": true,
+              "vertex_count": 18,
+              "z_layer": 0
+            },
+            {
+              "batch_key": "shared-quad-atlas|clip:progress-shell|blend:opaque",
+              "blend_mode": "opaque",
+              "clip_rect": [
+                34,
+                180,
+                572,
+                22
+              ],
+              "clip_stack_id": "progress-shell",
+              "first_instance": 6,
+              "instance_count": 1,
+              "opaque": true,
+              "vertex_count": 18,
+              "z_layer": 0
+            },
+            {
+              "batch_key": "shared-quad-atlas|clip:progress-shell>progress-layer|blend:opaque",
+              "blend_mode": "opaque",
+              "clip_rect": [
+                34,
+                180,
+                572,
+                22
+              ],
+              "clip_stack_id": "progress-shell>progress-layer",
+              "first_instance": 7,
+              "instance_count": 1,
+              "opaque": true,
+              "vertex_count": 18,
+              "z_layer": 0
+            },
+            {
+              "batch_key": "shared-quad-atlas|clip:progress-shell>progress-layer|blend:opaque",
+              "blend_mode": "opaque",
+              "clip_rect": [
+                34,
+                180,
+                572,
+                22
+              ],
+              "clip_stack_id": "progress-shell>progress-layer",
+              "first_instance": 8,
+              "instance_count": 1,
+              "opaque": true,
+              "vertex_count": 18,
+              "z_layer": 10
+            },
+            {
+              "batch_key": "shared-quad-atlas|clip:progress-shell>progress-layer|blend:opaque",
+              "blend_mode": "opaque",
+              "clip_rect": [
+                34,
+                180,
+                572,
+                22
+              ],
+              "clip_stack_id": "progress-shell>progress-layer",
+              "first_instance": 9,
+              "instance_count": 1,
+              "opaque": true,
+              "vertex_count": 18,
+              "z_layer": 11
+            },
+            {
+              "batch_key": "shared-quad-atlas|clip:progress-shell>progress-layer|blend:opaque",
+              "blend_mode": "opaque",
+              "clip_rect": [
+                34,
+                180,
+                572,
+                22
+              ],
+              "clip_stack_id": "progress-shell>progress-layer",
+              "first_instance": 10,
+              "instance_count": 1,
+              "opaque": true,
+              "vertex_count": 18,
+              "z_layer": 12
+            }
+          ],
+          "fallback_reason": "cost-model-full-tile-redraw",
+          "glyph_packet_ranges": [],
+          "height": 22,
+          "nodes": [
+            "throughput"
+          ],
+          "selected_strategy": "full-tile-redraw",
+          "width": 572,
+          "x": 34,
+          "y": 180
+        },
+        {
+          "candidate_costs": {
+            "complete-lower-range": 10329.501708984375,
+            "fragment": 5259.6338662606695,
+            "full-tile-redraw": 1e+30
+          },
+          "draw_ranges": [
+            {
+              "batch_key": "shared-quad-atlas|clip:root|fragment:0|blend:opaque",
+              "blend_mode": "opaque",
+              "clip_rect": [
+                34,
+                212,
+                572,
+                64
+              ],
+              "clip_stack_id": "root|fragment:0",
+              "first_instance": 11,
+              "instance_count": 2,
+              "opaque": true,
+              "vertex_count": 18,
+              "z_layer": 0
+            }
+          ],
+          "fallback_reason": "cost-model-minimum",
+          "glyph_packet_ranges": [],
+          "height": 50,
+          "nodes": [
+            "refresh-fps-button"
+          ],
+          "selected_strategy": "fragment",
+          "width": 174.66666666666666,
+          "x": 46,
+          "y": 230
+        },
+        {
+          "candidate_costs": {
+            "complete-lower-range": 15045.27294921875,
+            "fragment": 9975.405106495045,
+            "full-tile-redraw": 1e+30
+          },
+          "draw_ranges": [
+            {
+              "batch_key": "shared-quad-atlas|clip:root|fragment:0|blend:opaque",
+              "blend_mode": "opaque",
+              "clip_rect": [
+                34,
+                212,
+                572,
+                64
+              ],
+              "clip_stack_id": "root|fragment:0",
+              "first_instance": 11,
+              "instance_count": 1,
+              "opaque": true,
+              "vertex_count": 18,
+              "z_layer": 0
+            },
+            {
+              "batch_key": "shared-quad-atlas|clip:root|fragment:0|blend:opaque",
+              "blend_mode": "opaque",
+              "clip_rect": [
+                228.66666666666666,
+                230,
+                174.66666666666666,
+                46
+              ],
+              "clip_stack_id": "root|fragment:0",
+              "first_instance": 13,
+              "instance_count": 1,
+              "opaque": true,
+              "vertex_count": 18,
+              "z_layer": 0
+            }
+          ],
+          "fallback_reason": "cost-model-minimum",
+          "glyph_packet_ranges": [],
+          "height": 50,
+          "nodes": [
+            "refresh-latency-button"
+          ],
+          "selected_strategy": "fragment",
+          "width": 174.66666666666666,
+          "x": 228.66666666666666,
+          "y": 230
+        },
+        {
+          "candidate_costs": {
+            "complete-lower-range": 15045.27294921875,
+            "fragment": 9975.405106495045,
+            "full-tile-redraw": 1e+30
+          },
+          "draw_ranges": [
+            {
+              "batch_key": "shared-quad-atlas|clip:root|fragment:0|blend:opaque",
+              "blend_mode": "opaque",
+              "clip_rect": [
+                34,
+                212,
+                572,
+                64
+              ],
+              "clip_stack_id": "root|fragment:0",
+              "first_instance": 11,
+              "instance_count": 1,
+              "opaque": true,
+              "vertex_count": 18,
+              "z_layer": 0
+            },
+            {
+              "batch_key": "shared-quad-atlas|clip:root|fragment:0|blend:opaque",
+              "blend_mode": "opaque",
+              "clip_rect": [
+                411.3333333333333,
+                230,
+                174.66666666666669,
+                46
+              ],
+              "clip_stack_id": "root|fragment:0",
+              "first_instance": 14,
+              "instance_count": 1,
+              "opaque": true,
+              "vertex_count": 18,
+              "z_layer": 0
+            }
+          ],
+          "fallback_reason": "cost-model-minimum",
+          "glyph_packet_ranges": [],
+          "height": 50,
+          "nodes": [
+            "advance-progress-button"
+          ],
+          "selected_strategy": "fragment",
+          "width": 174.66666666666666,
+          "x": 411.3333333333333,
+          "y": 230
+        }
+      ]
+    }
+  ],
+  "resource_budget": {
+    "glyph_capacity": 31,
+    "instance_capacity": 15,
+    "node_capacity": 15
+  },
+  "root": {
+    "children": [
+      {
+        "children": [],
+        "id": "title",
+        "props": {
+          "value": "NOIR CAUSAL GPU DASHBOARD"
+        },
+        "tag": "text"
+      },
+      {
+        "children": [
+          {
+            "children": [],
+            "id": "fps",
+            "props": {
+              "lowering": "text-run",
+              "max-chars": 3,
+              "value": [
+                "dynamic",
+                "frame-rate"
+              ]
+            },
+            "tag": "text"
+          },
+          {
+            "children": [],
+            "id": "latency",
+            "props": {
+              "lowering": "text-run",
+              "max-chars": 3,
+              "value": [
+                "dynamic",
+                "latency-ms"
+              ]
+            },
+            "tag": "text"
+          }
+        ],
+        "id": "metrics",
+        "props": {
+          "#:gap": 12
+        },
+        "tag": "row"
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "id": "throughput",
+                "props": {
+                  "max": 100,
+                  "value": [
+                    "dynamic",
+                    "progress"
+                  ]
+                },
+                "tag": "progress"
+              },
+              {
+                "children": [],
+                "id": "tooltip-a",
+                "props": {
+                  "#:opacity": 1,
+                  "#:width": 120,
+                  "#:x": 0,
+                  "#:z": 10
+                },
+                "tag": "overlay"
+              },
+              {
+                "children": [],
+                "id": "tooltip-b",
+                "props": {
+                  "#:opacity": 1,
+                  "#:width": 120,
+                  "#:x": 180,
+                  "#:z": 11
+                },
+                "tag": "overlay"
+              },
+              {
+                "children": [],
+                "id": "tooltip-c",
+                "props": {
+                  "#:opacity": 1,
+                  "#:width": 120,
+                  "#:x": 360,
+                  "#:z": 12
+                },
+                "tag": "overlay"
+              }
+            ],
+            "id": "progress-layer",
+            "props": {
+              "#:clip": true
+            },
+            "tag": "stack"
+          }
+        ],
+        "id": "progress-shell",
+        "props": {
+          "#:clip": true
+        },
+        "tag": "stack"
+      },
+      {
+        "children": [
+          {
+            "children": [],
+            "id": "refresh-fps-button",
+            "props": {
+              "label": "FPS: 60 → 144",
+              "on": "refresh-fps"
+            },
+            "tag": "button"
+          },
+          {
+            "children": [],
+            "id": "refresh-latency-button",
+            "props": {
+              "label": "Latency: 8 → 15",
+              "on": "refresh-latency"
+            },
+            "tag": "button"
+          },
+          {
+            "children": [],
+            "id": "advance-progress-button",
+            "props": {
+              "label": "Progress: 40 → 72",
+              "on": "advance-progress"
+            },
+            "tag": "button"
+          }
+        ],
+        "id": "actions",
+        "props": {
+          "#:gap": 12
+        },
+        "tag": "row"
+      }
+    ],
+    "id": "dashboard",
+    "props": {
+      "#:background": "dark",
+      "#:gap": 16,
+      "#:padding": 24
+    },
+    "tag": "column"
+  },
+  "state": {
+    "frame-rate": 60,
+    "latency-ms": 8,
+    "progress": 40
+  },
+  "static_node_count": 12,
+  "update_plan": [
+    [
+      "text-run-patch",
+      "fps",
+      3
+    ],
+    [
+      "text-run-patch",
+      "latency",
+      3
+    ],
+    [
+      "instance-patch",
+      "throughput",
+      "size.x"
+    ]
+  ]
+}

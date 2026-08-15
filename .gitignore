@@ -1,0 +1,41 @@
+# Rust and GPUI build products
+**/target/
+**/Cargo.lock.bak
+
+# Local Racket, Python and editor state
+compiled/
+**/compiled/
+__pycache__/
+*.py[cod]
+.vscode/
+.idea/
+*.swp
+*~
+
+# Local credentials and operating-system material
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Generated, machine-local benchmark presentation artifacts
+out/*.log
+out/*.png
+out/*.ppm
+out/*.zip
+out/noir_winit_host-*
+wgpu-verify/out/*.log
+wgpu-verify/out/*.png
+wgpu-verify/out/*.ppm
+wgpu-verify/out/noir_winit_host-*
+
+# Archives and local package artifacts
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# Preserve small Scene/JSON evidence under out/; it is reproducible from source.

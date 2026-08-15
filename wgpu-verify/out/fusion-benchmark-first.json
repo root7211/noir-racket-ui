@@ -1,0 +1,85 @@
+{
+  "schema": "noir-fusion-benchmark-v1",
+  "renderer": "compiler-proved three-request baseline vs fused RenderRequest",
+  "profile_id": "noir-static-cost-v1",
+  "adapter_name": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "backend": "Vulkan",
+  "timestamp_query_supported": true,
+  "timestamp_period_ns": 1.0,
+  "cases": [
+    {
+      "id": "coalesced-activate-fuse-commit",
+      "member_worklist_indices": [
+        3,
+        4,
+        5
+      ],
+      "fused_worklist_index": 7,
+      "exact_packet_union": [
+        3,
+        6,
+        9
+      ],
+      "expectations_match": true,
+      "baseline": {
+        "request_count": 3,
+        "packet_activity_dispatch_count": 3,
+        "queue_submit_count": 3,
+        "tile_mask_hex": "0x000000000000000f",
+        "submitted_tile_count": 4,
+        "submitted_glyph_draw_count": 9,
+        "submitted_glyph_instance_count": 22,
+        "cpu_event_to_submit_ns": 16726903,
+        "gpu_elapsed_ns": 1094318.0
+      },
+      "fused": {
+        "request_count": 1,
+        "packet_activity_dispatch_count": 1,
+        "queue_submit_count": 1,
+        "tile_mask_hex": "0x000000000000000f",
+        "submitted_tile_count": 4,
+        "submitted_glyph_draw_count": 9,
+        "submitted_glyph_instance_count": 22,
+        "cpu_event_to_submit_ns": 134234,
+        "gpu_elapsed_ns": 534535.0
+      }
+    },
+    {
+      "id": "coalesced-activate-fuse-reset",
+      "member_worklist_indices": [
+        3,
+        4,
+        5
+      ],
+      "fused_worklist_index": 8,
+      "exact_packet_union": [
+        3,
+        6,
+        9
+      ],
+      "expectations_match": true,
+      "baseline": {
+        "request_count": 3,
+        "packet_activity_dispatch_count": 3,
+        "queue_submit_count": 3,
+        "tile_mask_hex": "0x0000000000000017",
+        "submitted_tile_count": 4,
+        "submitted_glyph_draw_count": 9,
+        "submitted_glyph_instance_count": 22,
+        "cpu_event_to_submit_ns": 717042,
+        "gpu_elapsed_ns": 1002481.0
+      },
+      "fused": {
+        "request_count": 1,
+        "packet_activity_dispatch_count": 1,
+        "queue_submit_count": 1,
+        "tile_mask_hex": "0x0000000000000017",
+        "submitted_tile_count": 4,
+        "submitted_glyph_draw_count": 9,
+        "submitted_glyph_instance_count": 22,
+        "cpu_event_to_submit_ns": 105107,
+        "gpu_elapsed_ns": 484200.0
+      }
+    }
+  ]
+}

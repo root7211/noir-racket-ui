@@ -1,0 +1,454 @@
+{
+  "schema": "noir-wgpu-replay-matrix-v2",
+  "renderer": "full-redraw / packet-aware / action-aware / coalesced / compiler-selected",
+  "profile_id": "noir-vulkan-gpu-matrix-v1",
+  "adapter_name": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "backend": "Vulkan",
+  "timestamp_query_supported": true,
+  "timestamp_period_ns": 1.0,
+  "warmup_iterations": 1,
+  "sample_iterations": 3,
+  "rows": [
+    {
+      "workload_id": "coalesced-activate-advance-progress-button",
+      "mode": "full-redraw",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 31,
+      "expected_write_bytes": 28,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 642274.0,
+        "median_ns": 722521.0,
+        "p95_ns": 723226.0,
+        "max_ns": 723226.0,
+        "mean_ns": 696007.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 70807.0,
+        "median_ns": 73916.0,
+        "p95_ns": 688346.0,
+        "max_ns": 688346.0,
+        "mean_ns": 277689.6666666667
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-advance-progress-button",
+      "mode": "packet-aware",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 6,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 6,
+      "expected_write_bytes": 28,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 552577.0,
+        "median_ns": 624701.0,
+        "p95_ns": 688235.0,
+        "max_ns": 688235.0,
+        "mean_ns": 621837.6666666666
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 106517.0,
+        "median_ns": 153160.0,
+        "p95_ns": 617866.0,
+        "max_ns": 617866.0,
+        "mean_ns": 292514.3333333333
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-advance-progress-button",
+      "mode": "action-aware",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 0,
+      "submitted_glyph_instance_count": 0,
+      "expected_write_bytes": 4,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 259484.0,
+        "median_ns": 297911.0,
+        "p95_ns": 302347.0,
+        "max_ns": 302347.0,
+        "mean_ns": 286580.6666666667
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 50088.0,
+        "median_ns": 54894.0,
+        "p95_ns": 303199.0,
+        "max_ns": 303199.0,
+        "mean_ns": 136060.33333333334
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-advance-progress-button",
+      "mode": "coalesced",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 2,
+      "submitted_glyph_draw_count": 0,
+      "submitted_glyph_instance_count": 0,
+      "expected_write_bytes": 28,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 298666.0,
+        "median_ns": 300036.0,
+        "p95_ns": 306772.0,
+        "max_ns": 306772.0,
+        "mean_ns": 301824.6666666667
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 59341.0,
+        "median_ns": 63401.0,
+        "p95_ns": 304541.0,
+        "max_ns": 304541.0,
+        "mean_ns": 142427.66666666666
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-advance-progress-button",
+      "mode": "compiler-selected",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 2,
+      "submitted_glyph_draw_count": 0,
+      "submitted_glyph_instance_count": 0,
+      "expected_write_bytes": 28,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 325726.0,
+        "median_ns": 327034.0,
+        "p95_ns": 330038.0,
+        "max_ns": 330038.0,
+        "mean_ns": 327599.3333333333
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 61216.0,
+        "median_ns": 109524.0,
+        "p95_ns": 305897.0,
+        "max_ns": 305897.0,
+        "mean_ns": 158879.0
+      },
+      "compiler_selected": {
+        "compiler_strategy_id": "coalesced",
+        "proof_profile_id": "noir-vulkan-gpu-matrix-v1",
+        "proof_winner": "coalesced",
+        "actual_executor": "coalesced",
+        "expected_tile_mask_hex": "0x0000000000000024",
+        "observed_tile_mask_hex": "0x0000000000000024",
+        "expected_tile_count": 2,
+        "observed_tile_count": 2,
+        "expected_glyph_draw_count": 0,
+        "observed_glyph_draw_count": 0,
+        "expected_glyph_instance_count": 0,
+        "observed_glyph_instance_count": 0,
+        "expected_winner_write_bytes": 28,
+        "observed_winner_write_bytes": 28,
+        "self_consistent": true
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-fps-button",
+      "mode": "full-redraw",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 31,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 754600.0,
+        "median_ns": 762460.0,
+        "p95_ns": 961348.0,
+        "max_ns": 961348.0,
+        "mean_ns": 826136.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 86944.0,
+        "median_ns": 98025.0,
+        "p95_ns": 2256821.0,
+        "max_ns": 2256821.0,
+        "mean_ns": 813930.0
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-fps-button",
+      "mode": "packet-aware",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 6,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 6,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 537427.0,
+        "median_ns": 539193.0,
+        "p95_ns": 566469.0,
+        "max_ns": 566469.0,
+        "mean_ns": 547696.3333333334
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 115815.0,
+        "median_ns": 147030.0,
+        "p95_ns": 630982.0,
+        "max_ns": 630982.0,
+        "mean_ns": 297942.3333333333
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-fps-button",
+      "mode": "action-aware",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 3,
+      "expected_write_bytes": 12,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 182322.0,
+        "median_ns": 208735.0,
+        "p95_ns": 222210.0,
+        "max_ns": 222210.0,
+        "mean_ns": 204422.33333333334
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 69041.0,
+        "median_ns": 79538.0,
+        "p95_ns": 196421.0,
+        "max_ns": 196421.0,
+        "mean_ns": 115000.0
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-fps-button",
+      "mode": "coalesced",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 2,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 3,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 257839.0,
+        "median_ns": 264834.0,
+        "p95_ns": 265338.0,
+        "max_ns": 265338.0,
+        "mean_ns": 262670.3333333333
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 85268.0,
+        "median_ns": 101473.0,
+        "p95_ns": 245096.0,
+        "max_ns": 245096.0,
+        "mean_ns": 143945.66666666666
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-fps-button",
+      "mode": "compiler-selected",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 2,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 3,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 334330.0,
+        "median_ns": 516237.0,
+        "p95_ns": 523884.0,
+        "max_ns": 523884.0,
+        "mean_ns": 458150.3333333333
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 117087.0,
+        "median_ns": 180129.0,
+        "p95_ns": 2513959.0,
+        "max_ns": 2513959.0,
+        "mean_ns": 937058.3333333334
+      },
+      "compiler_selected": {
+        "compiler_strategy_id": "coalesced",
+        "proof_profile_id": "noir-vulkan-gpu-matrix-v1",
+        "proof_winner": "coalesced",
+        "actual_executor": "coalesced",
+        "expected_tile_mask_hex": "0x0000000000000009",
+        "observed_tile_mask_hex": "0x0000000000000009",
+        "expected_tile_count": 2,
+        "observed_tile_count": 2,
+        "expected_glyph_draw_count": 1,
+        "observed_glyph_draw_count": 1,
+        "expected_glyph_instance_count": 3,
+        "observed_glyph_instance_count": 3,
+        "expected_winner_write_bytes": 36,
+        "observed_winner_write_bytes": 36,
+        "self_consistent": true
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-latency-button",
+      "mode": "full-redraw",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 31,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 592640.0,
+        "median_ns": 599803.0,
+        "p95_ns": 611950.0,
+        "max_ns": 611950.0,
+        "mean_ns": 601464.3333333334
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 77528.0,
+        "median_ns": 81013.0,
+        "p95_ns": 752058.0,
+        "max_ns": 752058.0,
+        "mean_ns": 303533.0
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-latency-button",
+      "mode": "packet-aware",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 6,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 6,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 516098.0,
+        "median_ns": 598713.0,
+        "p95_ns": 615824.0,
+        "max_ns": 615824.0,
+        "mean_ns": 576878.3333333334
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 127026.0,
+        "median_ns": 127103.0,
+        "p95_ns": 546969.0,
+        "max_ns": 546969.0,
+        "mean_ns": 267032.6666666667
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-latency-button",
+      "mode": "action-aware",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 3,
+      "expected_write_bytes": 12,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 196620.0,
+        "median_ns": 243467.0,
+        "p95_ns": 252732.0,
+        "max_ns": 252732.0,
+        "mean_ns": 230939.66666666666
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 65484.0,
+        "median_ns": 65587.0,
+        "p95_ns": 198642.0,
+        "max_ns": 198642.0,
+        "mean_ns": 109904.33333333333
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-latency-button",
+      "mode": "coalesced",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 2,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 3,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 309766.0,
+        "median_ns": 416008.0,
+        "p95_ns": 1483554.0,
+        "max_ns": 1483554.0,
+        "mean_ns": 736442.6666666666
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 122887.0,
+        "median_ns": 125405.0,
+        "p95_ns": 1425984.0,
+        "max_ns": 1425984.0,
+        "mean_ns": 558092.0
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-latency-button",
+      "mode": "compiler-selected",
+      "warmup_iterations": 1,
+      "sample_iterations": 3,
+      "submitted_tile_count": 2,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 3,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 3,
+        "min_ns": 278761.0,
+        "median_ns": 284444.0,
+        "p95_ns": 314086.0,
+        "max_ns": 314086.0,
+        "mean_ns": 292430.3333333333
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 3,
+        "min_ns": 86535.0,
+        "median_ns": 161796.0,
+        "p95_ns": 339311.0,
+        "max_ns": 339311.0,
+        "mean_ns": 195880.66666666666
+      },
+      "compiler_selected": {
+        "compiler_strategy_id": "coalesced",
+        "proof_profile_id": "noir-vulkan-gpu-matrix-v1",
+        "proof_winner": "coalesced",
+        "actual_executor": "coalesced",
+        "expected_tile_mask_hex": "0x0000000000000012",
+        "observed_tile_mask_hex": "0x0000000000000012",
+        "expected_tile_count": 2,
+        "observed_tile_count": 2,
+        "expected_glyph_draw_count": 1,
+        "observed_glyph_draw_count": 1,
+        "expected_glyph_instance_count": 3,
+        "observed_glyph_instance_count": 3,
+        "expected_winner_write_bytes": 36,
+        "observed_winner_write_bytes": 36,
+        "self_consistent": true
+      }
+    }
+  ]
+}

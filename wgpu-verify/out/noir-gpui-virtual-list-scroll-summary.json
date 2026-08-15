@@ -1,0 +1,34 @@
+{
+  "metric": "x11_wheel_to_endpoint_viewport_excluding_gpu_present",
+  "method": "Three zero-delay X11 wheel-down clicks; timer ends when each framework logs viewport rows 5..7.",
+  "frameworks": {
+    "noir": {
+      "sample_count": 15,
+      "wheel_clicks_per_sample": 3,
+      "endpoint_viewport": "rows_5_to_7",
+      "median_ns": 6604405,
+      "p95_ns": 7783897.5,
+      "min_ns": 6206216,
+      "max_ns": 7864226,
+      "mean_ns": 6710690.666666667,
+      "stdev_ns": 478872.080234626
+    },
+    "gpui": {
+      "sample_count": 15,
+      "wheel_clicks_per_sample": 3,
+      "endpoint_viewport": "rows_5_to_7",
+      "median_ns": 6596942,
+      "p95_ns": 36558245.2,
+      "min_ns": 6127956,
+      "max_ns": 36890174,
+      "mean_ns": 10571526.666666666,
+      "stdev_ns": 10595283.283767572
+    }
+  },
+  "limitations": [
+    "Not GPU frame time, GPU timestamp, or input-to-present latency.",
+    "The external metric includes X11 injection, process scheduling, output logging, and polling.",
+    "Noir scrolls through compiler-fixed row patch tables; GPUI uses native uniform_list scrolling. Both present a fixed capacity-8 list with a three-row viewport."
+  ],
+  "median_relative_change_noir_vs_gpui_pct": 0.11312817362953975
+}

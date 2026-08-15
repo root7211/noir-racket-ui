@@ -1,0 +1,111 @@
+{
+  "registry_version": 2,
+  "profiles": [
+    {
+      "profile_id": "noir-vulkan-gpu-matrix-v1",
+      "matcher": {
+        "backend": "Vulkan",
+        "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+        "width": 640,
+        "height": 360
+      },
+      "timestamp_supported": true,
+      "timestamp_period_ns": 1.0,
+      "calibration_mode": "wgpu-timestamp-query-matrix",
+      "samples": [
+        {
+          "name": "quad-range-submit",
+          "repetitions": 64,
+          "command_count": 1,
+          "bytes_per_command": 256,
+          "cpu_encode_submit_ns": 17734.265625,
+          "gpu_timestamp_ns": 4679.09375
+        },
+        {
+          "name": "glyph-atlas-upload-proxy",
+          "repetitions": 64,
+          "command_count": 3,
+          "bytes_per_command": 512,
+          "cpu_encode_submit_ns": 2252.0260416666665,
+          "gpu_timestamp_ns": 475.625
+        },
+        {
+          "name": "clip-switch-proxy",
+          "repetitions": 64,
+          "command_count": 8,
+          "bytes_per_command": 256,
+          "cpu_encode_submit_ns": 1339.716796875,
+          "gpu_timestamp_ns": 293.419921875
+        },
+        {
+          "name": "tile-small-proxy",
+          "repetitions": 64,
+          "command_count": 8,
+          "bytes_per_command": 4096,
+          "cpu_encode_submit_ns": 1201.935546875,
+          "gpu_timestamp_ns": 375.021484375
+        },
+        {
+          "name": "tile-large-proxy",
+          "repetitions": 64,
+          "command_count": 8,
+          "bytes_per_command": 65536,
+          "cpu_encode_submit_ns": 3834.615234375,
+          "gpu_timestamp_ns": 2806.865234375
+        },
+        {
+          "name": "query-resolve",
+          "repetitions": 64,
+          "command_count": 1,
+          "bytes_per_command": 256,
+          "cpu_encode_submit_ns": 3529.703125,
+          "gpu_timestamp_ns": 1093.609375
+        }
+      ],
+      "coefficients": {
+        "draw_range_ns": 4679.09375,
+        "covered_pixel_ns": 0.012182574801974827,
+        "clip_switch_ns": 36.677490234375,
+        "full_tile_multiplier": 7.484545156267089
+      },
+      "replay_strategy_costs": {
+        "schema": "noir-wgpu-replay-matrix-v1",
+        "semantic_group": "complete-activate-v1",
+        "selection_metric": "gpu_median_ns",
+        "source": {
+          "report": "out/replay-matrix.json",
+          "warmup_iterations": 2,
+          "sample_iterations": 7,
+          "timestamp_period_ns": 1.0,
+          "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)"
+        },
+        "batches": [
+          {
+            "batch_id": "coalesced-activate-advance-progress-button",
+            "candidates": [
+              { "strategy_id": "full-redraw", "semantic_group": "complete-activate-v1", "gpu_median_ns": 672079.0, "gpu_p95_ns": 775146.0, "cpu_median_ns": 80467.0, "tile_count": 1, "glyph_draw_count": 2, "glyph_instance_count": 31, "winner_write_bytes": 28 },
+              { "strategy_id": "packet-aware", "semantic_group": "complete-activate-v1", "gpu_median_ns": 566256.0, "gpu_p95_ns": 615657.0, "cpu_median_ns": 95569.0, "tile_count": 6, "glyph_draw_count": 2, "glyph_instance_count": 6, "winner_write_bytes": 28 },
+              { "strategy_id": "coalesced", "semantic_group": "complete-activate-v1", "gpu_median_ns": 373460.0, "gpu_p95_ns": 498839.0, "cpu_median_ns": 81212.0, "tile_count": 2, "glyph_draw_count": 0, "glyph_instance_count": 0, "winner_write_bytes": 28 }
+            ]
+          },
+          {
+            "batch_id": "coalesced-activate-refresh-fps-button",
+            "candidates": [
+              { "strategy_id": "full-redraw", "semantic_group": "complete-activate-v1", "gpu_median_ns": 684366.0, "gpu_p95_ns": 692440.0, "cpu_median_ns": 98691.0, "tile_count": 1, "glyph_draw_count": 2, "glyph_instance_count": 31, "winner_write_bytes": 36 },
+              { "strategy_id": "packet-aware", "semantic_group": "complete-activate-v1", "gpu_median_ns": 561036.0, "gpu_p95_ns": 792462.0, "cpu_median_ns": 120919.0, "tile_count": 6, "glyph_draw_count": 2, "glyph_instance_count": 6, "winner_write_bytes": 36 },
+              { "strategy_id": "coalesced", "semantic_group": "complete-activate-v1", "gpu_median_ns": 274298.0, "gpu_p95_ns": 315333.0, "cpu_median_ns": 85081.0, "tile_count": 2, "glyph_draw_count": 1, "glyph_instance_count": 3, "winner_write_bytes": 36 }
+            ]
+          },
+          {
+            "batch_id": "coalesced-activate-refresh-latency-button",
+            "candidates": [
+              { "strategy_id": "full-redraw", "semantic_group": "complete-activate-v1", "gpu_median_ns": 607714.0, "gpu_p95_ns": 719796.0, "cpu_median_ns": 90487.0, "tile_count": 1, "glyph_draw_count": 2, "glyph_instance_count": 31, "winner_write_bytes": 36 },
+              { "strategy_id": "packet-aware", "semantic_group": "complete-activate-v1", "gpu_median_ns": 571427.0, "gpu_p95_ns": 626263.0, "cpu_median_ns": 101872.0, "tile_count": 6, "glyph_draw_count": 2, "glyph_instance_count": 6, "winner_write_bytes": 36 },
+              { "strategy_id": "coalesced", "semantic_group": "complete-activate-v1", "gpu_median_ns": 294295.0, "gpu_p95_ns": 324906.0, "cpu_median_ns": 79137.0, "tile_count": 2, "glyph_draw_count": 1, "glyph_instance_count": 3, "winner_write_bytes": 36 }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

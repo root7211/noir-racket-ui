@@ -1,0 +1,110 @@
+{
+  "schema": "noir-profile-freshness-v1",
+  "status": "inconclusive",
+  "policy": "diagnostic-only; runtime strategy_id is immutable",
+  "relative_drift_threshold": 10.0,
+  "minimum_samples": 6,
+  "checks": [
+    {
+      "name": "manifest-schema",
+      "passed": true,
+      "detail": "noir-calibration-manifest-v1"
+    },
+    {
+      "name": "registry-version",
+      "passed": true,
+      "detail": "2"
+    },
+    {
+      "name": "scene-fingerprint",
+      "passed": true,
+      "detail": "expected=fnv1a64:b9abfd758142e4cc, observed=fnv1a64:b9abfd758142e4cc"
+    },
+    {
+      "name": "replay-fingerprint",
+      "passed": true,
+      "detail": "expected=fnv1a64:df189c98b5ad4016, observed=fnv1a64:df189c98b5ad4016"
+    },
+    {
+      "name": "replay-schema",
+      "passed": true,
+      "detail": "manifest=noir-wgpu-replay-matrix-v2, replay=noir-wgpu-replay-matrix-v2"
+    },
+    {
+      "name": "replay-profile",
+      "passed": true,
+      "detail": "manifest=noir-vulkan-gpu-matrix-v1, replay=noir-vulkan-gpu-matrix-v1"
+    },
+    {
+      "name": "adapter",
+      "passed": true,
+      "detail": "manifest=Vulkan/llvmpipe (LLVM 20.1.2, 256 bits) replay=Vulkan/llvmpipe (LLVM 20.1.2, 256 bits)"
+    },
+    {
+      "name": "timestamp",
+      "passed": true,
+      "detail": "manifest=Some(1.0) replay=Some(1.0)"
+    },
+    {
+      "name": "profile-present",
+      "passed": true,
+      "detail": "noir-vulkan-gpu-matrix-v1"
+    },
+    {
+      "name": "profile-matcher",
+      "passed": true,
+      "detail": "registry=Vulkan/llvmpipe (LLVM 20.1.2, 256 bits) 640x360 manifest=Vulkan/llvmpipe (LLVM 20.1.2, 256 bits) 640x360"
+    },
+    {
+      "name": "profile-timestamp",
+      "passed": true,
+      "detail": "registry=1 manifest=Some(1.0)"
+    },
+    {
+      "name": "profile-replay-schema",
+      "passed": true,
+      "detail": "noir-wgpu-replay-matrix-v1/complete-activate-v1/gpu_median_ns"
+    },
+    {
+      "name": "minimum-samples",
+      "passed": false,
+      "detail": "required=6, observed=5"
+    }
+  ],
+  "comparisons": [
+    {
+      "batch_id": "coalesced-activate-advance-progress-button",
+      "strategy_id": "coalesced",
+      "observed_gpu_median_ns": 514942.0,
+      "profile_gpu_median_ns": 373460.0,
+      "median_relative_drift": 0.3788411074813902,
+      "observed_gpu_p95_ns": 571690.0,
+      "profile_gpu_p95_ns": 498839.0,
+      "p95_relative_drift": 0.1460411074515024,
+      "work_contract_matches": true
+    },
+    {
+      "batch_id": "coalesced-activate-refresh-fps-button",
+      "strategy_id": "coalesced",
+      "observed_gpu_median_ns": 413001.0,
+      "profile_gpu_median_ns": 274298.0,
+      "median_relative_drift": 0.5056653712385799,
+      "observed_gpu_p95_ns": 525353.0,
+      "profile_gpu_p95_ns": 315333.0,
+      "p95_relative_drift": 0.666026074023334,
+      "work_contract_matches": true
+    },
+    {
+      "batch_id": "coalesced-activate-refresh-latency-button",
+      "strategy_id": "coalesced",
+      "observed_gpu_median_ns": 449238.0,
+      "profile_gpu_median_ns": 294295.0,
+      "median_relative_drift": 0.5264887272974397,
+      "observed_gpu_p95_ns": 1595555.0,
+      "profile_gpu_p95_ns": 324906.0,
+      "p95_relative_drift": 3.910820360350378,
+      "work_contract_matches": true
+    }
+  ],
+  "note": "This gate never selects or changes a renderer strategy. It reports whether the offline calibration artifact remains compatible with the current Scene and replay evidence."
+}

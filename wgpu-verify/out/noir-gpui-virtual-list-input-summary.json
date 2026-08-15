@@ -1,0 +1,34 @@
+{
+  "metric": "x11_input_to_handler_excluding_gpu_present",
+  "method": "25 zero-delay X11 mouse clicks per sample; timing ends only after all handler logs are observed",
+  "frameworks": {
+    "noir": {
+      "sample_count": 15,
+      "clicks_per_sample": 25,
+      "completed_events_per_sample": 25,
+      "median_ns_per_handler": 999231.0,
+      "p95_ns_per_handler": 1108958.0,
+      "min_ns_per_handler": 458233.0,
+      "max_ns_per_handler": 1144350.0,
+      "mean_ns_per_handler": 827508.5333333333,
+      "stdev_ns_per_handler": 282125.0770017913
+    },
+    "gpui": {
+      "sample_count": 15,
+      "clicks_per_sample": 25,
+      "completed_events_per_sample": 25,
+      "median_ns_per_handler": 975383.0,
+      "p95_ns_per_handler": 1548507.0,
+      "min_ns_per_handler": 945623.0,
+      "max_ns_per_handler": 1570480.0,
+      "mean_ns_per_handler": 1122290.9333333333,
+      "stdev_ns_per_handler": 259879.47891185107
+    }
+  },
+  "limitations": [
+    "This is not GPU frame time, presentation latency, or an apples-to-apples rendering benchmark.",
+    "Noir reports separate wgpu GPU timestamps; the minimal GPUI comparator does not expose an equivalent portable timestamp path.",
+    "X11 injection, process scheduling and log polling remain in the end-to-end metric."
+  ],
+  "median_relative_change_noir_vs_gpui_pct": 2.4449882764001396
+}

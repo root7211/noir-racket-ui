@@ -1,0 +1,22 @@
+{
+  "profile_id": "noir-vulkan-gpu-timestamp-v1",
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "backend": "Vulkan",
+  "timestamp_supported": true,
+  "timestamp_period_ns": 1.0,
+  "calibration_mode": "wgpu-timestamp-query",
+  "samples": [
+    {
+      "name": "clear-buffer-command",
+      "repetitions": 64,
+      "cpu_encode_submit_ns": 21508.75,
+      "gpu_timestamp_ns": 2522.1875
+    }
+  ],
+  "coefficients": {
+    "draw_range_ns": 2522.1875,
+    "covered_pixel_ns": 0.010946994357638889,
+    "clip_switch_ns": 630.546875,
+    "full_tile_multiplier": 4.0
+  }
+}

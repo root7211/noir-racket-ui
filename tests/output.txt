@@ -1,0 +1,8 @@
+Noir Counter language checks passed.
+{"actions":{"refresh-data":{"gpu_updates":[{"byte_length":96,"glyph_count":3,"kind":"glyph","node":"fps","offset":0,"state":"frame-rate"}],"writes":[{"op":"add","state":"frame-rate","value":84}]}},"dynamic_node_count":1,"resource_budget":{"glyph_capacity":3,"instance_capacity":6,"node_capacity":6},"root":{"children":[{"children":[],"id":"title","props":{"value":"NOIR GPU COUNTER"},"tag":"text"},{"children":[{"children":[],"id":"fps","props":{"max-chars":3,"value":["dynamic","frame-rate"]},"tag":"text"},{"children":[],"id":"latency","props":{"value":"fps"},"tag":"text"}],"id":"metrics","props":{"#:gap":12},"tag":"row"},{"children":[],"id":"refresh","props":{"label":"Increase to 144","on":"refresh-data"},"tag":"button"}],"id":"dashboard","props":{"#:background":"dark","#:gap":16,"#:padding":24},"tag":"column"},"state":{"frame-rate":60},"static_node_count":5,"update_plan":[["glyph-patch","fps",3]]}
+Noir UI plan
+  static nodes : 5
+  dynamic nodes: 1
+  resource budget: #hash((glyph_capacity . 3) (instance_capacity . 6) (node_capacity . 6))
+  (glyph-patch fps 3)
+  action refresh-data: (#(struct:gpu-update glyph fps frame-rate 0 96 3))

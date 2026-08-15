@@ -1,0 +1,420 @@
+{
+  "iteration": 1,
+  "id": "coalesced-activate-alert-threshold-row$apply",
+  "cpu_event_to_submit_ns": 13524004,
+  "gpu_elapsed_ns": 306668.0,
+  "expectations_match": true
+}
+{
+  "iteration": 1,
+  "id": "coalesced-activate-apply-all-button",
+  "cpu_event_to_submit_ns": 327799,
+  "gpu_elapsed_ns": 760375.0,
+  "expectations_match": true
+}
+{
+  "iteration": 1,
+  "id": "coalesced-activate-batch-size-row$apply",
+  "cpu_event_to_submit_ns": 191767,
+  "gpu_elapsed_ns": 428975.0,
+  "expectations_match": true
+}
+{
+  "iteration": 1,
+  "id": "coalesced-activate-reset-all-button",
+  "cpu_event_to_submit_ns": 196861,
+  "gpu_elapsed_ns": 759045.0,
+  "expectations_match": true
+}
+{
+  "iteration": 1,
+  "id": "coalesced-activate-sample-interval-row$apply",
+  "cpu_event_to_submit_ns": 127305,
+  "gpu_elapsed_ns": 345724.0,
+  "expectations_match": true
+}
+{
+  "iteration": 2,
+  "id": "coalesced-activate-alert-threshold-row$apply",
+  "cpu_event_to_submit_ns": 13074283,
+  "gpu_elapsed_ns": 365460.0,
+  "expectations_match": true
+}
+{
+  "iteration": 2,
+  "id": "coalesced-activate-apply-all-button",
+  "cpu_event_to_submit_ns": 178453,
+  "gpu_elapsed_ns": 703630.0,
+  "expectations_match": true
+}
+{
+  "iteration": 2,
+  "id": "coalesced-activate-batch-size-row$apply",
+  "cpu_event_to_submit_ns": 111856,
+  "gpu_elapsed_ns": 347232.0,
+  "expectations_match": true
+}
+{
+  "iteration": 2,
+  "id": "coalesced-activate-reset-all-button",
+  "cpu_event_to_submit_ns": 104848,
+  "gpu_elapsed_ns": 614089.0,
+  "expectations_match": true
+}
+{
+  "iteration": 2,
+  "id": "coalesced-activate-sample-interval-row$apply",
+  "cpu_event_to_submit_ns": 126445,
+  "gpu_elapsed_ns": 308866.0,
+  "expectations_match": true
+}
+{
+  "iteration": 3,
+  "id": "coalesced-activate-alert-threshold-row$apply",
+  "cpu_event_to_submit_ns": 12643970,
+  "gpu_elapsed_ns": 318645.0,
+  "expectations_match": true
+}
+{
+  "iteration": 3,
+  "id": "coalesced-activate-apply-all-button",
+  "cpu_event_to_submit_ns": 174993,
+  "gpu_elapsed_ns": 652560.0,
+  "expectations_match": true
+}
+{
+  "iteration": 3,
+  "id": "coalesced-activate-batch-size-row$apply",
+  "cpu_event_to_submit_ns": 105124,
+  "gpu_elapsed_ns": 325403.0,
+  "expectations_match": true
+}
+{
+  "iteration": 3,
+  "id": "coalesced-activate-reset-all-button",
+  "cpu_event_to_submit_ns": 92222,
+  "gpu_elapsed_ns": 548758.0,
+  "expectations_match": true
+}
+{
+  "iteration": 3,
+  "id": "coalesced-activate-sample-interval-row$apply",
+  "cpu_event_to_submit_ns": 84034,
+  "gpu_elapsed_ns": 299481.0,
+  "expectations_match": true
+}
+{
+  "iteration": 4,
+  "id": "coalesced-activate-alert-threshold-row$apply",
+  "cpu_event_to_submit_ns": 13198461,
+  "gpu_elapsed_ns": 345271.0,
+  "expectations_match": true
+}
+{
+  "iteration": 4,
+  "id": "coalesced-activate-apply-all-button",
+  "cpu_event_to_submit_ns": 183113,
+  "gpu_elapsed_ns": 629037.0,
+  "expectations_match": true
+}
+{
+  "iteration": 4,
+  "id": "coalesced-activate-batch-size-row$apply",
+  "cpu_event_to_submit_ns": 107902,
+  "gpu_elapsed_ns": 293459.0,
+  "expectations_match": true
+}
+{
+  "iteration": 4,
+  "id": "coalesced-activate-reset-all-button",
+  "cpu_event_to_submit_ns": 100767,
+  "gpu_elapsed_ns": 617543.0,
+  "expectations_match": true
+}
+{
+  "iteration": 4,
+  "id": "coalesced-activate-sample-interval-row$apply",
+  "cpu_event_to_submit_ns": 85291,
+  "gpu_elapsed_ns": 288556.0,
+  "expectations_match": true
+}
+{
+  "iteration": 5,
+  "id": "coalesced-activate-alert-threshold-row$apply",
+  "cpu_event_to_submit_ns": 13079628,
+  "gpu_elapsed_ns": 377146.0,
+  "expectations_match": true
+}
+{
+  "iteration": 5,
+  "id": "coalesced-activate-apply-all-button",
+  "cpu_event_to_submit_ns": 175374,
+  "gpu_elapsed_ns": 627001.0,
+  "expectations_match": true
+}
+{
+  "iteration": 5,
+  "id": "coalesced-activate-batch-size-row$apply",
+  "cpu_event_to_submit_ns": 111573,
+  "gpu_elapsed_ns": 303538.0,
+  "expectations_match": true
+}
+{
+  "iteration": 5,
+  "id": "coalesced-activate-reset-all-button",
+  "cpu_event_to_submit_ns": 123999,
+  "gpu_elapsed_ns": 549544.0,
+  "expectations_match": true
+}
+{
+  "iteration": 5,
+  "id": "coalesced-activate-sample-interval-row$apply",
+  "cpu_event_to_submit_ns": 94074,
+  "gpu_elapsed_ns": 293858.0,
+  "expectations_match": true
+}
+{
+  "iteration": 6,
+  "id": "coalesced-activate-alert-threshold-row$apply",
+  "cpu_event_to_submit_ns": 12890344,
+  "gpu_elapsed_ns": 319193.0,
+  "expectations_match": true
+}
+{
+  "iteration": 6,
+  "id": "coalesced-activate-apply-all-button",
+  "cpu_event_to_submit_ns": 182948,
+  "gpu_elapsed_ns": 667567.0,
+  "expectations_match": true
+}
+{
+  "iteration": 6,
+  "id": "coalesced-activate-batch-size-row$apply",
+  "cpu_event_to_submit_ns": 125470,
+  "gpu_elapsed_ns": 408118.0,
+  "expectations_match": true
+}
+{
+  "iteration": 6,
+  "id": "coalesced-activate-reset-all-button",
+  "cpu_event_to_submit_ns": 100527,
+  "gpu_elapsed_ns": 665080.0,
+  "expectations_match": true
+}
+{
+  "iteration": 6,
+  "id": "coalesced-activate-sample-interval-row$apply",
+  "cpu_event_to_submit_ns": 90279,
+  "gpu_elapsed_ns": 269154.0,
+  "expectations_match": true
+}
+{
+  "iteration": 7,
+  "id": "coalesced-activate-alert-threshold-row$apply",
+  "cpu_event_to_submit_ns": 14090838,
+  "gpu_elapsed_ns": 337603.0,
+  "expectations_match": true
+}
+{
+  "iteration": 7,
+  "id": "coalesced-activate-apply-all-button",
+  "cpu_event_to_submit_ns": 182621,
+  "gpu_elapsed_ns": 648212.0,
+  "expectations_match": true
+}
+{
+  "iteration": 7,
+  "id": "coalesced-activate-batch-size-row$apply",
+  "cpu_event_to_submit_ns": 112928,
+  "gpu_elapsed_ns": 326073.0,
+  "expectations_match": true
+}
+{
+  "iteration": 7,
+  "id": "coalesced-activate-reset-all-button",
+  "cpu_event_to_submit_ns": 151603,
+  "gpu_elapsed_ns": 682714.0,
+  "expectations_match": true
+}
+{
+  "iteration": 7,
+  "id": "coalesced-activate-sample-interval-row$apply",
+  "cpu_event_to_submit_ns": 154408,
+  "gpu_elapsed_ns": 311901.0,
+  "expectations_match": true
+}
+{
+  "iteration": 8,
+  "id": "coalesced-activate-alert-threshold-row$apply",
+  "cpu_event_to_submit_ns": 13382302,
+  "gpu_elapsed_ns": 272409.0,
+  "expectations_match": true
+}
+{
+  "iteration": 8,
+  "id": "coalesced-activate-apply-all-button",
+  "cpu_event_to_submit_ns": 172232,
+  "gpu_elapsed_ns": 676232.0,
+  "expectations_match": true
+}
+{
+  "iteration": 8,
+  "id": "coalesced-activate-batch-size-row$apply",
+  "cpu_event_to_submit_ns": 127127,
+  "gpu_elapsed_ns": 307446.0,
+  "expectations_match": true
+}
+{
+  "iteration": 8,
+  "id": "coalesced-activate-reset-all-button",
+  "cpu_event_to_submit_ns": 147038,
+  "gpu_elapsed_ns": 683457.0,
+  "expectations_match": true
+}
+{
+  "iteration": 8,
+  "id": "coalesced-activate-sample-interval-row$apply",
+  "cpu_event_to_submit_ns": 96278,
+  "gpu_elapsed_ns": 320231.0,
+  "expectations_match": true
+}
+{
+  "iteration": 9,
+  "id": "coalesced-activate-alert-threshold-row$apply",
+  "cpu_event_to_submit_ns": 13972338,
+  "gpu_elapsed_ns": 343669.0,
+  "expectations_match": true
+}
+{
+  "iteration": 9,
+  "id": "coalesced-activate-apply-all-button",
+  "cpu_event_to_submit_ns": 185565,
+  "gpu_elapsed_ns": 678518.0,
+  "expectations_match": true
+}
+{
+  "iteration": 9,
+  "id": "coalesced-activate-batch-size-row$apply",
+  "cpu_event_to_submit_ns": 114133,
+  "gpu_elapsed_ns": 274822.0,
+  "expectations_match": true
+}
+{
+  "iteration": 9,
+  "id": "coalesced-activate-reset-all-button",
+  "cpu_event_to_submit_ns": 112530,
+  "gpu_elapsed_ns": 657541.0,
+  "expectations_match": true
+}
+{
+  "iteration": 9,
+  "id": "coalesced-activate-sample-interval-row$apply",
+  "cpu_event_to_submit_ns": 90439,
+  "gpu_elapsed_ns": 314982.0,
+  "expectations_match": true
+}
+{
+  "iteration": 10,
+  "id": "coalesced-activate-alert-threshold-row$apply",
+  "cpu_event_to_submit_ns": 13464247,
+  "gpu_elapsed_ns": 333222.0,
+  "expectations_match": true
+}
+{
+  "iteration": 10,
+  "id": "coalesced-activate-apply-all-button",
+  "cpu_event_to_submit_ns": 165103,
+  "gpu_elapsed_ns": 636823.0,
+  "expectations_match": true
+}
+{
+  "iteration": 10,
+  "id": "coalesced-activate-batch-size-row$apply",
+  "cpu_event_to_submit_ns": 113099,
+  "gpu_elapsed_ns": 287323.0,
+  "expectations_match": true
+}
+{
+  "iteration": 10,
+  "id": "coalesced-activate-reset-all-button",
+  "cpu_event_to_submit_ns": 93985,
+  "gpu_elapsed_ns": 519499.0,
+  "expectations_match": true
+}
+{
+  "iteration": 10,
+  "id": "coalesced-activate-sample-interval-row$apply",
+  "cpu_event_to_submit_ns": 83163,
+  "gpu_elapsed_ns": 287908.0,
+  "expectations_match": true
+}
+{
+  "iteration": 11,
+  "id": "coalesced-activate-alert-threshold-row$apply",
+  "cpu_event_to_submit_ns": 14081185,
+  "gpu_elapsed_ns": 371731.0,
+  "expectations_match": true
+}
+{
+  "iteration": 11,
+  "id": "coalesced-activate-apply-all-button",
+  "cpu_event_to_submit_ns": 208100,
+  "gpu_elapsed_ns": 767002.0,
+  "expectations_match": true
+}
+{
+  "iteration": 11,
+  "id": "coalesced-activate-batch-size-row$apply",
+  "cpu_event_to_submit_ns": 144958,
+  "gpu_elapsed_ns": 348329.0,
+  "expectations_match": true
+}
+{
+  "iteration": 11,
+  "id": "coalesced-activate-reset-all-button",
+  "cpu_event_to_submit_ns": 107175,
+  "gpu_elapsed_ns": 629288.0,
+  "expectations_match": true
+}
+{
+  "iteration": 11,
+  "id": "coalesced-activate-sample-interval-row$apply",
+  "cpu_event_to_submit_ns": 91743,
+  "gpu_elapsed_ns": 304977.0,
+  "expectations_match": true
+}
+{
+  "iteration": 12,
+  "id": "coalesced-activate-alert-threshold-row$apply",
+  "cpu_event_to_submit_ns": 13602865,
+  "gpu_elapsed_ns": 362639.0,
+  "expectations_match": true
+}
+{
+  "iteration": 12,
+  "id": "coalesced-activate-apply-all-button",
+  "cpu_event_to_submit_ns": 239360,
+  "gpu_elapsed_ns": 729870.0,
+  "expectations_match": true
+}
+{
+  "iteration": 12,
+  "id": "coalesced-activate-batch-size-row$apply",
+  "cpu_event_to_submit_ns": 144213,
+  "gpu_elapsed_ns": 480875.0,
+  "expectations_match": true
+}
+{
+  "iteration": 12,
+  "id": "coalesced-activate-reset-all-button",
+  "cpu_event_to_submit_ns": 145055,
+  "gpu_elapsed_ns": 817324.0,
+  "expectations_match": true
+}
+{
+  "iteration": 12,
+  "id": "coalesced-activate-sample-interval-row$apply",
+  "cpu_event_to_submit_ns": 146615,
+  "gpu_elapsed_ns": 377786.0,
+  "expectations_match": true
+}

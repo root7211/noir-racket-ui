@@ -1,0 +1,17 @@
+[package]
+name = "noir-wgpu-verify"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+bytemuck = { version = "1.15", features = ["derive"] }
+pollster = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# Ubuntu 24.04 的 Cargo 1.75 不能解析当前 Edition 2024 的 indexmap。
+# naga/wgpu 需要的语义在 2.2.x 已满足，故锁定一个 MSRV 兼容版本。
+indexmap = "=2.2.6"
+wgpu = "0.20"
+# 当前 sandbox/目标验证使用 X11；关闭 Wayland 可避免 scanner 引入高 MSRV quick-xml。
+winit = { version = "=0.29.15", default-features = false, features = ["x11", "rwh_06"] }

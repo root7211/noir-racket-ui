@@ -1,0 +1,49 @@
+{
+  "schema": "noir-calibration-manifest-v1",
+  "profile_id": "noir-vulkan-gpu-matrix-v1",
+  "scene_fingerprint_fnv1a64": "fnv1a64:b9abfd758142e4cc",
+  "replay_report_fingerprint_fnv1a64": "fnv1a64:df189c98b5ad4016",
+  "replay_schema": "noir-wgpu-replay-matrix-v2",
+  "renderer": "full-redraw / packet-aware / action-aware / coalesced / compiler-selected",
+  "adapter_name": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "backend": "Vulkan",
+  "timestamp_query_supported": true,
+  "timestamp_period_ns": 1.0,
+  "warmup_iterations": 2,
+  "sample_iterations": 5,
+  "compiler_selected": [
+    {
+      "batch_id": "coalesced-activate-advance-progress-button",
+      "strategy_id": "coalesced",
+      "tile_mask_hex": "0x0000000000000024",
+      "tile_count": 2,
+      "glyph_draw_count": 0,
+      "glyph_instance_count": 0,
+      "winner_write_bytes": 28,
+      "gpu_median_ns": 514942.0,
+      "gpu_p95_ns": 571690.0
+    },
+    {
+      "batch_id": "coalesced-activate-refresh-fps-button",
+      "strategy_id": "coalesced",
+      "tile_mask_hex": "0x0000000000000009",
+      "tile_count": 2,
+      "glyph_draw_count": 1,
+      "glyph_instance_count": 3,
+      "winner_write_bytes": 36,
+      "gpu_median_ns": 413001.0,
+      "gpu_p95_ns": 525353.0
+    },
+    {
+      "batch_id": "coalesced-activate-refresh-latency-button",
+      "strategy_id": "coalesced",
+      "tile_mask_hex": "0x0000000000000012",
+      "tile_count": 2,
+      "glyph_draw_count": 1,
+      "glyph_instance_count": 3,
+      "winner_write_bytes": 36,
+      "gpu_median_ns": 449238.0,
+      "gpu_p95_ns": 1595555.0
+    }
+  ]
+}

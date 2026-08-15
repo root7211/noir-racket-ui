@@ -1,0 +1,225 @@
+{
+  "schema": "noir-resident-worklist-sampling-v1",
+  "rows": [
+    {
+      "id": "coalesced-activate-alert-threshold-row$apply",
+      "correctness": true,
+      "cpu": {
+        "baseline": {
+          "count": 12,
+          "min": 12687899,
+          "median": 13049538.5,
+          "p95": 16579536,
+          "max": 16579536,
+          "mean": 13268467.25
+        },
+        "optimized": {
+          "count": 12,
+          "min": 12643970,
+          "median": 13423274.5,
+          "p95": 14090838,
+          "max": 14090838,
+          "mean": 13417038.75
+        },
+        "median_delta": 373736.0,
+        "median_delta_percent": 2.8639786763340327
+      },
+      "gpu": {
+        "baseline": {
+          "count": 12,
+          "min": 303532.0,
+          "median": 387039.0,
+          "p95": 436202.0,
+          "max": 436202.0,
+          "mean": 373993.9166666667
+        },
+        "optimized": {
+          "count": 12,
+          "min": 272409.0,
+          "median": 340636.0,
+          "p95": 377146.0,
+          "max": 377146.0,
+          "mean": 337804.6666666667
+        },
+        "median_delta": -46403.0,
+        "median_delta_percent": -11.989231059402282
+      }
+    },
+    {
+      "id": "coalesced-activate-apply-all-button",
+      "correctness": true,
+      "cpu": {
+        "baseline": {
+          "count": 12,
+          "min": 152817,
+          "median": 188568.0,
+          "p95": 223653,
+          "max": 223653,
+          "mean": 191579.91666666666
+        },
+        "optimized": {
+          "count": 12,
+          "min": 165103,
+          "median": 182784.5,
+          "p95": 327799,
+          "max": 327799,
+          "mean": 197971.75
+        },
+        "median_delta": -5783.5,
+        "median_delta_percent": -3.0670633405455856
+      },
+      "gpu": {
+        "baseline": {
+          "count": 12,
+          "min": 607945.0,
+          "median": 720555.0,
+          "p95": 932026.0,
+          "max": 932026.0,
+          "mean": 714461.8333333334
+        },
+        "optimized": {
+          "count": 12,
+          "min": 627001.0,
+          "median": 671899.5,
+          "p95": 767002.0,
+          "max": 767002.0,
+          "mean": 681402.25
+        },
+        "median_delta": -48655.5,
+        "median_delta_percent": -6.752503278722652
+      }
+    },
+    {
+      "id": "coalesced-activate-batch-size-row$apply",
+      "correctness": true,
+      "cpu": {
+        "baseline": {
+          "count": 12,
+          "min": 98281,
+          "median": 122179.0,
+          "p95": 154848,
+          "max": 154848,
+          "mean": 124664.25
+        },
+        "optimized": {
+          "count": 12,
+          "min": 105124,
+          "median": 113616.0,
+          "p95": 191767,
+          "max": 191767,
+          "mean": 125845.83333333333
+        },
+        "median_delta": -8563.0,
+        "median_delta_percent": -7.008569394085727
+      },
+      "gpu": {
+        "baseline": {
+          "count": 12,
+          "min": 281447.0,
+          "median": 317302.0,
+          "p95": 499203.0,
+          "max": 499203.0,
+          "mean": 347015.5833333333
+        },
+        "optimized": {
+          "count": 12,
+          "min": 274822.0,
+          "median": 325738.0,
+          "p95": 480875.0,
+          "max": 480875.0,
+          "mean": 344299.4166666667
+        },
+        "median_delta": 8436.0,
+        "median_delta_percent": 2.6586658766726967
+      }
+    },
+    {
+      "id": "coalesced-activate-reset-all-button",
+      "correctness": true,
+      "cpu": {
+        "baseline": {
+          "count": 12,
+          "min": 94978,
+          "median": 124701.5,
+          "p95": 166641,
+          "max": 166641,
+          "mean": 124617.66666666667
+        },
+        "optimized": {
+          "count": 12,
+          "min": 92222,
+          "median": 109852.5,
+          "p95": 196861,
+          "max": 196861,
+          "mean": 123050.83333333333
+        },
+        "median_delta": -14849.0,
+        "median_delta_percent": -11.907635433414995
+      },
+      "gpu": {
+        "baseline": {
+          "count": 12,
+          "min": 521462.0,
+          "median": 617537.0,
+          "p95": 830066.0,
+          "max": 830066.0,
+          "mean": 643897.5833333334
+        },
+        "optimized": {
+          "count": 12,
+          "min": 519499.0,
+          "median": 643414.5,
+          "p95": 817324.0,
+          "max": 817324.0,
+          "mean": 645323.5
+        },
+        "median_delta": 25877.5,
+        "median_delta_percent": 4.190437172185634
+      }
+    },
+    {
+      "id": "coalesced-activate-sample-interval-row$apply",
+      "correctness": true,
+      "cpu": {
+        "baseline": {
+          "count": 12,
+          "min": 75856,
+          "median": 90975.5,
+          "p95": 156219,
+          "max": 156219,
+          "mean": 101249.5
+        },
+        "optimized": {
+          "count": 12,
+          "min": 83163,
+          "median": 92908.5,
+          "p95": 154408,
+          "max": 154408,
+          "mean": 105839.5
+        },
+        "median_delta": 1933.0,
+        "median_delta_percent": 2.124747871679738
+      },
+      "gpu": {
+        "baseline": {
+          "count": 12,
+          "min": 246840.0,
+          "median": 297330.0,
+          "p95": 425390.0,
+          "max": 425390.0,
+          "mean": 316816.3333333333
+        },
+        "optimized": {
+          "count": 12,
+          "min": 269154.0,
+          "median": 306921.5,
+          "p95": 377786.0,
+          "max": 377786.0,
+          "mean": 310285.3333333333
+        },
+        "median_delta": 9591.5,
+        "median_delta_percent": 3.22587697171493
+      }
+    }
+  ]
+}

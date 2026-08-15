@@ -1,0 +1,89 @@
+{
+  "schema": "noir-resident-worklist-comparison-v1",
+  "baseline": "wgpu-verify/out/resident-worklist-baseline-benchmark.json",
+  "optimized": "wgpu-verify/out/resident-worklist-optimized-benchmark.json",
+  "adapter_name": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "backend": "Vulkan",
+  "rows": [
+    {
+      "id": "coalesced-activate-alert-threshold-row$apply",
+      "correctness": true,
+      "cpu_event_to_submit_ns": {
+        "baseline": 14843930,
+        "optimized": 14740407,
+        "delta": -103523,
+        "delta_percent": -0.6974096482535285
+      },
+      "gpu_elapsed_ns": {
+        "baseline": 410571.0,
+        "optimized": 573770.0,
+        "delta": 163199.0,
+        "delta_percent": 39.74927600829089
+      }
+    },
+    {
+      "id": "coalesced-activate-apply-all-button",
+      "correctness": true,
+      "cpu_event_to_submit_ns": {
+        "baseline": 244711,
+        "optimized": 190806,
+        "delta": -53905,
+        "delta_percent": -22.028024894671674
+      },
+      "gpu_elapsed_ns": {
+        "baseline": 755066.0,
+        "optimized": 857239.0,
+        "delta": 102173.0,
+        "delta_percent": 13.531664781621739
+      }
+    },
+    {
+      "id": "coalesced-activate-batch-size-row$apply",
+      "correctness": true,
+      "cpu_event_to_submit_ns": {
+        "baseline": 130264,
+        "optimized": 153558,
+        "delta": 23294,
+        "delta_percent": 17.882147024504082
+      },
+      "gpu_elapsed_ns": {
+        "baseline": 402105.0,
+        "optimized": 464792.0,
+        "delta": 62687.0,
+        "delta_percent": 15.589709155568817
+      }
+    },
+    {
+      "id": "coalesced-activate-reset-all-button",
+      "correctness": true,
+      "cpu_event_to_submit_ns": {
+        "baseline": 334063,
+        "optimized": 195931,
+        "delta": -138132,
+        "delta_percent": -41.34908684888779
+      },
+      "gpu_elapsed_ns": {
+        "baseline": 689997.0,
+        "optimized": 729352.0,
+        "delta": 39355.0,
+        "delta_percent": 5.703647986875305
+      }
+    },
+    {
+      "id": "coalesced-activate-sample-interval-row$apply",
+      "correctness": true,
+      "cpu_event_to_submit_ns": {
+        "baseline": 182275,
+        "optimized": 136547,
+        "delta": -45728,
+        "delta_percent": -25.087367987930325
+      },
+      "gpu_elapsed_ns": {
+        "baseline": 471567.0,
+        "optimized": 544233.0,
+        "delta": 72666.0,
+        "delta_percent": 15.409475217731522
+      }
+    }
+  ]
+}

@@ -1,0 +1,155 @@
+{
+  "schema": "noir-fusion-benchmark-samples-v1",
+  "cases": [
+    {
+      "id": "coalesced-activate-fuse-commit",
+      "all_expectations_match": true,
+      "baseline": {
+        "request_count": {
+          "n": 15,
+          "median": 3.0,
+          "p95": 3.0,
+          "mean": 3.0
+        },
+        "packet_activity_dispatch_count": {
+          "n": 15,
+          "median": 3.0,
+          "p95": 3.0,
+          "mean": 3.0
+        },
+        "queue_submit_count": {
+          "n": 15,
+          "median": 3.0,
+          "p95": 3.0,
+          "mean": 3.0
+        },
+        "cpu_event_to_submit_ns": {
+          "n": 15,
+          "median": 741518.0,
+          "p95": 832996.6,
+          "mean": 755714.5333333333
+        },
+        "gpu_elapsed_ns": {
+          "n": 15,
+          "median": 817895.0,
+          "p95": 1006768.9999999999,
+          "mean": 855418.4666666667
+        }
+      },
+      "fused": {
+        "request_count": {
+          "n": 15,
+          "median": 1.0,
+          "p95": 1.0,
+          "mean": 1.0
+        },
+        "packet_activity_dispatch_count": {
+          "n": 15,
+          "median": 1.0,
+          "p95": 1.0,
+          "mean": 1.0
+        },
+        "queue_submit_count": {
+          "n": 15,
+          "median": 1.0,
+          "p95": 1.0,
+          "mean": 1.0
+        },
+        "cpu_event_to_submit_ns": {
+          "n": 15,
+          "median": 106640.0,
+          "p95": 124876.79999999999,
+          "mean": 109614.53333333334
+        },
+        "gpu_elapsed_ns": {
+          "n": 15,
+          "median": 541667.0,
+          "p95": 659020.1999999998,
+          "mean": 558821.8666666667
+        }
+      },
+      "relative_change_fused_vs_baseline": {
+        "request_count": -0.6666666666666666,
+        "packet_activity_dispatch_count": -0.6666666666666666,
+        "queue_submit_count": -0.6666666666666666,
+        "cpu_event_to_submit_ns": -0.8561869030825955,
+        "gpu_elapsed_ns": -0.33773039326563925
+      }
+    },
+    {
+      "id": "coalesced-activate-fuse-reset",
+      "all_expectations_match": true,
+      "baseline": {
+        "request_count": {
+          "n": 15,
+          "median": 3.0,
+          "p95": 3.0,
+          "mean": 3.0
+        },
+        "packet_activity_dispatch_count": {
+          "n": 15,
+          "median": 3.0,
+          "p95": 3.0,
+          "mean": 3.0
+        },
+        "queue_submit_count": {
+          "n": 15,
+          "median": 3.0,
+          "p95": 3.0,
+          "mean": 3.0
+        },
+        "cpu_event_to_submit_ns": {
+          "n": 15,
+          "median": 740088.0,
+          "p95": 998744.1999999997,
+          "mean": 772832.7333333333
+        },
+        "gpu_elapsed_ns": {
+          "n": 15,
+          "median": 896625.0,
+          "p95": 1063637.0999999999,
+          "mean": 911888.5333333333
+        }
+      },
+      "fused": {
+        "request_count": {
+          "n": 15,
+          "median": 1.0,
+          "p95": 1.0,
+          "mean": 1.0
+        },
+        "packet_activity_dispatch_count": {
+          "n": 15,
+          "median": 1.0,
+          "p95": 1.0,
+          "mean": 1.0
+        },
+        "queue_submit_count": {
+          "n": 15,
+          "median": 1.0,
+          "p95": 1.0,
+          "mean": 1.0
+        },
+        "cpu_event_to_submit_ns": {
+          "n": 15,
+          "median": 100198.0,
+          "p95": 144664.89999999997,
+          "mean": 108167.06666666667
+        },
+        "gpu_elapsed_ns": {
+          "n": 15,
+          "median": 564471.0,
+          "p95": 681600.2999999999,
+          "mean": 573544.2
+        }
+      },
+      "relative_change_fused_vs_baseline": {
+        "request_count": -0.6666666666666666,
+        "packet_activity_dispatch_count": -0.6666666666666666,
+        "queue_submit_count": -0.6666666666666666,
+        "cpu_event_to_submit_ns": -0.8646133973257234,
+        "gpu_elapsed_ns": -0.3704491844416562
+      }
+    }
+  ]
+}

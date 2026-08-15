@@ -1,0 +1,325 @@
+{
+  "schema": "noir-wgpu-replay-matrix-v1",
+  "renderer": "full-redraw / packet-aware / action-aware / coalesced",
+  "profile_id": "noir-vulkan-gpu-matrix-v1",
+  "adapter_name": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "backend": "Vulkan",
+  "timestamp_query_supported": true,
+  "timestamp_period_ns": 1.0,
+  "warmup_iterations": 2,
+  "sample_iterations": 7,
+  "rows": [
+    {
+      "workload_id": "coalesced-activate-advance-progress-button",
+      "mode": "full-redraw",
+      "warmup_iterations": 2,
+      "sample_iterations": 7,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 31,
+      "expected_write_bytes": 28,
+      "gpu_elapsed_ns": {
+        "sample_count": 7,
+        "min_ns": 606610.0,
+        "median_ns": 672079.0,
+        "p95_ns": 775146.0,
+        "max_ns": 775146.0,
+        "mean_ns": 674134.2857142857
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 7,
+        "min_ns": 57384.0,
+        "median_ns": 80467.0,
+        "p95_ns": 657763.0,
+        "max_ns": 657763.0,
+        "mean_ns": 166786.7142857143
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-advance-progress-button",
+      "mode": "packet-aware",
+      "warmup_iterations": 2,
+      "sample_iterations": 7,
+      "submitted_tile_count": 6,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 6,
+      "expected_write_bytes": 28,
+      "gpu_elapsed_ns": {
+        "sample_count": 7,
+        "min_ns": 524114.0,
+        "median_ns": 566256.0,
+        "p95_ns": 615657.0,
+        "max_ns": 615657.0,
+        "mean_ns": 568364.8571428572
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 7,
+        "min_ns": 81795.0,
+        "median_ns": 95569.0,
+        "p95_ns": 553039.0,
+        "max_ns": 553039.0,
+        "mean_ns": 162586.7142857143
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-advance-progress-button",
+      "mode": "action-aware",
+      "warmup_iterations": 2,
+      "sample_iterations": 7,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 0,
+      "submitted_glyph_instance_count": 0,
+      "expected_write_bytes": 4,
+      "gpu_elapsed_ns": {
+        "sample_count": 7,
+        "min_ns": 255264.0,
+        "median_ns": 279731.0,
+        "p95_ns": 343969.0,
+        "max_ns": 343969.0,
+        "mean_ns": 285576.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 7,
+        "min_ns": 45752.0,
+        "median_ns": 59074.0,
+        "p95_ns": 229848.0,
+        "max_ns": 229848.0,
+        "mean_ns": 82965.0
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-advance-progress-button",
+      "mode": "coalesced",
+      "warmup_iterations": 2,
+      "sample_iterations": 7,
+      "submitted_tile_count": 2,
+      "submitted_glyph_draw_count": 0,
+      "submitted_glyph_instance_count": 0,
+      "expected_write_bytes": 28,
+      "gpu_elapsed_ns": {
+        "sample_count": 7,
+        "min_ns": 315731.0,
+        "median_ns": 373460.0,
+        "p95_ns": 498839.0,
+        "max_ns": 498839.0,
+        "mean_ns": 391832.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 7,
+        "min_ns": 62342.0,
+        "median_ns": 81212.0,
+        "p95_ns": 277092.0,
+        "max_ns": 277092.0,
+        "mean_ns": 110605.71428571429
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-fps-button",
+      "mode": "full-redraw",
+      "warmup_iterations": 2,
+      "sample_iterations": 7,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 31,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 7,
+        "min_ns": 607754.0,
+        "median_ns": 684366.0,
+        "p95_ns": 692440.0,
+        "max_ns": 692440.0,
+        "mean_ns": 665782.8571428572
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 7,
+        "min_ns": 85215.0,
+        "median_ns": 98691.0,
+        "p95_ns": 654957.0,
+        "max_ns": 654957.0,
+        "mean_ns": 176334.2857142857
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-fps-button",
+      "mode": "packet-aware",
+      "warmup_iterations": 2,
+      "sample_iterations": 7,
+      "submitted_tile_count": 6,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 6,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 7,
+        "min_ns": 492925.0,
+        "median_ns": 561036.0,
+        "p95_ns": 792462.0,
+        "max_ns": 792462.0,
+        "mean_ns": 586986.8571428572
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 7,
+        "min_ns": 82455.0,
+        "median_ns": 120919.0,
+        "p95_ns": 554092.0,
+        "max_ns": 554092.0,
+        "mean_ns": 175481.85714285713
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-fps-button",
+      "mode": "action-aware",
+      "warmup_iterations": 2,
+      "sample_iterations": 7,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 3,
+      "expected_write_bytes": 12,
+      "gpu_elapsed_ns": {
+        "sample_count": 7,
+        "min_ns": 217605.0,
+        "median_ns": 262022.0,
+        "p95_ns": 280631.0,
+        "max_ns": 280631.0,
+        "mean_ns": 256683.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 7,
+        "min_ns": 49280.0,
+        "median_ns": 84788.0,
+        "p95_ns": 228344.0,
+        "max_ns": 228344.0,
+        "mean_ns": 95660.42857142857
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-fps-button",
+      "mode": "coalesced",
+      "warmup_iterations": 2,
+      "sample_iterations": 7,
+      "submitted_tile_count": 2,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 3,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 7,
+        "min_ns": 261590.0,
+        "median_ns": 274298.0,
+        "p95_ns": 315333.0,
+        "max_ns": 315333.0,
+        "mean_ns": 281680.4285714286
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 7,
+        "min_ns": 67203.0,
+        "median_ns": 85081.0,
+        "p95_ns": 261989.0,
+        "max_ns": 261989.0,
+        "mean_ns": 111994.28571428571
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-latency-button",
+      "mode": "full-redraw",
+      "warmup_iterations": 2,
+      "sample_iterations": 7,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 31,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 7,
+        "min_ns": 582812.0,
+        "median_ns": 607714.0,
+        "p95_ns": 719796.0,
+        "max_ns": 719796.0,
+        "mean_ns": 623619.2857142857
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 7,
+        "min_ns": 63025.0,
+        "median_ns": 90487.0,
+        "p95_ns": 548718.0,
+        "max_ns": 548718.0,
+        "mean_ns": 148259.0
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-latency-button",
+      "mode": "packet-aware",
+      "warmup_iterations": 2,
+      "sample_iterations": 7,
+      "submitted_tile_count": 6,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 6,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 7,
+        "min_ns": 529913.0,
+        "median_ns": 571427.0,
+        "p95_ns": 626263.0,
+        "max_ns": 626263.0,
+        "mean_ns": 576712.4285714285
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 7,
+        "min_ns": 90393.0,
+        "median_ns": 101872.0,
+        "p95_ns": 537696.0,
+        "max_ns": 537696.0,
+        "mean_ns": 162546.0
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-latency-button",
+      "mode": "action-aware",
+      "warmup_iterations": 2,
+      "sample_iterations": 7,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 3,
+      "expected_write_bytes": 12,
+      "gpu_elapsed_ns": {
+        "sample_count": 7,
+        "min_ns": 206604.0,
+        "median_ns": 242099.0,
+        "p95_ns": 264114.0,
+        "max_ns": 264114.0,
+        "mean_ns": 235348.2857142857
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 7,
+        "min_ns": 46061.0,
+        "median_ns": 48795.0,
+        "p95_ns": 262621.0,
+        "max_ns": 262621.0,
+        "mean_ns": 79482.71428571429
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-latency-button",
+      "mode": "coalesced",
+      "warmup_iterations": 2,
+      "sample_iterations": 7,
+      "submitted_tile_count": 2,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 3,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 7,
+        "min_ns": 255869.0,
+        "median_ns": 294295.0,
+        "p95_ns": 324906.0,
+        "max_ns": 324906.0,
+        "mean_ns": 289758.4285714286
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 7,
+        "min_ns": 67753.0,
+        "median_ns": 79137.0,
+        "p95_ns": 225749.0,
+        "max_ns": 225749.0,
+        "mean_ns": 104781.14285714286
+      }
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "schema": "noir-wgpu-benchmark-v1",
+  "renderer": "coalesced-batch-executor + action-aware tile + placement renderer",
+  "profile_id": "noir-static-cost-v1",
+  "adapter_name": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "backend": "Vulkan",
+  "timestamp_query_supported": true,
+  "timestamp_period_ns": 1.0,
+  "cases": [
+    {
+      "id": "coalesced-activate-alert-row$apply",
+      "execution_order": [
+        "transient:10",
+        "action:0"
+      ],
+      "expected_tile_mask_hex": "0x0000000000000002",
+      "observed_tile_mask_hex": "0x0000000000000002",
+      "expected_winner_write_count": 5,
+      "expected_winner_write_bytes": 36,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 3,
+      "submitted_glyph_instance_count": 8,
+      "cpu_event_to_submit_ns": 14291406,
+      "gpu_elapsed_ns": 435981.0,
+      "expectations_match": true
+    },
+    {
+      "id": "coalesced-activate-batch-row$apply",
+      "execution_order": [
+        "transient:11",
+        "action:1"
+      ],
+      "expected_tile_mask_hex": "0x0000000000000004",
+      "observed_tile_mask_hex": "0x0000000000000004",
+      "expected_winner_write_count": 5,
+      "expected_winner_write_bytes": 36,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 3,
+      "submitted_glyph_instance_count": 6,
+      "cpu_event_to_submit_ns": 186845,
+      "gpu_elapsed_ns": 354565.0,
+      "expectations_match": true
+    },
+    {
+      "id": "coalesced-activate-fuse-commit",
+      "execution_order": [
+        "transient:12",
+        "transaction:0"
+      ],
+      "expected_tile_mask_hex": "0x000000000000000f",
+      "observed_tile_mask_hex": "0x000000000000000f",
+      "expected_winner_write_count": 2,
+      "expected_winner_write_bytes": 24,
+      "submitted_tile_count": 4,
+      "submitted_glyph_draw_count": 9,
+      "submitted_glyph_instance_count": 22,
+      "cpu_event_to_submit_ns": 155860,
+      "gpu_elapsed_ns": 1007733.0,
+      "expectations_match": true
+    },
+    {
+      "id": "coalesced-activate-fuse-reset",
+      "execution_order": [
+        "transient:13",
+        "transaction:0"
+      ],
+      "expected_tile_mask_hex": "0x0000000000000017",
+      "observed_tile_mask_hex": "0x0000000000000017",
+      "expected_winner_write_count": 2,
+      "expected_winner_write_bytes": 24,
+      "submitted_tile_count": 4,
+      "submitted_glyph_draw_count": 9,
+      "submitted_glyph_instance_count": 22,
+      "cpu_event_to_submit_ns": 162923,
+      "gpu_elapsed_ns": 714644.0,
+      "expectations_match": true
+    },
+    {
+      "id": "coalesced-activate-sample-row$apply",
+      "execution_order": [
+        "transient:14",
+        "action:2"
+      ],
+      "expected_tile_mask_hex": "0x0000000000000001",
+      "observed_tile_mask_hex": "0x0000000000000001",
+      "expected_winner_write_count": 5,
+      "expected_winner_write_bytes": 36,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 3,
+      "submitted_glyph_instance_count": 8,
+      "cpu_event_to_submit_ns": 116575,
+      "gpu_elapsed_ns": 338849.0,
+      "expectations_match": true
+    }
+  ]
+}

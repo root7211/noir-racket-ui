@@ -1,0 +1,96 @@
+{
+  "schema": "noir-wgpu-benchmark-v1",
+  "renderer": "coalesced-batch-executor + action-aware tile + placement renderer",
+  "profile_id": "noir-static-cost-v1",
+  "adapter_name": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "backend": "Vulkan",
+  "timestamp_query_supported": true,
+  "timestamp_period_ns": 1.0,
+  "cases": [
+    {
+      "id": "coalesced-activate-alert-threshold-row$apply",
+      "execution_order": [
+        "transient:10",
+        "action:0"
+      ],
+      "expected_tile_mask_hex": "0x0000000000000002",
+      "observed_tile_mask_hex": "0x0000000000000002",
+      "expected_winner_write_count": 5,
+      "expected_winner_write_bytes": 36,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 3,
+      "submitted_glyph_instance_count": 8,
+      "cpu_event_to_submit_ns": 14740407,
+      "gpu_elapsed_ns": 573770.0,
+      "expectations_match": true
+    },
+    {
+      "id": "coalesced-activate-apply-all-button",
+      "execution_order": [
+        "transient:11",
+        "transaction:0"
+      ],
+      "expected_tile_mask_hex": "0x000000000000000f",
+      "observed_tile_mask_hex": "0x000000000000000f",
+      "expected_winner_write_count": 2,
+      "expected_winner_write_bytes": 24,
+      "submitted_tile_count": 4,
+      "submitted_glyph_draw_count": 9,
+      "submitted_glyph_instance_count": 22,
+      "cpu_event_to_submit_ns": 190806,
+      "gpu_elapsed_ns": 857239.0,
+      "expectations_match": true
+    },
+    {
+      "id": "coalesced-activate-batch-size-row$apply",
+      "execution_order": [
+        "transient:12",
+        "action:1"
+      ],
+      "expected_tile_mask_hex": "0x0000000000000004",
+      "observed_tile_mask_hex": "0x0000000000000004",
+      "expected_winner_write_count": 5,
+      "expected_winner_write_bytes": 36,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 3,
+      "submitted_glyph_instance_count": 6,
+      "cpu_event_to_submit_ns": 153558,
+      "gpu_elapsed_ns": 464792.0,
+      "expectations_match": true
+    },
+    {
+      "id": "coalesced-activate-reset-all-button",
+      "execution_order": [
+        "transient:13",
+        "transaction:0"
+      ],
+      "expected_tile_mask_hex": "0x0000000000000017",
+      "observed_tile_mask_hex": "0x0000000000000017",
+      "expected_winner_write_count": 2,
+      "expected_winner_write_bytes": 24,
+      "submitted_tile_count": 4,
+      "submitted_glyph_draw_count": 9,
+      "submitted_glyph_instance_count": 22,
+      "cpu_event_to_submit_ns": 195931,
+      "gpu_elapsed_ns": 729352.0,
+      "expectations_match": true
+    },
+    {
+      "id": "coalesced-activate-sample-interval-row$apply",
+      "execution_order": [
+        "transient:14",
+        "action:2"
+      ],
+      "expected_tile_mask_hex": "0x0000000000000001",
+      "observed_tile_mask_hex": "0x0000000000000001",
+      "expected_winner_write_count": 5,
+      "expected_winner_write_bytes": 36,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 3,
+      "submitted_glyph_instance_count": 8,
+      "cpu_event_to_submit_ns": 136547,
+      "gpu_elapsed_ns": 544233.0,
+      "expectations_match": true
+    }
+  ]
+}
