@@ -1,0 +1,190 @@
+{
+  "audit_version": "session-aware-v1",
+  "data_directory": "data/rigorous-20260815-221938",
+  "protocol": {
+    "protocol_version": "rigorous-v1",
+    "sessions": 5,
+    "warmup_batches": 50,
+    "measurement_batches": 200,
+    "clicks_per_batch": 25,
+    "total_observations_per_framework": 1000,
+    "gpu": "AMD Radeon 780M",
+    "driver": "Mesa Dozen 26.1.7",
+    "os": "Linux 6.6.87.2-microsoft-standard-WSL2",
+    "wgpu_backend": "vulkan",
+    "display": "Xvfb (virtual)",
+    "start_time": "2026-08-15T22:19:38+08:00"
+  },
+  "integrity": {
+    "sessions_declared": 5,
+    "sessions_found": 5,
+    "batches_per_framework_by_session": [
+      200,
+      200,
+      200,
+      200,
+      200
+    ],
+    "actual_block_order": [
+      {
+        "session_id": "session-01",
+        "noir_first": 102,
+        "gpui_first": 98
+      },
+      {
+        "session_id": "session-02",
+        "noir_first": 101,
+        "gpui_first": 99
+      },
+      {
+        "session_id": "session-03",
+        "noir_first": 95,
+        "gpui_first": 105
+      },
+      {
+        "session_id": "session-04",
+        "noir_first": 97,
+        "gpui_first": 103
+      },
+      {
+        "session_id": "session-05",
+        "noir_first": 105,
+        "gpui_first": 95
+      }
+    ],
+    "complete": true,
+    "incomplete_batch_records": 0,
+    "binary_fingerprint_sets": 1,
+    "metadata_files_requiring_json_repair": 5,
+    "adapter_probe_failed_all_sessions": true,
+    "cpu_governor_unknown_all_sessions": true,
+    "power_state_unknown_all_sessions": true
+  },
+  "pooled_descriptive_only": {
+    "observations_per_framework": 1000,
+    "noir_median_ms": 0.63621024,
+    "gpui_median_ms": 1.1944628400000001,
+    "relative_improvement_pct": 46.73670718797749
+  },
+  "session_level_primary": {
+    "independent_units": 5,
+    "session_median_diffs_ms": [
+      -0.51993834,
+      -0.56714034,
+      -0.5755161199999999,
+      -0.58543726,
+      -0.5181956399999998
+    ],
+    "session_relative_improvements_pct": [
+      45.187407536251854,
+      46.91174510942,
+      47.2391473992159,
+      47.832500427556454,
+      45.377841752140945
+    ],
+    "median_session_diff_ms": -0.56714034,
+    "median_session_improvement_pct": 46.91174510942,
+    "mean_session_improvement_pct": 46.50972844491703,
+    "all_sessions_favor_noir": true,
+    "exact_sign_flip_one_sided_p": 0.03125,
+    "exact_sign_test_two_sided_p": 0.0625,
+    "hierarchical_bootstrap": {
+      "seed": 20260815,
+      "draws": 50000,
+      "median_diff_ms_ci95": [
+        -0.5801685199999999,
+        -0.5257726400000001
+      ],
+      "improvement_pct_ci95": [
+        45.494667068699606,
+        47.58964109038495
+      ]
+    }
+  },
+  "sessions": [
+    {
+      "session_id": "session-01",
+      "n": 200,
+      "noir_first_blocks": 102,
+      "gpui_first_blocks": 98,
+      "median_noir_ms": 0.63068828,
+      "median_gpui_ms": 1.1506266200000002,
+      "median_diff_ms": -0.51993834,
+      "relative_improvement_pct": 45.187407536251854,
+      "noir_p95_ms": 0.773137938,
+      "gpui_p95_ms": 1.377146924,
+      "noir_p99_ms": 0.8151870555999937,
+      "gpui_p99_ms": 1.4288299403999998,
+      "paired_batch_median_diff_ms": -0.5238713999999999,
+      "paired_batch_negative_fraction": 0.99
+    },
+    {
+      "session_id": "session-02",
+      "n": 200,
+      "noir_first_blocks": 101,
+      "gpui_first_blocks": 99,
+      "median_noir_ms": 0.6418113599999999,
+      "median_gpui_ms": 1.2089516999999999,
+      "median_diff_ms": -0.56714034,
+      "relative_improvement_pct": 46.91174510942,
+      "noir_p95_ms": 0.7489953999999999,
+      "gpui_p95_ms": 1.34244488,
+      "noir_p99_ms": 1.2589063016000002,
+      "gpui_p99_ms": 1.4255617355999974,
+      "paired_batch_median_diff_ms": -0.5609462199999999,
+      "paired_batch_negative_fraction": 0.985
+    },
+    {
+      "session_id": "session-03",
+      "n": 200,
+      "noir_first_blocks": 95,
+      "gpui_first_blocks": 105,
+      "median_noir_ms": 0.64278724,
+      "median_gpui_ms": 1.21830336,
+      "median_diff_ms": -0.5755161199999999,
+      "relative_improvement_pct": 47.2391473992159,
+      "noir_p95_ms": 1.2569223440000001,
+      "gpui_p95_ms": 1.325776536,
+      "noir_p99_ms": 1.3204309304,
+      "gpui_p99_ms": 1.4176214011999997,
+      "paired_batch_median_diff_ms": -0.5619271,
+      "paired_batch_negative_fraction": 0.93
+    },
+    {
+      "session_id": "session-04",
+      "n": 200,
+      "noir_first_blocks": 97,
+      "gpui_first_blocks": 103,
+      "median_noir_ms": 0.6384947,
+      "median_gpui_ms": 1.22393196,
+      "median_diff_ms": -0.58543726,
+      "relative_improvement_pct": 47.832500427556454,
+      "noir_p95_ms": 0.725022254,
+      "gpui_p95_ms": 1.3249099859999998,
+      "noir_p99_ms": 1.1862857847999997,
+      "gpui_p99_ms": 1.3754023812,
+      "paired_batch_median_diff_ms": -0.5785630800000001,
+      "paired_batch_negative_fraction": 0.98
+    },
+    {
+      "session_id": "session-05",
+      "n": 200,
+      "noir_first_blocks": 105,
+      "gpui_first_blocks": 95,
+      "median_noir_ms": 0.6237618,
+      "median_gpui_ms": 1.1419574399999999,
+      "median_diff_ms": -0.5181956399999998,
+      "relative_improvement_pct": 45.377841752140945,
+      "noir_p95_ms": 0.7133218979999999,
+      "gpui_p95_ms": 1.27845491,
+      "noir_p99_ms": 1.2682137031999998,
+      "gpui_p99_ms": 1.31697719,
+      "paired_batch_median_diff_ms": -0.51731106,
+      "paired_batch_negative_fraction": 0.985
+    }
+  ],
+  "interpretation": {
+    "supported": "For this exact Xvfb/WSL2 Dozen fixed-click endpoint, all five session medians favor Noir and the session-aware hierarchical bootstrap remains below zero.",
+    "not_supported": "The raw data do not establish native-display input-to-photon latency, scroll performance, general GUI performance, or a cross-device advantage. Batch-level pooled p-values are sensitivity evidence only because batches are nested within five sessions."
+  }
+}
