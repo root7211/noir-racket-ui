@@ -1,0 +1,135 @@
+
+===== host =====
+kernel=Linux 6.6.87.2-microsoft-standard-WSL2 x86_64 GNU/Linux
+distro=PRETTY_NAME="Ubuntu 24.04.1 LTS";NAME="Ubuntu";VERSION="24.04.1 LTS (Noble Numbat)";
+wsl_interop=present
+dxg_device=present
+wslg_runtime=present
+
+===== commands =====
+cargo=/home/root721/.cargo/bin/cargo
+rustc=/home/root721/.cargo/bin/rustc
+vulkaninfo=/usr/bin/vulkaninfo
+nvidia-smi=not-found
+glxinfo=/usr/bin/glxinfo
+cargo 1.87.0 (99624be96 2025-05-06)
+rustc 1.87.0 (17067e9ac 2025-05-09)
+
+===== environment =====
+WGPU_BACKEND=''
+WGPU_ADAPTER_NAME=''
+WGPU_POWER_PREF=''
+VK_ICD_FILENAMES=''
+VK_LAYER_PATH=''
+LD_LIBRARY_PATH=''
+DISPLAY=:0
+WAYLAND_DISPLAY=wayland-0
+
+===== vulkan_icd_inventory =====
+/usr/share/vulkan/icd.d/asahi_icd.json
+/usr/share/vulkan/icd.d/dzn_icd.json
+/usr/share/vulkan/icd.d/freedreno_icd.json
+/usr/share/vulkan/icd.d/gfxstream_vk_icd.json
+/usr/share/vulkan/icd.d/intel_hasvk_icd.json
+/usr/share/vulkan/icd.d/intel_icd.json
+/usr/share/vulkan/icd.d/lvp_icd.json
+/usr/share/vulkan/icd.d/nouveau_icd.json
+/usr/share/vulkan/icd.d/radeon_icd.json
+/usr/share/vulkan/icd.d/virtio_icd.json
+
+===== vulkaninfo_summary =====
+WARNING: dzn is not a conformant Vulkan implementation, testing use only.
+Dropped Escape call with ulEscapeCode : 0x03007703
+==========
+VULKANINFO
+==========
+
+Vulkan Instance Version: 1.3.275
+
+
+Instance Extensions: count = 25
+-------------------------------
+VK_EXT_acquire_drm_display             : extension revision 1
+VK_EXT_acquire_xlib_display            : extension revision 1
+VK_EXT_debug_report                    : extension revision 10
+VK_EXT_debug_utils                     : extension revision 2
+VK_EXT_direct_mode_display             : extension revision 1
+VK_EXT_display_surface_counter         : extension revision 1
+VK_EXT_headless_surface                : extension revision 1
+VK_EXT_layer_settings                  : extension revision 2
+VK_EXT_surface_maintenance1            : extension revision 1
+VK_EXT_swapchain_colorspace            : extension revision 5
+VK_KHR_device_group_creation           : extension revision 1
+VK_KHR_display                         : extension revision 23
+VK_KHR_external_fence_capabilities     : extension revision 1
+VK_KHR_external_memory_capabilities    : extension revision 1
+VK_KHR_external_semaphore_capabilities : extension revision 1
+VK_KHR_get_display_properties2         : extension revision 1
+VK_KHR_get_physical_device_properties2 : extension revision 2
+VK_KHR_get_surface_capabilities2       : extension revision 1
+VK_KHR_portability_enumeration         : extension revision 1
+VK_KHR_surface                         : extension revision 25
+VK_KHR_surface_protected_capabilities  : extension revision 1
+VK_KHR_wayland_surface                 : extension revision 6
+VK_KHR_xcb_surface                     : extension revision 6
+VK_KHR_xlib_surface                    : extension revision 6
+VK_LUNARG_direct_driver_loading        : extension revision 1
+
+Instance Layers: count = 5
+--------------------------
+VK_LAYER_INTEL_nullhw       INTEL NULL HW                                                1.1.73   version 1
+VK_LAYER_MESA_anti_lag      Open-source implementation of the VK_AMD_anti_lag extension. 1.4.303  version 1
+VK_LAYER_MESA_device_select Linux device selection layer                                 1.4.303  version 1
+VK_LAYER_MESA_overlay       Mesa Overlay layer                                           1.4.303  version 1
+VK_LAYER_MESA_screenshot    Mesa Screenshot layer                                        1.4.303  version 1
+
+Devices:
+========
+GPU0:
+	apiVersion         = 1.2.354
+	driverVersion      = 26.1.7
+	vendorID           = 0x1002
+	deviceID           = 0x15bf
+	deviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU
+	deviceName         = Microsoft Direct3D12 (AMD RadeonT 780M)
+	driverID           = DRIVER_ID_MESA_DOZEN
+	driverName         = Dozen
+	driverInfo         = Mesa 26.1.7 - kisak-mesa PPA
+	conformanceVersion = 0.0.0.0
+	deviceUUID         = 1561f2ee-9178-48a0-e819-7eb68c81354f
+	driverUUID         = bc7ab21d-1d30-a49f-88e1-ffcc442dd416
+GPU1:
+	apiVersion         = 1.4.354
+	driverVersion      = 26.1.7
+	vendorID           = 0x10005
+	deviceID           = 0x0000
+	deviceType         = PHYSICAL_DEVICE_TYPE_CPU
+	deviceName         = llvmpipe (LLVM 20.1.8, 256 bits)
+	driverID           = DRIVER_ID_MESA_LLVMPIPE
+	driverName         = llvmpipe
+	driverInfo         = Mesa 26.1.7 - kisak-mesa PPA (LLVM 20.1.8)
+	conformanceVersion = 1.3.1.1
+	deviceUUID         = 6d657361-3236-2e31-2e37-202d206b6900
+	driverUUID         = 6c6c766d-7069-7065-5555-494400000000
+
+===== wgpu30_vulkan_probe =====
+WARNING: dzn is not a conformant Vulkan implementation, testing use only.
+Dropped Escape call with ulEscapeCode : 0x03007703
+noir-wgpu-probe: wgpu=30 requested-backends=Backends(VULKAN) adapter-count=2
+adapter[0]: backend=Vulkan type=IntegratedGpu name="Microsoft Direct3D12 (AMD RadeonT 780M)" vendor=0x1002 device=0x15bf driver="Dozen" driver_info="Mesa 26.1.7 - kisak-mesa PPA"
+adapter[1]: backend=Vulkan type=Cpu name="llvmpipe (LLVM 20.1.8, 256 bits)" vendor=0x10005 device=0x0000 driver="llvmpipe" driver_info="Mesa 26.1.7 - kisak-mesa PPA (LLVM 20.1.8)"
+
+===== wgpu30_all_backend_probe =====
+WARNING: dzn is not a conformant Vulkan implementation, testing use only.
+Dropped Escape call with ulEscapeCode : 0x03007703
+noir-wgpu-probe: wgpu=30 requested-backends=Backends(NOOP | VULKAN | GL | METAL | DX12 | BROWSER_WEBGPU) adapter-count=3
+adapter[0]: backend=Vulkan type=IntegratedGpu name="Microsoft Direct3D12 (AMD RadeonT 780M)" vendor=0x1002 device=0x15bf driver="Dozen" driver_info="Mesa 26.1.7 - kisak-mesa PPA"
+adapter[1]: backend=Vulkan type=Cpu name="llvmpipe (LLVM 20.1.8, 256 bits)" vendor=0x10005 device=0x0000 driver="llvmpipe" driver_info="Mesa 26.1.7 - kisak-mesa PPA (LLVM 20.1.8)"
+adapter[2]: backend=Gl type=Cpu name="llvmpipe (LLVM 20.1.8, 256 bits)" vendor=0x10005 device=0x0000 driver="" driver_info="4.6 (Core Profile) Mesa 26.1.7 - kisak-mesa PPA"
+
+===== interpretation =====
+PASS requires at least one adapter line with backend=Vulkan and type=DiscreteGpu or IntegratedGpu.
+A backend=Vulkan type=Cpu line (for example llvmpipe) proves Vulkan is installed but does not prove physical-GPU access.
+If /dev/dxg is absent, the WSL guest has no Windows GPU paravirtualization device; wgpu version changes cannot repair that.
+If /dev/dxg is present but the Vulkan-only probe lists only Cpu adapters, collect this report before changing VK_ICD_FILENAMES. The likely boundary is the Windows GPU driver, Mesa/Dozen ICD, or the active WSL distribution rather than Noir's Scene or list ABI.
+Do not persistently force a dzn ICD before the unforced report is saved: an ICD override can hide a working native Vulkan path or turn an adapter-selection issue into a loader issue.
