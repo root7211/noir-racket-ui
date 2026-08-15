@@ -1,0 +1,14 @@
+{
+  "protocol_version": "rigorous-v1",
+  "sessions": 5,
+  "warmup_batches": 50,
+  "measurement_batches": 200,
+  "clicks_per_batch": 25,
+  "total_observations_per_framework": 1000,
+  "gpu": "AMD Radeon 780M",
+  "driver": "Mesa Dozen 26.1.7",
+  "os": "Linux 6.6.87.2-microsoft-standard-WSL2",
+  "wgpu_backend": "vulkan",
+  "display": "Xvfb (virtual)",
+  "start_time": "2026-08-15T19:22:34+08:00"
+}
