@@ -40,6 +40,8 @@ const LOG_BROWSER_PLAN_ABI_SCHEMA: &str = "noir-log-browser-plan-v1";
 const LOG_BROWSER_PLAN_ABI_REVISION: u32 = 1;
 const FONT_ASSET_PLAN_ABI_SCHEMA: &str = "noir-font-asset-plan-v1";
 const FONT_ASSET_PLAN_ABI_REVISION: u32 = 1;
+const FONT_PLACEMENT_PLAN_ABI_SCHEMA: &str = "noir-font-placement-plan-v1";
+const FONT_PLACEMENT_PLAN_ABI_REVISION: u32 = 1;
 
 #[derive(Debug, Deserialize)]
 struct Scene {
@@ -87,6 +89,7 @@ struct AbiContracts {
     list_navigation_plan: AbiContract,
     log_browser_plan: AbiContract,
     font_asset_plan: AbiContract,
+    font_placement_plan: AbiContract,
 }
 
 #[derive(Debug, Deserialize)]
@@ -138,14 +141,22 @@ struct FontManifest {
 struct FontManifestAtlas { width: u32, height: u32, channels: u32, mode: String }
 #[derive(Debug, Deserialize)]
 struct FontManifestMetrics { pixel_size: u32, line_height: u32 }
-#[derive(Debug, Deserialize)]
-struct FontManifestGlyph { glyph_id: u32 }
+#[derive(Clone, Debug, Deserialize)]
+struct FontManifestGlyph {
+    glyph_id: u32,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    advance: f32,
+}
 
 struct VerifiedFontAsset {
     plan: FontAssetPlan,
     atlas_bytes: Vec<u8>,
     manifest_path: PathBuf,
     atlas_path: PathBuf,
+    glyphs: Vec<FontManifestGlyph>,
 }
 struct RegisteredFontAtlas {
     face_id: String,
@@ -153,6 +164,8 @@ struct RegisteredFontAtlas {
     width: u32,
     height: u32,
     atlas_sha256: String,
+    glyphs: Vec<FontManifestGlyph>,
+    view: wgpu::TextureView,
     _texture: wgpu::Texture,
 }
 #[derive(Clone, Debug, Deserialize)]
@@ -645,6 +658,7 @@ struct GlyphPlacementEntry {
     atlas_uv: [f32; 4],
     advance: f32,
     dynamic: bool,
+    #[serde(default)] face_id: Option<String>,
     #[serde(rename = "state")] _state: serde_json::Value,
     #[serde(default)] state_index: Option<usize>,
     #[serde(rename = "clip_stack_id")] _clip_stack_id: String,
@@ -921,7 +935,9 @@ struct GpuDrawIndirect {
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct GpuPacketWorklist {
     count: u32,
-    // WGSL uniform layout: vec3<u32> starts at 16 and forces lanes to offset 32.
+    // WGSL uniform layout aligns the named vec3<u32> field to byte 16; the
+    // following vec4 array therefore starts at byte 32 and the full uniform is
+    // 160 bytes. Rust mirrors both the leading and trailing alignment padding.
     _pad0: [u32; 7],
     lanes: [[u32; 4]; 8],
 }
@@ -1400,6 +1416,7 @@ impl Host {
 
         compiler_abi_contracts(&scene)?;
         let verified_font_assets = compiler_font_assets(&scene, &scene_dir)?;
+        compiler_font_placements(&scene, &verified_font_assets)?;
         let virtual_lists = compiler_virtual_list_plans(&scene)?;
         let list_interactions = compiler_list_interaction_plans(&scene, &virtual_lists)?;
         if !virtual_lists.is_empty() {
@@ -1487,8 +1504,8 @@ impl Host {
         let clear = QuadInstance { pos: [-1.0,-1.0], size: [2.0,2.0], color: [0.008,0.012,0.025,1.0], glyph_word_offset: 0, glyph_enabled: 0, glyph_count: 0 };
         let clear_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("noir-tile-clear-quad"), contents: bytemuck::bytes_of(&clear), usage: wgpu::BufferUsages::VERTEX });
 
-        let (glyph_bind_group, text_pipeline) = make_text_resources(&device, &queue, format, &glyph_buffer)?;
         let font_atlases = make_registered_font_atlases(&device, &queue, &verified_font_assets)?;
+        let (glyph_bind_group, text_pipeline) = make_text_resources(&device, &queue, format, &glyph_buffer, &font_atlases)?;
         let static_pipeline = make_static_pipeline(&device, format);
         let gpu_timer = if timestamp_supported { Some(make_gpu_timestamp_timer(&device, queue.get_timestamp_period())) } else { None };
         println!("compiler subgroup packets: {} width-32 packet(s), vertex-subgroup-supported={subgroup_vertex_supported}; packet draw fallback is always ABI-equivalent", subgroup_packets.len());
@@ -2092,8 +2109,21 @@ impl Host {
         self.bind_glyph_placement_pipeline(pass);
         if let Some(activity) = &self.packet_activity {
             for packet in &self.subgroup_packets {
-                println!("packet-indirect-draw full packet={} activity_word={} indirect_offset={} lanes={} dynamic={}", packet.packet_index, packet.activity_word_offset, packet.indirect_byte_offset, packet.lane_count, packet.dynamic);
-                pass.draw_indirect(&activity.indirect_buffer, packet.indirect_byte_offset);
+                let atlas_page = self.scene.glyph_draw_packets[packet.packet_index].atlas_page;
+                // font_placement_plan v1 is deliberately static and sparse (title/header/detail
+                // chrome). Dozen/llvmpipe may drop later indirect commands in a multi-command
+                // page-2 pass although command readback is correct, so its compiler-known
+                // subrange uses direct draw. Legacy/dynamic packets retain compute worklist ->
+                // indirect draw when the adapter exposes vertex subgroup support; otherwise the
+                // same compiler-proved ranges use this compatible direct executor.
+                if atlas_page == 2 || !self.subgroup_vertex_supported {
+                    let reason = if atlas_page == 2 { "page2-static-v1" } else { "no-vertex-subgroup-compatible-direct" };
+                    println!("glyph-direct-draw full packet={} page={} placements=[{}..{}) lanes={} reason={}", packet.packet_index, atlas_page, packet.first_placement, packet.first_placement + packet.lane_count, packet.lane_count, reason);
+                    pass.draw(0..6, packet.first_placement..packet.first_placement + packet.lane_count);
+                } else {
+                    println!("packet-indirect-draw full packet={} activity_word={} indirect_offset={} lanes={} dynamic={}", packet.packet_index, packet.activity_word_offset, packet.indirect_byte_offset, packet.lane_count, packet.dynamic);
+                    pass.draw_indirect(&activity.indirect_buffer, packet.indirect_byte_offset);
+                }
             }
             return;
         }
@@ -2132,7 +2162,12 @@ impl Host {
                     let clipped_end = end.min(subgroup_end);
                     if start >= clipped_end { continue; }
                     if let Some(activity) = &self.packet_activity {
-                        if !direct_for_no_packets && start == subgroup.first_placement && clipped_end == subgroup_end {
+                        if packet.atlas_page == 2 || !self.subgroup_vertex_supported {
+                            let reason = if packet.atlas_page == 2 { "page2-static-v1" } else { "no-vertex-subgroup-compatible-direct" };
+                            println!("glyph-direct-draw tile={} packet={} page={} placements=[{}..{}) lanes={} reason={}",
+                                     tile_index, subgroup.packet_index, packet.atlas_page, start, clipped_end, subgroup.lane_count, reason);
+                            pass.draw(0..6, start..clipped_end);
+                        } else if !direct_for_no_packets && start == subgroup.first_placement && clipped_end == subgroup_end {
                             println!("packet-indirect-draw tile={} packet={} page={} activity_word={} indirect_offset={} lanes={} dynamic={}",
                                      tile_index, subgroup.packet_index, packet.atlas_page, subgroup.activity_word_offset,
                                      subgroup.indirect_byte_offset, subgroup.lane_count, subgroup.dynamic);
@@ -3436,6 +3471,7 @@ fn run_packet_activity_differential(device: &wgpu::Device, queue: &wgpu::Queue, 
     anyhow::ensure!(selected_activity_bytes == reference_activity_bytes, "packet activity differential mismatch");
     anyhow::ensure!(selected_indirect_bytes == reference_indirect_bytes, "packet indirect differential mismatch");
     println!("packet-activity-differential: selected={:?} reference={:?} packets={} activity+indirect=equal", selected.variant, reference.variant, selected.packet_count);
+
     Ok(())
 }
 
@@ -3453,7 +3489,7 @@ fn make_packet_activity_resources(device: &wgpu::Device, glyph_buffer: &wgpu::Bu
     let descriptor_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("noir-subgroup-packet-descriptors"), contents: bytemuck::cast_slice(&descriptors), usage: wgpu::BufferUsages::STORAGE,
     });
-    // WGSL consumes one 160-byte GpuPacketWorklist.  Dynamic uniform offsets must
+    // WGSL consumes one 160-byte GpuPacketWorklist. Dynamic uniform offsets must
     // honour the adapter limit (normally 256 bytes), so each compiler list owns an
     // alignment-padded immutable slot in one GPU-resident table.
     let payload_size = std::mem::size_of::<GpuPacketWorklist>() as u64;
@@ -3508,18 +3544,95 @@ fn make_packet_activity_resources(device: &wgpu::Device, glyph_buffer: &wgpu::Bu
     Some(PacketActivityResources { variant, _descriptor_buffer: descriptor_buffer, activity_buffer, _worklist_buffer: worklist_buffer, worklist_stride: worklist_stride as u32, worklist_count: worklists.len() as u32, indirect_buffer, bind_group, pipeline, packet_count: packets.len() as u32 })
 }
 
-fn make_text_resources(device:&wgpu::Device,queue:&wgpu::Queue,format:wgpu::TextureFormat,glyph_buffer:&wgpu::Buffer)->Result<(wgpu::BindGroup,wgpu::RenderPipeline)> {
-         let atlas=device.create_texture(&wgpu::TextureDescriptor{label:Some("noir-glyph-atlas-pages"),size:wgpu::Extent3d{width:ATLAS_WIDTH,height:ATLAS_HEIGHT,depth_or_array_layers:ATLAS_PAGES},mip_level_count:1,sample_count:1,dimension:wgpu::TextureDimension::D2,format:wgpu::TextureFormat::R8Unorm,usage:wgpu::TextureUsages::TEXTURE_BINDING|wgpu::TextureUsages::COPY_DST,view_formats:&[]});
- queue.write_texture(wgpu::TexelCopyTextureInfo{texture:&atlas,mip_level:0,origin:wgpu::Origin3d{x:0,y:0,z:0},aspect:wgpu::TextureAspect::All},&digit_atlas_pixels(),wgpu::TexelCopyBufferLayout{offset:0,bytes_per_row:Some(ATLAS_WIDTH),rows_per_image:Some(ATLAS_HEIGHT)},wgpu::Extent3d{width:ATLAS_WIDTH,height:ATLAS_HEIGHT,depth_or_array_layers:1});
- queue.write_texture(wgpu::TexelCopyTextureInfo{texture:&atlas,mip_level:0,origin:wgpu::Origin3d{x:0,y:0,z:1},aspect:wgpu::TextureAspect::All},&ascii_atlas_pixels(),wgpu::TexelCopyBufferLayout{offset:0,bytes_per_row:Some(ATLAS_WIDTH),rows_per_image:Some(ATLAS_HEIGHT)},wgpu::Extent3d{width:ATLAS_WIDTH,height:ATLAS_HEIGHT,depth_or_array_layers:1});
- let view=atlas.create_view(&wgpu::TextureViewDescriptor{dimension:Some(wgpu::TextureViewDimension::D2Array),..Default::default()}); let sampler=device.create_sampler(&wgpu::SamplerDescriptor{label:Some("noir-digit-atlas-sampler"),mag_filter:wgpu::FilterMode::Nearest,min_filter:wgpu::FilterMode::Nearest,..Default::default()});
- let bgl=device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor{label:Some("noir-glyph-bgl"),entries:&[wgpu::BindGroupLayoutEntry{binding:0,visibility:wgpu::ShaderStages::VERTEX,ty:wgpu::BindingType::Buffer{ty:wgpu::BufferBindingType::Storage{read_only:true},has_dynamic_offset:false,min_binding_size:None},count:None},wgpu::BindGroupLayoutEntry{binding:1,visibility:wgpu::ShaderStages::FRAGMENT,ty:wgpu::BindingType::Texture{multisampled:false,view_dimension:wgpu::TextureViewDimension::D2Array,sample_type:wgpu::TextureSampleType::Float{filterable:true}},count:None},wgpu::BindGroupLayoutEntry{binding:2,visibility:wgpu::ShaderStages::FRAGMENT,ty:wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),count:None}]});
- let bind_group=device.create_bind_group(&wgpu::BindGroupDescriptor{label:Some("noir-glyph-bind"),layout:&bgl,entries:&[wgpu::BindGroupEntry{binding:0,resource:glyph_buffer.as_entire_binding()},wgpu::BindGroupEntry{binding:1,resource:wgpu::BindingResource::TextureView(&view)},wgpu::BindGroupEntry{binding:2,resource:wgpu::BindingResource::Sampler(&sampler)}]});
- let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor{label:Some("noir-glyph-placement-shader"),source:wgpu::ShaderSource::Wgsl(include_str!("../host_placement.wgsl").into())}); let layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{label:Some("noir-glyph-placement-layout"),bind_group_layouts:&[Some(&bgl)],immediate_size:0});
- let pipeline=device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{label:Some("noir-glyph-placement-pipeline"),layout:Some(&layout),vertex:wgpu::VertexState{module:&shader,entry_point:Some("vs_main"),buffers:&[Some(unit_layout()),Some(glyph_placement_layout())],compilation_options:Default::default()},fragment:Some(wgpu::FragmentState{module:&shader,entry_point:Some("fs_main"),targets:&[Some(wgpu::ColorTargetState{format,blend:Some(wgpu::BlendState::ALPHA_BLENDING),write_mask:wgpu::ColorWrites::ALL})],compilation_options:Default::default()}),primitive:wgpu::PrimitiveState::default(),depth_stencil:None,multisample:wgpu::MultisampleState::default(),multiview_mask:None,cache:None});
- Ok((bind_group,pipeline))
-}
 fn make_canvas_and_blit(device:&wgpu::Device,format:wgpu::TextureFormat,width:u32,height:u32)->(wgpu::Texture,wgpu::TextureView,wgpu::BindGroup,wgpu::RenderPipeline){let canvas=device.create_texture(&wgpu::TextureDescriptor{label:Some("noir-canvas"),size:wgpu::Extent3d{width,height,depth_or_array_layers:1},mip_level_count:1,sample_count:1,dimension:wgpu::TextureDimension::D2,format,usage:wgpu::TextureUsages::RENDER_ATTACHMENT|wgpu::TextureUsages::TEXTURE_BINDING,view_formats:&[]});let view=canvas.create_view(&Default::default());let sampler=device.create_sampler(&wgpu::SamplerDescriptor{mag_filter:wgpu::FilterMode::Nearest,min_filter:wgpu::FilterMode::Nearest,..Default::default()});let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor{label:Some("noir-blit"),source:wgpu::ShaderSource::Wgsl(include_str!("../host_blit.wgsl").into())});let bgl=device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor{label:Some("noir-canvas-bgl"),entries:&[wgpu::BindGroupLayoutEntry{binding:0,visibility:wgpu::ShaderStages::FRAGMENT,ty:wgpu::BindingType::Texture{multisampled:false,view_dimension:wgpu::TextureViewDimension::D2,sample_type:wgpu::TextureSampleType::Float{filterable:true}},count:None},wgpu::BindGroupLayoutEntry{binding:1,visibility:wgpu::ShaderStages::FRAGMENT,ty:wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),count:None}]});let bg=device.create_bind_group(&wgpu::BindGroupDescriptor{label:Some("noir-canvas-bg"),layout:&bgl,entries:&[wgpu::BindGroupEntry{binding:0,resource:wgpu::BindingResource::TextureView(&view)},wgpu::BindGroupEntry{binding:1,resource:wgpu::BindingResource::Sampler(&sampler)}]});let layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{label:Some("noir-blit-layout"),bind_group_layouts:&[Some(&bgl)],immediate_size:0});let pipe=device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{label:Some("noir-blit-pipe"),layout:Some(&layout),vertex:wgpu::VertexState{module:&shader,entry_point:Some("vs_main"),buffers:&[],compilation_options:Default::default()},fragment:Some(wgpu::FragmentState{module:&shader,entry_point:Some("fs_main"),targets:&[Some(wgpu::ColorTargetState{format,blend:None,write_mask:wgpu::ColorWrites::ALL})],compilation_options:Default::default()}),primitive:wgpu::PrimitiveState::default(),depth_stencil:None,multisample:wgpu::MultisampleState::default(),multiview_mask:None,cache:None});(canvas,view,bg,pipe)}
+fn make_text_resources(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    format: wgpu::TextureFormat,
+    glyph_buffer: &wgpu::Buffer,
+    font_atlases: &[RegisteredFontAtlas],
+) -> Result<(wgpu::BindGroup, wgpu::RenderPipeline)> {
+    let legacy_atlas = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("noir-legacy-glyph-atlas-pages"),
+        size: wgpu::Extent3d { width: ATLAS_WIDTH, height: ATLAS_HEIGHT, depth_or_array_layers: ATLAS_PAGES },
+        mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo { texture: &legacy_atlas, mip_level: 0, origin: wgpu::Origin3d { x: 0, y: 0, z: 0 }, aspect: wgpu::TextureAspect::All },
+        &digit_atlas_pixels(),
+        wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(ATLAS_WIDTH), rows_per_image: Some(ATLAS_HEIGHT) },
+        wgpu::Extent3d { width: ATLAS_WIDTH, height: ATLAS_HEIGHT, depth_or_array_layers: 1 },
+    );
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo { texture: &legacy_atlas, mip_level: 0, origin: wgpu::Origin3d { x: 0, y: 0, z: 1 }, aspect: wgpu::TextureAspect::All },
+        &ascii_atlas_pixels(),
+        wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(ATLAS_WIDTH), rows_per_image: Some(ATLAS_HEIGHT) },
+        wgpu::Extent3d { width: ATLAS_WIDTH, height: ATLAS_HEIGHT, depth_or_array_layers: 1 },
+    );
+    let legacy_view = legacy_atlas.create_view(&wgpu::TextureViewDescriptor { dimension: Some(wgpu::TextureViewDimension::D2Array), ..Default::default() });
+    let legacy_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("noir-legacy-glyph-atlas-sampler"), mag_filter: wgpu::FilterMode::Nearest, min_filter: wgpu::FilterMode::Nearest, ..Default::default()
+    });
+
+    // Every pipeline has binding 3/4 so page selection remains a compiler-fixed branch.
+    // A transparent 1×1 R8 texture makes zero-font-asset legacy Scenes ABI-compatible.
+    let fallback_font_texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("noir-fontc-page2-transparent-fallback"),
+        size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+        mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo { texture: &fallback_font_texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+        &[0],
+        wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(1), rows_per_image: Some(1) },
+        wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+    );
+    let fallback_font_view = fallback_font_texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let font_view = font_atlases.iter().find(|atlas| atlas.atlas_page == 2).map(|atlas| &atlas.view).unwrap_or(&fallback_font_view);
+    let font_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("noir-fontc-page2-linear-sampler"), mag_filter: wgpu::FilterMode::Linear, min_filter: wgpu::FilterMode::Linear, ..Default::default()
+    });
+
+    let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("noir-glyph-placement-bgl"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::VERTEX, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Texture { multisampled: false, view_dimension: wgpu::TextureViewDimension::D2Array, sample_type: wgpu::TextureSampleType::Float { filterable: true } }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), count: None },
+            wgpu::BindGroupLayoutEntry { binding: 3, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Texture { multisampled: false, view_dimension: wgpu::TextureViewDimension::D2, sample_type: wgpu::TextureSampleType::Float { filterable: true } }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 4, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), count: None },
+        ],
+    });
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("noir-glyph-placement-bind-group"), layout: &bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: glyph_buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&legacy_view) },
+            wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&legacy_sampler) },
+            wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(font_view) },
+            wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::Sampler(&font_sampler) },
+        ],
+    });
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("noir-glyph-placement-shader"), source: wgpu::ShaderSource::Wgsl(include_str!("../host_placement.wgsl").into())
+    });
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("noir-glyph-placement-layout"), bind_group_layouts: &[Some(&bgl)], immediate_size: 0
+    });
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("noir-glyph-placement-pipeline"), layout: Some(&layout),
+        vertex: wgpu::VertexState { module: &shader, entry_point: Some("vs_main"), buffers: &[Some(unit_layout()), Some(glyph_placement_layout())], compilation_options: Default::default() },
+        fragment: Some(wgpu::FragmentState { module: &shader, entry_point: Some("fs_main"), targets: &[Some(wgpu::ColorTargetState { format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
+        primitive: wgpu::PrimitiveState::default(), depth_stencil: None, multisample: wgpu::MultisampleState::default(), multiview_mask: None, cache: None,
+    });
+    Ok((bind_group, pipeline))
+}
 fn unit_layout<'a>()->wgpu::VertexBufferLayout<'a>{wgpu::VertexBufferLayout{array_stride:8,step_mode:wgpu::VertexStepMode::Vertex,attributes:&[wgpu::VertexAttribute{format:wgpu::VertexFormat::Float32x2,offset:0,shader_location:0}]}}
 fn static_instance_layout<'a>()->wgpu::VertexBufferLayout<'a>{wgpu::VertexBufferLayout{array_stride:44,step_mode:wgpu::VertexStepMode::Instance,attributes:&[wgpu::VertexAttribute{format:wgpu::VertexFormat::Float32x2,offset:0,shader_location:1},wgpu::VertexAttribute{format:wgpu::VertexFormat::Float32x2,offset:8,shader_location:2},wgpu::VertexAttribute{format:wgpu::VertexFormat::Float32x4,offset:16,shader_location:3},wgpu::VertexAttribute{format:wgpu::VertexFormat::Uint32,offset:32,shader_location:4},wgpu::VertexAttribute{format:wgpu::VertexFormat::Uint32,offset:36,shader_location:5},wgpu::VertexAttribute{format:wgpu::VertexFormat::Uint32,offset:40,shader_location:6}]}}
 
@@ -3611,6 +3724,11 @@ fn compiler_font_assets(scene: &Scene, scene_dir: &Path) -> Result<Vec<VerifiedF
                         && manifest.glyphs.len() == plan.glyph_domain_count as usize
                         && manifest.glyphs.iter().enumerate().all(|(index, glyph)| glyph.glyph_id == index as u32),
                         "font asset {} manifest glyph domain is not dense 0..count-1", plan.face_id);
+        anyhow::ensure!(manifest.glyphs.iter().all(|glyph| glyph.width > 0 && glyph.height > 0
+                        && glyph.x.checked_add(glyph.width).is_some_and(|right| right <= plan.atlas_width)
+                        && glyph.y.checked_add(glyph.height).is_some_and(|bottom| bottom <= plan.atlas_height)
+                        && glyph.advance.is_finite() && glyph.advance > 0.0),
+                        "font asset {} manifest glyph metrics escape atlas or have non-positive advance", plan.face_id);
         let atlas_bytes = fs::read(&atlas_path).with_context(|| format!("read font atlas {}", atlas_path.display()))?;
         anyhow::ensure!(atlas_bytes.len() == (plan.atlas_width as usize) * (plan.atlas_height as usize),
                         "font asset {} R8 length does not match Scene geometry", plan.face_id);
@@ -3619,9 +3737,54 @@ fn compiler_font_assets(scene: &Scene, scene_dir: &Path) -> Result<Vec<VerifiedF
         println!("compiler font asset: face={} page={} glyphs={} atlas={}x{} r8 activation={} manifest={} atlas={}",
                  plan.face_id, plan.atlas_page, plan.glyph_domain_count, plan.atlas_width, plan.atlas_height,
                  plan.activation, manifest_path.display(), atlas_path.display());
-        verified.push(VerifiedFontAsset { plan: plan.clone(), atlas_bytes, manifest_path, atlas_path });
+        verified.push(VerifiedFontAsset { plan: plan.clone(), atlas_bytes, manifest_path, atlas_path, glyphs: manifest.glyphs });
     }
     Ok(verified)
+}
+
+fn compiler_font_placements(scene: &Scene, assets: &[VerifiedFontAsset]) -> Result<()> {
+    let assets_by_face = assets.iter().map(|asset| (asset.plan.face_id.as_str(), asset)).collect::<HashMap<_, _>>();
+    let mut active = 0usize;
+    for placement in &scene.glyph_placement_plan {
+        anyhow::ensure!(placement.ndc_size[0].is_finite() && placement.ndc_size[1].is_finite()
+                        && placement.ndc_size[0] > 0.0 && placement.ndc_size[1] > 0.0,
+                        "glyph placement {} has non-positive or non-finite NDC geometry", placement.node);
+        match placement.atlas_page {
+            0 | 1 => anyhow::ensure!(placement.face_id.is_none(),
+                                      "legacy glyph placement {} page {} must not carry face_id", placement.node, placement.atlas_page),
+            2 => {
+                let face_id = placement.face_id.as_deref()
+                    .context("page-2 glyph placement lacks required face_id")?;
+                let asset = assets_by_face.get(face_id)
+                    .with_context(|| format!("page-2 glyph placement {} references unregistered face {}", placement.node, face_id))?;
+                anyhow::ensure!(!placement.dynamic, "page-2 glyph placement {} must be static in font_placement_plan v1", placement.node);
+                anyhow::ensure!(asset.plan.atlas_page == 2 && placement.glyph_id >> 16 == 2,
+                                "page-2 glyph placement {} has page-inconsistent asset or glyph ID", placement.node);
+                let glyph_index = placement.glyph_id & 0xffff;
+                anyhow::ensure!(glyph_index >= asset.plan.glyph_domain_first
+                                && glyph_index < asset.plan.glyph_domain_first + asset.plan.glyph_domain_count,
+                                "page-2 glyph placement {} glyph {} is outside face {} domain", placement.node, glyph_index, face_id);
+                let glyph = asset.glyphs.get(glyph_index as usize)
+                    .with_context(|| format!("page-2 glyph placement {} lacks manifest glyph {}", placement.node, glyph_index))?;
+                anyhow::ensure!(glyph.glyph_id == glyph_index,
+                                "page-2 glyph placement {} manifest glyph domain is unstable", placement.node);
+                let expected_uv = [
+                    glyph.x as f32 / asset.plan.atlas_width as f32,
+                    glyph.y as f32 / asset.plan.atlas_height as f32,
+                    glyph.width as f32 / asset.plan.atlas_width as f32,
+                    glyph.height as f32 / asset.plan.atlas_height as f32,
+                ];
+                anyhow::ensure!(placement.atlas_uv.iter().zip(expected_uv).all(|(actual, expected)| (*actual - expected).abs() <= 1e-6),
+                                "page-2 glyph placement {} UV does not match face {} manifest glyph {}", placement.node, face_id, glyph_index);
+                anyhow::ensure!((placement.advance - glyph.advance).abs() <= 1e-5,
+                                "page-2 glyph placement {} advance does not match face {} manifest glyph {}", placement.node, face_id, glyph_index);
+                active += 1;
+            }
+            page => anyhow::bail!("glyph placement {} uses unsupported atlas page {}", placement.node, page),
+        }
+    }
+    println!("compiler font placement proof: active-page2-glyphs={} registered-font-assets={} mode=static-proportional-v1", active, assets.len());
+    Ok(())
 }
 
 fn make_registered_font_atlases(device: &wgpu::Device, queue: &wgpu::Queue, assets: &[VerifiedFontAsset]) -> Result<Vec<RegisteredFontAtlas>> {
@@ -3641,13 +3804,14 @@ fn make_registered_font_atlases(device: &wgpu::Device, queue: &wgpu::Queue, asse
             wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(asset.plan.atlas_width), rows_per_image: Some(asset.plan.atlas_height) },
             wgpu::Extent3d { width: asset.plan.atlas_width, height: asset.plan.atlas_height, depth_or_array_layers: 1 },
         );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         println!("font-atlas-upload: face={} page={} bytes={} sha256={} renderer=registered-inactive manifest={} atlas={}",
                  asset.plan.face_id, asset.plan.atlas_page, asset.atlas_bytes.len(), asset.plan.atlas_sha256,
                  asset.manifest_path.display(), asset.atlas_path.display());
         registered.push(RegisteredFontAtlas {
             face_id: asset.plan.face_id.clone(), atlas_page: asset.plan.atlas_page,
             width: asset.plan.atlas_width, height: asset.plan.atlas_height,
-            atlas_sha256: asset.plan.atlas_sha256.clone(), _texture: texture,
+            atlas_sha256: asset.plan.atlas_sha256.clone(), glyphs: asset.glyphs.clone(), view, _texture: texture,
         });
     }
     Ok(registered)
@@ -3684,13 +3848,19 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
                     "unsupported font_asset_plan ABI {}@{}; expected {}@{}",
                     scene.abi_contracts.font_asset_plan.schema, scene.abi_contracts.font_asset_plan.revision,
                     FONT_ASSET_PLAN_ABI_SCHEMA, FONT_ASSET_PLAN_ABI_REVISION);
-    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} frozen",
+    anyhow::ensure!(scene.abi_contracts.font_placement_plan.schema == FONT_PLACEMENT_PLAN_ABI_SCHEMA
+                    && scene.abi_contracts.font_placement_plan.revision == FONT_PLACEMENT_PLAN_ABI_REVISION,
+                    "unsupported font_placement_plan ABI {}@{}; expected {}@{}",
+                    scene.abi_contracts.font_placement_plan.schema, scene.abi_contracts.font_placement_plan.revision,
+                    FONT_PLACEMENT_PLAN_ABI_SCHEMA, FONT_PLACEMENT_PLAN_ABI_REVISION);
+    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} frozen",
              scene.abi_contracts.virtual_list_plan.schema, scene.abi_contracts.virtual_list_plan.revision,
              scene.abi_contracts.row_activation_plan.schema, scene.abi_contracts.row_activation_plan.revision,
              scene.abi_contracts.scrollbar_plan.schema, scene.abi_contracts.scrollbar_plan.revision,
              scene.abi_contracts.list_navigation_plan.schema, scene.abi_contracts.list_navigation_plan.revision,
              scene.abi_contracts.log_browser_plan.schema, scene.abi_contracts.log_browser_plan.revision,
-             scene.abi_contracts.font_asset_plan.schema, scene.abi_contracts.font_asset_plan.revision);
+             scene.abi_contracts.font_asset_plan.schema, scene.abi_contracts.font_asset_plan.revision,
+             scene.abi_contracts.font_placement_plan.schema, scene.abi_contracts.font_placement_plan.revision);
     Ok(())
 }
 

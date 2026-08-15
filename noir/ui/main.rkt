@@ -114,6 +114,10 @@ scene-glyph-draw-packets
 (define log-browser-plan-abi-revision 1)
 (define font-asset-plan-abi-schema "noir-font-asset-plan-v1")
 (define font-asset-plan-abi-revision 1)
+;; font_asset_plan v1 remains a registration/byte-integrity contract. This distinct
+;; placement contract activates its atlas only for compiler-proved static page-2 runs.
+(define font-placement-plan-abi-schema "noir-font-placement-plan-v1")
+(define font-placement-plan-abi-revision 1)
 
 (define (abi-contracts->jsexpr)
   (hash 'virtual_list_plan
@@ -133,7 +137,10 @@ scene-glyph-draw-packets
               'revision log-browser-plan-abi-revision)
         'font_asset_plan
         (hash 'schema font-asset-plan-abi-schema
-              'revision font-asset-plan-abi-revision)))
+              'revision font-asset-plan-abi-revision)
+        'font_placement_plan
+        (hash 'schema font-placement-plan-abi-schema
+              'revision font-placement-plan-abi-revision)))
 
 (struct ui-node (tag id props children source) #:transparent)
 ;; Scene 以静态树和增量执行计划共同组成。state/actions 由 `noir-app`
@@ -156,7 +163,7 @@ scene-glyph-draw-packets
 ;; clip/z/batch 均在宏展开期固定。dynamic? 只表示 glyph_id cell 可由 action 覆写。
 (struct glyph-placement (slot node glyph-index glyph-id atlas-page glyph-byte-offset glyph-word-offset
                               ndc-pos ndc-size atlas-uv advance dynamic? state state-index
-                              clip-stack-id clip-rect z-layer batch-key) #:transparent)
+                              clip-stack-id clip-rect z-layer batch-key face-id) #:transparent)
 ;; Draw Packet 压缩相邻 placement；它是后端未来用 indirect/multi-draw 消费的静态 recipe。
 (struct glyph-draw-packet (id atlas-page first-placement placement-count first-glyph-byte-offset glyph-byte-length
                                nodes bounds clip-stack-id clip-rect z-layer batch-key dynamic?) #:transparent)
@@ -345,7 +352,8 @@ scene-glyph-draw-packets
         'clip_stack_id (symbol->string (glyph-placement-clip-stack-id placement))
         'clip_rect (glyph-placement-clip-rect placement)
         'z_layer (glyph-placement-z-layer placement)
-        'batch_key (symbol->string (glyph-placement-batch-key placement))))
+        'batch_key (symbol->string (glyph-placement-batch-key placement))
+        'face_id (or (glyph-placement-face-id placement) 'null)))
 
 (define (glyph-draw-packet->jsexpr packet)
   (hash 'id (symbol->string (glyph-draw-packet-id packet))
@@ -854,7 +862,7 @@ scene-glyph-draw-packets
   (struct c-state (id initial source) #:transparent)
   (struct c-action (id state op value source) #:transparent)
   ;; state 为 #f 表示编译期静态 shaped text；glyph-ids/advances/page 是后端可直接消费的资源计划。
-  (struct c-binding (node-id state offset byte-length glyph-count atlas-page glyph-ids glyph-advances) #:transparent)
+  (struct c-binding (node-id state offset byte-length glyph-count atlas-page glyph-ids glyph-advances face-id) #:transparent)
   ;; progress 的 value 不触发 layout solve，而是映射到预分配 QuadInstance 的 size.x。
   (struct c-instance-binding (node-id state max-value layout) #:transparent)
   (struct c-event (slot node-id action action-index action-ids transaction-op transaction-index x y width height z-index instance-offset
@@ -880,7 +888,8 @@ scene-glyph-draw-packets
   (struct c-log-browser-spec (id list-id detail-id append-updates source) #:transparent)
   (struct c-log-browser-plan (id list-id append-batch-id append-updates detail-node-id detail-glyph-offsets detail-tile-ids row-color-offsets levels packet-worklist-index) #:transparent)
   (struct c-font-asset-spec (manifest-path atlas-path source) #:transparent)
-  (struct c-font-asset-plan (face-id manifest-path atlas-path font-sha256 atlas-sha256 atlas-width atlas-height atlas-channels pixel-size line-height glyph-domain-first glyph-domain-count atlas-page activation) #:transparent)
+  (struct c-font-glyph (glyph-id codepoint character x y width height advance bearing-x bearing-y) #:transparent)
+(struct c-font-asset-plan (face-id manifest-path atlas-path font-sha256 atlas-sha256 atlas-width atlas-height atlas-channels pixel-size line-height glyph-domain-first glyph-domain-count atlas-page activation glyphs) #:transparent)
   (struct c-action-plan (id action action-index text-updates instance-updates damage tile-ids) #:transparent)
   ;; Layout Plan 是后端可直接消费的静态几何契约。instance-offset 以
   ;; QuadInstance 的 44-byte packed layout 为单位，和 Rust vertex layout 对齐。
@@ -889,7 +898,7 @@ scene-glyph-draw-packets
   ;; glyph-id 对动态数字表示 initial state；action 可以覆写该 cell 的首个 u32，但不能改变 geometry/page/packet。
   (struct c-glyph-placement (slot node-id glyph-index glyph-id atlas-page glyph-byte-offset glyph-word-offset
                                   ndc-pos ndc-size atlas-uv advance dynamic? state state-index
-                                  clip-stack-id clip-rect z-layer batch-key) #:transparent)
+                                  clip-stack-id clip-rect z-layer batch-key face-id) #:transparent)
   ;; Packet 按连续 placement 的 atlas page、clip/z/batch、动态性压缩；下游可直接映射为 batch 或 indirect draw。
   (struct c-glyph-packet (id atlas-page first-placement placement-count first-glyph-byte-offset glyph-byte-length
                              nodes bounds clip-stack-id clip-rect z-layer batch-key dynamic?) #:transparent)
@@ -942,6 +951,39 @@ scene-glyph-draw-packets
   ;; MVP shaping 是受限、确定的 ASCII glyph map：静态 label 不依赖 runtime font lookup。
   ;; page 0 保留给动态数字；page 1 覆盖空格与大写 A–Z。编码的高 16 bit 为 atlas page。
   (define (encode-glyph page glyph-id) (+ (arithmetic-shift page 16) glyph-id))
+  (define (font-asset-by-face who face-id source)
+    (or (findf (lambda (plan) (string=? (c-font-asset-plan-face-id plan) face-id))
+               (current-static-font-assets))
+        (raise-syntax-error who
+                            (format "unknown #:font-face ~a; declare a matching (font-asset ...) in the same noir-app" face-id)
+                            source)))
+
+  (define (font-face-id who raw source)
+    (cond [(symbol? raw) (symbol->string raw)]
+          [(string? raw) raw]
+          [else (raise-syntax-error who "#:font-face expects a literal symbol or string face ID" source)]))
+
+  (define (shape-static-fontc who text face-id source)
+    (unless (string? text)
+      (raise-syntax-error who "fontc text must be a string literal" source))
+    (define asset (font-asset-by-face who face-id source))
+    (define glyph-by-codepoint
+      (for/hash ([glyph (in-list (c-font-asset-plan-glyphs asset))])
+        (values (c-font-glyph-codepoint glyph) glyph)))
+    (define glyphs
+      (for/list ([ch (in-string text)])
+        (hash-ref glyph-by-codepoint (char->integer ch)
+                  (lambda ()
+                    (raise-syntax-error who
+                                        (format "font face ~a has no compiled glyph for U+~04X" face-id (char->integer ch))
+                                        source)))))
+    (values (c-font-asset-plan-atlas-page asset)
+            (map (lambda (glyph) (encode-glyph (c-font-asset-plan-atlas-page asset)
+                                                (c-font-glyph-glyph-id glyph)))
+                 glyphs)
+            (map c-font-glyph-advance glyphs)
+            face-id))
+
   (define (shape-static-ascii who text source)
     (unless (string? text)
       (raise-syntax-error who "static text must be a string literal" source))
@@ -956,7 +998,8 @@ scene-glyph-draw-packets
                                    source)])))
     (values ascii-atlas-page
             (map (lambda (glyph) (encode-glyph ascii-atlas-page glyph)) glyphs)
-            (make-list (length glyphs) 1.0)))
+            (make-list (length glyphs) 1.0)
+            #f))
 
   ;; 动态数字的几何容量已固定；这里仅把 initial state lowering 为首帧的 page-0 glyph ID。
   ;; 以后 action 只能覆写每 slot 的 glyph_id，不得改变 slot、atlas page 或 NDC placement。
@@ -1450,6 +1493,11 @@ scene-glyph-draw-packets
   ;; A theme exists only while `noir-app` expands its one static root.  Property
   ;; parsing resolves tokens here, so the runtime Scene cannot observe a theme map.
   (define current-static-theme (make-parameter #f))
+;; The font-face index exists only during macro expansion. Runtime Scene data contains
+;; already-resolved UV/advance/face evidence rather than a mutable font registry.
+(define current-static-font-assets (make-parameter '()))
+(define (with-static-font-assets assets thunk)
+  (parameterize ([current-static-font-assets assets]) (thunk)))
 
   (define (parse-theme-hex who stx)
     (define text (syntax-e stx))
@@ -1606,7 +1654,7 @@ scene-glyph-draw-packets
     ;; 文本允许属性与内容交错出现：
     ;; (text #:id title "static")
     ;; (text #:id fps #:dynamic frame-rate #:max-chars 3)
-    (define allowed (set-add leaf-props '#:max-chars))
+    (define allowed (set-add (set-add leaf-props '#:max-chars) '#:font-face))
     (let loop ([rest forms] [props (hash)] [static-value #f] [dynamic-value #f])
       (cond
         [(null? rest)
@@ -1618,6 +1666,10 @@ scene-glyph-draw-packets
            (raise-syntax-error 'text "dynamic text needs #:max-chars" stx))
          (when (and static-value (hash-has-key? props '#:max-chars))
            (raise-syntax-error 'text "#:max-chars is valid only for dynamic text" stx))
+         (when (and dynamic-value (hash-has-key? props '#:font-face))
+           (raise-syntax-error 'text "#:font-face currently admits static text only; dynamic text stays on its frozen legacy atlas path" stx))
+         (when (and static-value (hash-has-key? props '#:font-face))
+           (font-asset-by-face 'text (font-face-id 'text (hash-ref props '#:font-face) stx) stx))
          (define-values (id clean-props seen*) (register-id 'text stx props seen))
          (define final-props
            (if dynamic-value
@@ -1628,7 +1680,12 @@ scene-glyph-draw-packets
                  'max-chars (hash-ref props '#:max-chars))
                 ;; 表面语法仍是 `text`，但动态节点的 IR lowering 明确是固定长度 text-run。
                 'lowering 'text-run)
-               (hash-set clean-props 'value static-value)))
+               (hash-set
+                (if (hash-has-key? clean-props '#:font-face)
+                    (hash-set (hash-remove clean-props '#:font-face)
+                              'font-face (font-face-id 'text (hash-ref props '#:font-face) stx))
+                    clean-props)
+                'value static-value)))
          (values (c-node 'text id final-props '() stx) seen*)]
         [(keyword-stx? (car rest))
          (define kw (syntax-e (car rest)))
@@ -2371,15 +2428,19 @@ scene-glyph-draw-packets
             (define binding (c-binding (c-node-id node) state-id offset byte-length glyph-count
                                        (if (eq? charset 'ascii-upper) ascii-atlas-page digit-atlas-page)
                                        (if (eq? charset 'ascii-upper) (make-list glyph-count (encode-glyph ascii-atlas-page 0)) '())
-                                       (make-list glyph-count 1.0)))
+                                       (make-list glyph-count 1.0)
+                                       #f))
             (loop (cdr nodes) (+ offset byte-length) (cons binding result))]
            [(string? static-value)
-            (define-values (page glyph-ids advances)
-              (shape-static-ascii 'text static-value (c-node-source node)))
+            (define selected-face (hash-ref (c-node-props node) 'font-face #f))
+            (define-values (page glyph-ids advances face-id)
+              (if selected-face
+                  (shape-static-fontc 'text static-value selected-face (c-node-source node))
+                  (shape-static-ascii 'text static-value (c-node-source node))))
             (define glyph-count (length glyph-ids))
             (define byte-length (* glyph-count glyph-instance-bytes))
             (define binding (c-binding (c-node-id node) #f offset byte-length glyph-count
-                                       page glyph-ids advances))
+                                       page glyph-ids advances face-id))
             (loop (cdr nodes) (+ offset byte-length) (cons binding result))]
            [else (loop (cdr nodes) offset result)])])))
 
@@ -2979,13 +3040,33 @@ scene-glyph-draw-packets
     (define (layout-ndc-size layout)
       (list (* 2.0 (/ (c-layout-width layout) 640.0))
             (* 2.0 (/ (c-layout-height layout) 360.0))))
-    (define (atlas-uv glyph-id)
-      (define glyph-index (bitwise-and glyph-id #xffff))
-      ;; 单个 cell 的可采样 3×5 bitmap 永远位于 6×8 cell 的 (1,1) padding 后。
-      (list (/ (+ (* glyph-index 6.0) 1.0) 162.0)
-            (/ 1.0 8.0)
-            (/ 5.0 162.0)
-            (/ 7.0 8.0)))
+    (define font-assets-by-face
+      (for/hash ([asset (in-list (current-static-font-assets))])
+        (values (c-font-asset-plan-face-id asset) asset)))
+    (define (fontc-glyph binding glyph-id)
+      (define face-id (c-binding-face-id binding))
+      (and face-id
+           (let* ([asset (hash-ref font-assets-by-face face-id
+                                   (lambda () (raise-syntax-error 'text "selected font face disappeared during lowering" (c-node-source root))))]
+                  [glyph-index (bitwise-and glyph-id #xffff)])
+             (unless (and (= (c-binding-atlas-page binding) (c-font-asset-plan-atlas-page asset))
+                          (< glyph-index (length (c-font-asset-plan-glyphs asset))))
+               (raise-syntax-error 'text "fontc glyph ID is outside the proved face domain" (c-node-source root)))
+             (list-ref (c-font-asset-plan-glyphs asset) glyph-index))))
+    (define (atlas-uv binding glyph-id)
+      (define font-glyph (fontc-glyph binding glyph-id))
+      (if font-glyph
+          (let ([asset (hash-ref font-assets-by-face (c-binding-face-id binding))])
+            (list (/ (exact->inexact (c-font-glyph-x font-glyph)) (c-font-asset-plan-atlas-width asset))
+                  (/ (exact->inexact (c-font-glyph-y font-glyph)) (c-font-asset-plan-atlas-height asset))
+                  (/ (exact->inexact (c-font-glyph-width font-glyph)) (c-font-asset-plan-atlas-width asset))
+                  (/ (exact->inexact (c-font-glyph-height font-glyph)) (c-font-asset-plan-atlas-height asset))))
+          (let ([glyph-index (bitwise-and glyph-id #xffff)])
+            ;; 单个 legacy cell 的可采样 3×5 bitmap 永远位于 6×8 cell 的 (1,1) padding 后。
+            (list (/ (+ (* glyph-index 6.0) 1.0) 162.0)
+                  (/ 1.0 8.0)
+                  (/ 5.0 162.0)
+                  (/ 7.0 8.0)))))
     (define placements
       (append-map
        (lambda (binding)
@@ -3033,20 +3114,38 @@ scene-glyph-draw-packets
               (define advance (car advance-list))
               (define glyph-byte-offset (+ (c-binding-offset binding)
                                            (* glyph-index glyph-instance-bytes)))
-              (define glyph-pos (list (+ start-x (* prefix unit-advance))
-                                      (+ (second run-pos) (* (second run-size) 0.19))))
-              (define glyph-size (list (* unit-advance advance 0.76) glyph-height))
+              (define font-glyph (fontc-glyph binding glyph-id))
+              (define-values (glyph-pos glyph-size)
+                (if font-glyph
+                    (let* ([asset (hash-ref font-assets-by-face (c-binding-face-id binding))]
+                           ;; line scale is compile-time typography geometry: 72% of the text
+                           ;; run is reserved for the manifest line box, with a fixed 14% lower inset.
+                           [line-scale (/ (* (second run-size) 0.72)
+                                          (c-font-asset-plan-line-height asset))]
+                           [baseline-y (+ (second run-pos)
+                                          (* (second run-size) 0.14)
+                                          (* line-scale (- (c-font-asset-plan-line-height asset)
+                                                           (c-font-asset-plan-pixel-size asset)
+                                                           (c-font-glyph-bearing-y font-glyph))))]
+                           [x (+ start-x (* prefix line-scale) (* (c-font-glyph-bearing-x font-glyph) line-scale))]
+                           [y (+ baseline-y (* (c-font-glyph-bearing-y font-glyph) line-scale))])
+                      (values (list x y)
+                              (list (* (c-font-glyph-width font-glyph) line-scale)
+                                    (* (c-font-glyph-height font-glyph) line-scale))))
+                    (values (list (+ start-x (* prefix unit-advance))
+                                  (+ (second run-pos) (* (second run-size) 0.19)))
+                            (list (* unit-advance advance 0.76) glyph-height))))
               (define slot (quotient glyph-byte-offset glyph-instance-bytes))
               (loop (cdr ids) (cdr advance-list) (add1 glyph-index) (+ prefix advance)
                     (cons (c-glyph-placement
                            slot node-id glyph-index glyph-id (c-binding-atlas-page binding)
                            glyph-byte-offset (quotient glyph-byte-offset 4)
-                           glyph-pos glyph-size (atlas-uv glyph-id) advance
+                           glyph-pos glyph-size (atlas-uv binding glyph-id) advance
                            (and state-id #t) state-id (and state-id (hash-ref state-indexes state-id))
                            (c-composite-clip-stack-id composite)
                            (c-composite-clip-rect composite)
                            (c-composite-z-layer composite)
-                           batch-key)
+                           batch-key (c-binding-face-id binding))
                           result))])))
        bindings))
     (define (packet-compatible? left right)
@@ -4393,13 +4492,34 @@ scene-glyph-draw-packets
         (raise-syntax-error 'font-asset "atlas must have positive width/height and one R8 channel" (c-font-asset-spec-source spec)))
       (unless (= (file-size atlas-source) (* width height channels))
         (raise-syntax-error 'font-asset "atlas R8 byte length does not match manifest dimensions" (c-font-asset-spec-source spec)))
+      ;; Persist only compiler-internal manifest metrics. Scene emits resolved placement
+      ;; UVs and advances, while Rust rereads this same manifest for startup proof.
+      (define compiled-glyphs
+        (for/list ([glyph (in-list glyphs)])
+          (define glyph-id (manifest-ref 'font-asset glyph "glyph_id" (c-font-asset-spec-source spec)))
+          (define codepoint (manifest-ref 'font-asset glyph "codepoint" (c-font-asset-spec-source spec)))
+          (define character (manifest-ref 'font-asset glyph "character" (c-font-asset-spec-source spec)))
+          (define x (manifest-ref 'font-asset glyph "x" (c-font-asset-spec-source spec)))
+          (define y (manifest-ref 'font-asset glyph "y" (c-font-asset-spec-source spec)))
+          (define glyph-width (manifest-ref 'font-asset glyph "width" (c-font-asset-spec-source spec)))
+          (define glyph-height (manifest-ref 'font-asset glyph "height" (c-font-asset-spec-source spec)))
+          (define advance (manifest-ref 'font-asset glyph "advance" (c-font-asset-spec-source spec)))
+          (define bearing-x (manifest-ref 'font-asset glyph "bearing_x" (c-font-asset-spec-source spec)))
+          (define bearing-y (manifest-ref 'font-asset glyph "bearing_y" (c-font-asset-spec-source spec)))
+          (unless (and (exact-nonnegative-integer? codepoint) (string? character) (= (string-length character) 1)
+                       (exact-nonnegative-integer? x) (exact-nonnegative-integer? y)
+                       (exact-positive-integer? glyph-width) (exact-positive-integer? glyph-height)
+                       (<= (+ x glyph-width) width) (<= (+ y glyph-height) height)
+                       (real? advance) (> advance 0.0) (real? bearing-x) (real? bearing-y))
+            (raise-syntax-error 'font-asset "manifest glyph has invalid proportional metrics or atlas rectangle" (c-font-asset-spec-source spec)))
+          (c-font-glyph glyph-id codepoint character x y glyph-width glyph-height advance bearing-x bearing-y)))
       (c-font-asset-plan face-id (c-font-asset-spec-manifest-path spec) (c-font-asset-spec-atlas-path spec)
                          (manifest-ref 'font-asset manifest "font_sha256" (c-font-asset-spec-source spec))
                          (manifest-ref 'font-asset manifest "atlas_sha256" (c-font-asset-spec-source spec))
                          width height channels
                          (manifest-ref 'font-asset metrics "pixel_size" (c-font-asset-spec-source spec))
                          (manifest-ref 'font-asset metrics "line_height" (c-font-asset-spec-source spec))
-                         0 glyph-count 2 "registered-inactive")))
+                         0 glyph-count 2 "registered-inactive" compiled-glyphs)))
 
   (define (font-asset-plan->datum plan)
     `(font-asset-plan ,(c-font-asset-plan-face-id plan)
@@ -4886,7 +5006,8 @@ scene-glyph-draw-packets
                       ',(c-glyph-placement-clip-stack-id placement)
                       ',(c-glyph-placement-clip-rect placement)
                       ,(c-glyph-placement-z-layer placement)
-                      ',(c-glyph-placement-batch-key placement)))
+                      ',(c-glyph-placement-batch-key placement)
+                      ,(c-glyph-placement-face-id placement)))
 
   (define (glyph-placement-plan->datum placements)
     `(list ,@(map glyph-placement->datum placements)))
@@ -5113,18 +5234,24 @@ scene-glyph-draw-packets
      (define action-indexes (action-index-by-id actions))
      (define transaction-indexes (transaction-index-by-id transactions))
      (define-values (root-node _)
-       (parameterize ([current-static-theme static-theme])
+       (parameterize ([current-static-theme static-theme]
+                      [current-static-font-assets font-assets])
          (parse-node (car layout-forms) (set))))
-     (define-values (total dynamic budget updates) (compile-scene root-node))
-     (define layouts (compile-layout-plan root-node))
+     (define-values (total dynamic budget updates)
+       (with-static-font-assets font-assets (lambda () (compile-scene root-node))))
+     (define layouts
+       (with-static-font-assets font-assets (lambda () (compile-layout-plan root-node))))
      (define-values (glyph-placements glyph-packets)
-       (compile-glyph-placement-plan root-node states layouts state-indexes))
+       (with-static-font-assets font-assets
+         (lambda () (compile-glyph-placement-plan root-node states layouts state-indexes))))
      (define subgroup-packets (compile-subgroup-packet-plan glyph-packets))
      (define packet-activity-contract (compile-packet-activity-contract subgroup-packets))
      (define base-packet-worklists (compile-packet-worklists subgroup-packets))
      (define events (compile-event-map root-node layouts action-indexes transaction-indexes))
      (define tracks (compile-animation-tracks events))
-     (define raw-plans (compile-action-plans root-node states actions layouts action-indexes))
+     (define raw-plans
+       (with-static-font-assets font-assets
+         (lambda () (compile-action-plans root-node states actions layouts action-indexes))))
      (define raw-schedule (compile-frame-schedule events tracks raw-plans))
      (define render-schedules (compile-render-schedules root-node layouts events tracks raw-plans glyph-placements glyph-packets raw-schedule))
      (define-values (plans schedule)
@@ -5138,7 +5265,9 @@ scene-glyph-draw-packets
      (define focus-graph (compile-focus-graph root-node layouts render-schedules state-indexes))
      (define state-initial-by-id
        (for/hash ([state (in-list states)]) (values (c-state-id state) (c-state-initial state))))
-     (define keyboard-map (compile-keyboard-map root-node focus-graph state-initial-by-id))
+     (define keyboard-map
+       (with-static-font-assets font-assets
+         (lambda () (compile-keyboard-map root-node focus-graph state-initial-by-id))))
      (define transaction-plans (compile-transaction-plans transactions focus-graph))
      (define keyboard-command-map (compile-keyboard-command-map root-node focus-graph plans action-indexes transaction-plans))
      (define command-matchers (compile-command-matchers command-specs root-node focus-graph plans action-indexes))

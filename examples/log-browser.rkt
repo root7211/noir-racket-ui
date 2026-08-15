@@ -24,10 +24,10 @@
  (column #:id log-browser-dashboard #:gap (theme-space sm) #:padding (theme-space lg) #:background (theme-color canvas) #:radius (theme-radius panel)
    ;; Top application bar: the title remains on a dark, fixed high-contrast surface.
    (stack #:id log-app-bar #:height 34 #:background (theme-color header)
-     (text #:id log-title #:height 34 #:background (theme-color header) "SYSTEM LOG BROWSER"))
+     (text #:id log-title #:height 34 #:background (theme-color header) #:font-face noir-desktop-sans-18 "SYSTEM LOG BROWSER"))
    ;; A distinct, compiler-fixed table header makes the row template legible as four fields.
    (stack #:id log-column-header #:height 24 #:background (theme-color surface)
-     (text #:id log-columns #:height 24 #:background (theme-color surface) "LEVEL TIME SOURCE MESSAGE"))
+     (text #:id log-columns #:height 24 #:background (theme-color surface) #:font-face noir-desktop-sans-18 "LEVEL TIME SOURCE MESSAGE"))
    ;; The list itself keeps its original 3-row / 4-slot compact arena and scrollbar ABI.
    (stack #:id log-list-shell #:height 84 #:clip true #:background (theme-color panel)
      (virtual-list #:id system-log
@@ -54,4 +54,4 @@
    ;; compiler-fixed accessible label instead of relying on unrendered button labels.
    (stack #:id log-append-bar #:height 30 #:background (theme-color accent)
      (button #:id append-tail #:height 30 #:background (theme-color accent) "APPEND TAIL" #:on open-log-detail)
-     (text #:id append-tail-label #:height 30 #:background (theme-color accent) "APPEND FIXED TAIL"))))
+     (text #:id append-tail-label #:height 30 #:background (theme-color accent) #:font-face noir-desktop-sans-18 "APPEND FIXED TAIL"))))
