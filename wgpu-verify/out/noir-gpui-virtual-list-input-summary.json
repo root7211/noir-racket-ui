@@ -6,23 +6,23 @@
       "sample_count": 15,
       "clicks_per_sample": 25,
       "completed_events_per_sample": 25,
-      "median_ns_per_handler": 999231.0,
-      "p95_ns_per_handler": 1108958.0,
-      "min_ns_per_handler": 458233.0,
-      "max_ns_per_handler": 1144350.0,
-      "mean_ns_per_handler": 827508.5333333333,
-      "stdev_ns_per_handler": 282125.0770017913
+      "median_ns_per_handler": 671580.0,
+      "p95_ns_per_handler": 1257759.0,
+      "min_ns_per_handler": 604104.0,
+      "max_ns_per_handler": 1269820.0,
+      "mean_ns_per_handler": 767658.8666666667,
+      "stdev_ns_per_handler": 214805.81550582798
     },
     "gpui": {
       "sample_count": 15,
       "clicks_per_sample": 25,
       "completed_events_per_sample": 25,
-      "median_ns_per_handler": 975383.0,
-      "p95_ns_per_handler": 1548507.0,
-      "min_ns_per_handler": 945623.0,
-      "max_ns_per_handler": 1570480.0,
-      "mean_ns_per_handler": 1122290.9333333333,
-      "stdev_ns_per_handler": 259879.47891185107
+      "median_ns_per_handler": 1378140.0,
+      "p95_ns_per_handler": 4587176.999999993,
+      "min_ns_per_handler": 1173130.0,
+      "max_ns_per_handler": 9315810.0,
+      "mean_ns_per_handler": 1965075.3333333333,
+      "stdev_ns_per_handler": 2061089.1399412616
     }
   },
   "limitations": [
@@ -30,5 +30,5 @@
     "Noir reports separate wgpu GPU timestamps; the minimal GPUI comparator does not expose an equivalent portable timestamp path.",
     "X11 injection, process scheduling and log polling remain in the end-to-end metric."
   ],
-  "median_relative_change_noir_vs_gpui_pct": 2.4449882764001396
+  "median_relative_change_noir_vs_gpui_pct": -51.26910183290523
 }

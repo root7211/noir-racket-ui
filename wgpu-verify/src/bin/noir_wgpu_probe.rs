@@ -5,7 +5,8 @@
 
 fn main() {
     pollster::block_on(async {
-        let descriptor = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
+        let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
+        descriptor.flags |= wgpu::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER;
         let backends = descriptor.backends;
         let instance = wgpu::Instance::new(descriptor);
         let adapters = instance.enumerate_adapters(backends).await;

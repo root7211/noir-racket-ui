@@ -1268,7 +1268,9 @@ impl Host {
             println!("compiler build attestation: absent (legacy Scene)");
         }
         let size = window.inner_size();
-        let instance = wgpu::Instance::default();
+        let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
+        descriptor.flags |= wgpu::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER;
+        let instance = wgpu::Instance::new(descriptor);
         let surface = instance.create_surface(window.clone()).context("create wgpu surface")?;
         let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions { power_preference: wgpu::PowerPreference::HighPerformance, compatible_surface: Some(&surface), force_fallback_adapter: false, apply_limit_buckets: false }).await.context("request surface adapter")?;
         let adapter_info = adapter.get_info();

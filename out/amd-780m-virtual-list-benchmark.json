@@ -1,0 +1,28 @@
+{
+  "schema": "noir-wgpu-benchmark-v1",
+  "renderer": "coalesced-batch-executor + action-aware tile + placement renderer",
+  "profile_id": "noir-static-cost-v1",
+  "adapter_name": "Microsoft Direct3D12 (AMD RadeonT 780M)",
+  "backend": "Vulkan",
+  "timestamp_query_supported": true,
+  "timestamp_period_ns": 10.0,
+  "cases": [
+    {
+      "id": "coalesced-activate-refresh-list-button",
+      "execution_order": [
+        "transient:2",
+        "action:0"
+      ],
+      "expected_tile_mask_hex": "0x0000000000000003",
+      "observed_tile_mask_hex": "0x0000000000000003",
+      "expected_winner_write_count": 5,
+      "expected_winner_write_bytes": 36,
+      "submitted_tile_count": 2,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 3,
+      "cpu_event_to_submit_ns": 9744619,
+      "gpu_elapsed_ns": 44680.0,
+      "expectations_match": true
+    }
+  ]
+}
