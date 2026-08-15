@@ -1,0 +1,28 @@
+{
+  "schema": "noir-fontc-spec-v1",
+  "face_id": "noir-desktop-sans-18",
+  "font": "DejaVu Sans",
+  "pixel_size": 18,
+  "charset": "ASCII_PRINTABLE",
+  "extra_text": [
+    "SYSTEM LOG BROWSER",
+    "LEVEL",
+    "TIME",
+    "SOURCE",
+    "MESSAGE",
+    "DETAIL",
+    "SELECTED",
+    "ERROR",
+    "WARN",
+    "INFO",
+    "DEBUG",
+    "APPEND TAIL",
+    "END"
+  ],
+  "atlas": {
+    "width": 512,
+    "height": 512,
+    "padding": 2,
+    "mode": "gray"
+  }
+}

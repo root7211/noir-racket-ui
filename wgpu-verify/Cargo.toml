@@ -10,6 +10,7 @@ bytemuck = { version = "1.15", features = ["derive"] }
 pollster = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+sha2 = "0.10"
 # wgpu 30的官方MSRV为Rust 1.87；显式锁定间接依赖以避免基准环境漂移。
 indexmap = "2.7"
 wgpu = "=30.0.0"

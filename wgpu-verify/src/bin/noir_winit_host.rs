@@ -1,8 +1,10 @@
 use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
 use serde::{Deserialize, Deserializer, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc};
 use std::time::Instant;
 use wgpu::util::DeviceExt;
@@ -34,6 +36,10 @@ const SCROLLBAR_PLAN_ABI_SCHEMA: &str = "noir-scrollbar-plan-v1";
 const SCROLLBAR_PLAN_ABI_REVISION: u32 = 1;
 const LIST_NAVIGATION_PLAN_ABI_SCHEMA: &str = "noir-list-navigation-plan-v1";
 const LIST_NAVIGATION_PLAN_ABI_REVISION: u32 = 1;
+const LOG_BROWSER_PLAN_ABI_SCHEMA: &str = "noir-log-browser-plan-v1";
+const LOG_BROWSER_PLAN_ABI_REVISION: u32 = 1;
+const FONT_ASSET_PLAN_ABI_SCHEMA: &str = "noir-font-asset-plan-v1";
+const FONT_ASSET_PLAN_ABI_REVISION: u32 = 1;
 
 #[derive(Debug, Deserialize)]
 struct Scene {
@@ -65,6 +71,10 @@ struct Scene {
     #[serde(default)] row_activation_plans: Vec<RowActivationPlan>,
     #[serde(default)] scrollbar_plans: Vec<ScrollbarPlan>,
     #[serde(default)] list_navigation_plans: Vec<ListNavigationPlan>,
+    log_browser_plans: Vec<LogBrowserPlan>,
+    // Not serde-defaulted: every Scene must explicitly declare whether it has zero
+    // assets or a proved set; missing field is never allowed to masquerade as v1.
+    font_assets: Vec<FontAssetPlan>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,6 +85,8 @@ struct AbiContracts {
     row_activation_plan: AbiContract,
     scrollbar_plan: AbiContract,
     list_navigation_plan: AbiContract,
+    log_browser_plan: AbiContract,
+    font_asset_plan: AbiContract,
 }
 
 #[derive(Debug, Deserialize)]
@@ -87,6 +99,62 @@ struct BuildAttestation {
 
 #[derive(Debug, Deserialize)]
 struct ResourceBudget { instance_capacity: usize, glyph_capacity: usize }
+
+#[derive(Clone, Debug, Deserialize)]
+struct FontAssetPlan {
+    abi_schema: String,
+    abi_revision: u32,
+    face_id: String,
+    renderer_kind: String,
+    manifest_path: String,
+    atlas_path: String,
+    font_sha256: String,
+    atlas_sha256: String,
+    atlas_width: u32,
+    atlas_height: u32,
+    atlas_channels: u32,
+    pixel_size: u32,
+    line_height: u32,
+    glyph_domain_first: u32,
+    glyph_domain_count: u32,
+    atlas_page: u32,
+    activation: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FontManifest {
+    schema: String,
+    revision: u32,
+    face_id: String,
+    renderer_kind: String,
+    font_sha256: String,
+    atlas_sha256: String,
+    glyph_count: u32,
+    atlas: FontManifestAtlas,
+    metrics: FontManifestMetrics,
+    glyphs: Vec<FontManifestGlyph>,
+}
+#[derive(Debug, Deserialize)]
+struct FontManifestAtlas { width: u32, height: u32, channels: u32, mode: String }
+#[derive(Debug, Deserialize)]
+struct FontManifestMetrics { pixel_size: u32, line_height: u32 }
+#[derive(Debug, Deserialize)]
+struct FontManifestGlyph { glyph_id: u32 }
+
+struct VerifiedFontAsset {
+    plan: FontAssetPlan,
+    atlas_bytes: Vec<u8>,
+    manifest_path: PathBuf,
+    atlas_path: PathBuf,
+}
+struct RegisteredFontAtlas {
+    face_id: String,
+    atlas_page: u32,
+    width: u32,
+    height: u32,
+    atlas_sha256: String,
+    _texture: wgpu::Texture,
+}
 #[derive(Clone, Debug, Deserialize)]
 struct VirtualScrollPatch {
     offset: usize,
@@ -242,6 +310,41 @@ struct CompiledListNavigationPlan {
     page_step: usize,
     max_viewport: usize,
     tile_mask: u64,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct LogAppendUpdate { index: usize, value: String }
+#[derive(Clone, Debug, Deserialize)]
+struct LogLevelWire { name: String, color: [f32; 4] }
+#[derive(Clone, Debug, Deserialize)]
+struct LogBrowserPlan {
+    abi_schema: String,
+    abi_revision: u32,
+    id: String,
+    list_id: String,
+    append_batch_id: String,
+    append_indices: Vec<usize>,
+    append_updates: Vec<LogAppendUpdate>,
+    detail_node_id: String,
+    detail_glyph_offsets: Vec<usize>,
+    detail_tile_ids: Vec<usize>,
+    row_color_offsets: Vec<usize>,
+    levels: Vec<LogLevelWire>,
+    packet_worklist_index: usize,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LogLevel { Info, Warn, Error, Debug }
+#[derive(Clone, Debug)]
+struct CompiledLogBrowserPlan {
+    id: String,
+    list_index: usize,
+    append_batch_id: String,
+    append_updates: Vec<LogAppendUpdate>,
+    detail_glyph_offsets: Vec<usize>,
+    detail_tile_mask: u64,
+    row_color_offsets: Vec<usize>,
+    level_colors: [[f32; 4]; 4],
+    packet_worklist_index: usize,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1232,6 +1335,11 @@ struct Host {
     scrollbar_plans: Vec<CompiledScrollbarPlan>,
     active_scrollbar: Option<usize>,
     list_navigation_plans: Vec<CompiledListNavigationPlan>,
+    log_browser_plans: Vec<CompiledLogBrowserPlan>,
+    log_levels: Vec<Vec<LogLevel>>,
+    // Registered v1 fontc atlases. They deliberately remain separate from legacy
+    // atlas pages 0/1 until a later glyph-placement ABI activates page 2.
+    _font_atlases: Vec<RegisteredFontAtlas>,
     // The event loop owns a FIFO of compiler-fixed renderer requests.  This replaces
     // separate dirty-tile/worklist/strategy hand-off state, so redraw receives all
     // scheduling operands explicitly.
@@ -1256,7 +1364,7 @@ struct Host {
 }
 
 impl Host {
-    async fn new(window: Arc<Window>, scene: Scene, scene_fingerprint_fnv1a64: String) -> Result<Self> {
+    async fn new(window: Arc<Window>, scene: Scene, scene_dir: PathBuf, scene_fingerprint_fnv1a64: String) -> Result<Self> {
         let source_fingerprint_fnv1a64 = scene.build_attestation.as_ref()
             .filter(|attestation| attestation.schema == "noir-build-attestation-v1")
             .map(|attestation| attestation.source_fingerprint_fnv1a64.clone())
@@ -1291,6 +1399,7 @@ impl Host {
         surface.configure(&device, &config);
 
         compiler_abi_contracts(&scene)?;
+        let verified_font_assets = compiler_font_assets(&scene, &scene_dir)?;
         let virtual_lists = compiler_virtual_list_plans(&scene)?;
         let list_interactions = compiler_list_interaction_plans(&scene, &virtual_lists)?;
         if !virtual_lists.is_empty() {
@@ -1315,6 +1424,10 @@ impl Host {
         let packet_worklists = compiler_packet_worklists(&scene, &subgroup_packets)?;
         let scrollbar_plans = compiler_scrollbar_plans(&scene, &virtual_lists, &packet_worklists)?;
         let list_navigation_plans = compiler_list_navigation_plans(&scene, &virtual_lists, &scrollbar_plans, &packet_worklists)?;
+        let log_browser_plans = compiler_log_browser_plans(&scene, &virtual_lists, &list_interactions, &packet_worklists)?;
+        let log_levels = log_browser_plans.iter()
+            .map(|plan| vec![LogLevel::Info; virtual_lists[plan.list_index].logical_capacity])
+            .collect::<Vec<_>>();
         let keyboard_packet_worklist_indices = compiler_keyboard_packet_worklists(keyboard.as_ref(), &packet_worklists)?;
         let transaction_packet_worklist_indices = compiler_transaction_packet_worklists(&compiled_transactions, &packet_worklists)?;
         println!("compiler packet worklists: {}", packet_worklists.iter().map(|w| format!("{}#{}={:?}", w.id, w.index, w.packet_indices)).collect::<Vec<_>>().join("; "));
@@ -1375,6 +1488,7 @@ impl Host {
         let clear_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("noir-tile-clear-quad"), contents: bytemuck::bytes_of(&clear), usage: wgpu::BufferUsages::VERTEX });
 
         let (glyph_bind_group, text_pipeline) = make_text_resources(&device, &queue, format, &glyph_buffer)?;
+        let font_atlases = make_registered_font_atlases(&device, &queue, &verified_font_assets)?;
         let static_pipeline = make_static_pipeline(&device, format);
         let gpu_timer = if timestamp_supported { Some(make_gpu_timestamp_timer(&device, queue.get_timestamp_period())) } else { None };
         println!("compiler subgroup packets: {} width-32 packet(s), vertex-subgroup-supported={subgroup_vertex_supported}; packet draw fallback is always ABI-equivalent", subgroup_packets.len());
@@ -1384,7 +1498,7 @@ impl Host {
         let initial_instances = instances.clone();
         let initial_glyph_bytes = glyph_bytes.clone();
         let virtual_list_count = virtual_lists.len();
-        let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group, cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
+        let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group, cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, log_browser_plans, log_levels, _font_atlases: font_atlases, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
         host.sync_focus_visuals();
         host.execute_scene_data_update_batches()?;
         host.redraw_canvas_full();
@@ -1999,7 +2113,10 @@ impl Host {
 
     // `ranges` 已由 Racket compiler 完整裁剪与验证。此处仅绑定 Placement Buffer 并执行
     // 固定 instance range draw；不做 UI tree 遍历、bounds 计算或 packet/tile 相交测试。
-    fn draw_tile_glyph_packets<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>, tile_index: usize, ranges: &'a [GlyphPacketRange]) {
+    // A compiler `no-packets` worklist means packet activity compute is intentionally absent.
+    // Dynamic glyph bytes may still have changed inside compiler-proved placement ranges; draw
+    // those ranges directly rather than consuming a stale zero-activity indirect command.
+    fn draw_tile_glyph_packets<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>, tile_index: usize, ranges: &'a [GlyphPacketRange], direct_for_no_packets: bool) {
         if ranges.is_empty() { return; }
         self.bind_glyph_placement_pipeline(pass);
         for range in ranges {
@@ -2015,13 +2132,14 @@ impl Host {
                     let clipped_end = end.min(subgroup_end);
                     if start >= clipped_end { continue; }
                     if let Some(activity) = &self.packet_activity {
-                        if start == subgroup.first_placement && clipped_end == subgroup_end {
+                        if !direct_for_no_packets && start == subgroup.first_placement && clipped_end == subgroup_end {
                             println!("packet-indirect-draw tile={} packet={} page={} activity_word={} indirect_offset={} lanes={} dynamic={}",
                                      tile_index, subgroup.packet_index, packet.atlas_page, subgroup.activity_word_offset,
                                      subgroup.indirect_byte_offset, subgroup.lane_count, subgroup.dynamic);
                             pass.draw_indirect(&activity.indirect_buffer, subgroup.indirect_byte_offset);
                         } else {
-                            println!("packet-direct-subrange tile={} packet={} page={} placements=[{}..{}) lanes={} reason=tile-clipped", tile_index, subgroup.packet_index, packet.atlas_page, start, clipped_end, subgroup.lane_count);
+                            let reason = if direct_for_no_packets { "no-packets-direct" } else { "tile-clipped" };
+                            println!("packet-direct-subrange tile={} packet={} page={} placements=[{}..{}) lanes={} reason={}", tile_index, subgroup.packet_index, packet.atlas_page, start, clipped_end, subgroup.lane_count, reason);
                             pass.draw(0..6, start..clipped_end);
                         }
                     } else {
@@ -2142,7 +2260,8 @@ impl Host {
               pass.set_scissor_rect(scissor_x, scissor_y, scissor_width.max(1), scissor_height.max(1));
               pass.set_pipeline(&self.static_pipeline); pass.set_vertex_buffer(0,self.unit_quad.slice(..)); pass.set_vertex_buffer(1,self.clear_buffer.slice(..)); pass.draw(0..6,0..1);
               self.draw_ranges(&mut pass,tile.draw_ranges.iter());
-              self.draw_tile_glyph_packets(&mut pass, tile_index, &tile.glyph_packet_ranges);
+              self.draw_tile_glyph_packets(&mut pass, tile_index, &tile.glyph_packet_ranges,
+                                           request.packet_worklist_index == RenderRequest::NO_PACKETS);
           } }
         if measure_gpu { if let Some(timer)=self.gpu_timer.as_ref() {
             encoder.write_timestamp(&timer.query_set, 1);
@@ -2205,6 +2324,7 @@ impl Host {
         }
         self.virtual_lists[list_index].current_viewport_slot = target;
         let tiles = (target..target + visible_rows).map(|logical| logical % physical_slots).collect::<Vec<_>>();
+        self.sync_log_browser_row_colors(list_index);
         println!("compact-register scroll: list={} table={} capacity={} target={} row-tiles={:?} physical-slots={} glyph-id-patches={} template=ring-v1", id, table.id, logical_capacity, target, tiles, physical_slots, glyph_patch_count);
     }
 
@@ -2279,6 +2399,66 @@ impl Host {
         Ok(())
     }
 
+    fn log_level_from_record(value: &str) -> LogLevel {
+        if value.starts_with("WARN ") { LogLevel::Warn }
+        else if value.starts_with("ERROR ") { LogLevel::Error }
+        else if value.starts_with("DEBUG ") { LogLevel::Debug }
+        else { LogLevel::Info }
+    }
+
+    fn log_level_name(level: LogLevel) -> &'static str {
+        match level { LogLevel::Info => "INFO", LogLevel::Warn => "WARN", LogLevel::Error => "ERROR", LogLevel::Debug => "DEBUG" }
+    }
+
+    fn log_level_for(&self, list_index: usize, logical: usize) -> Option<LogLevel> {
+        let plan_index = self.log_browser_plans.iter().position(|plan| plan.list_index == list_index)?;
+        self.log_levels.get(plan_index)?.get(logical).copied()
+    }
+
+    fn log_row_color(&self, list_index: usize, logical: usize) -> Option<[f32; 4]> {
+        let plan_index = self.log_browser_plans.iter().position(|plan| plan.list_index == list_index)?;
+        let level = self.log_level_for(list_index, logical)?;
+        let color_index = match level { LogLevel::Info => 0, LogLevel::Warn => 1, LogLevel::Error => 2, LogLevel::Debug => 3 };
+        Some(self.log_browser_plans[plan_index].level_colors[color_index])
+    }
+
+    fn patch_log_browser_detail(&mut self, list_index: usize, logical: usize) -> bool {
+        let Some(plan) = self.log_browser_plans.iter().find(|plan| plan.list_index == list_index).cloned() else { return false; };
+        let plan_index = self.log_browser_plans.iter().position(|candidate| candidate.id == plan.id).expect("cloned log browser plan must remain indexed");
+        let level = self.log_levels[plan_index][logical];
+        let value = format!("DETAIL {} SELECTED", Self::log_level_name(level));
+        for (offset, ch) in plan.detail_glyph_offsets.iter().zip(value.chars().chain(std::iter::repeat(' '))) {
+            let glyph_id = if ch == ' ' { 1u32 << 16 } else { (1u32 << 16) | (1 + (ch as u32 - 'A' as u32)) };
+            self.queue.write_buffer(&self.glyph_buffer, *offset as u64, &glyph_id.to_le_bytes());
+        }
+        self.enqueue_render(RenderRequest::with_worklist(plan.detail_tile_mask, plan.packet_worklist_index), "log-browser-detail");
+        println!("log-browser detail: id={} logical={} level={} glyph-writes={} tile-mask=0x{:016x} worklist={}",
+                 plan.id, logical, Self::log_level_name(level), plan.detail_glyph_offsets.len(), plan.detail_tile_mask, plan.packet_worklist_index);
+        true
+    }
+
+    fn sync_log_browser_row_colors(&mut self, list_index: usize) {
+        if !self.log_browser_plans.iter().any(|plan| plan.list_index == list_index) { return; }
+        let (viewport, visible_rows) = {
+            let list = &self.virtual_lists[list_index];
+            (list.current_viewport_slot, list.visible_rows)
+        };
+        for logical in viewport..viewport + visible_rows { self.patch_list_row_color(list_index, logical); }
+    }
+
+    fn execute_log_browser_append(&mut self, requested_id: &str) -> Result<()> {
+        let plan = self.log_browser_plans.iter().find(|plan| plan.id == requested_id)
+            .with_context(|| format!("unknown log browser {requested_id}"))?.clone();
+        let updates = plan.append_updates.iter().map(|update| (update.index, update.value.clone())).collect::<Vec<_>>();
+        self.apply_compact_data_update_batch(&self.virtual_lists[plan.list_index].id.clone(), &updates)?;
+        let plan_index = self.log_browser_plans.iter().position(|candidate| candidate.id == plan.id).expect("log browser plan must remain indexed");
+        for update in &plan.append_updates { self.log_levels[plan_index][update.index] = Self::log_level_from_record(&update.value); }
+        self.sync_log_browser_row_colors(plan.list_index);
+        println!("log-browser append: id={} batch={} records={} tail={}..{} source=compiler-artifact",
+                 plan.id, plan.append_batch_id, plan.append_updates.len(), plan.append_updates.first().unwrap().index, plan.append_updates.last().unwrap().index);
+        Ok(())
+    }
+
     fn list_row_at_cursor(&self) -> Option<(usize, usize)> {
         for interaction in &self.list_interactions {
             let plan = &self.virtual_lists[interaction.list_index];
@@ -2296,18 +2476,22 @@ impl Host {
     }
 
     fn patch_list_row_color(&mut self, list_index: usize, logical: usize) {
-        let interaction = &self.list_interactions[list_index];
-        let plan = &self.virtual_lists[list_index];
-        if logical < plan.current_viewport_slot || logical >= plan.current_viewport_slot + plan.visible_rows { return; }
-        let physical = logical % plan.physical_slots;
+        let interaction = self.list_interactions[list_index].clone();
+        let (list_id, viewport, visible_rows, physical_slots) = {
+            let plan = &self.virtual_lists[list_index];
+            (plan.id.clone(), plan.current_viewport_slot, plan.visible_rows, plan.physical_slots)
+        };
+        if logical < viewport || logical >= viewport + visible_rows { return; }
+        let physical = logical % physical_slots;
         let offset = interaction.row_color_offsets[physical];
         let instance = offset / std::mem::size_of::<QuadInstance>();
         let color = if self.list_selected_rows[list_index] == Some(logical) { interaction.selected_color }
             else if self.list_hovered_rows[list_index] == Some(logical) { interaction.hover_color }
-            else { self.initial_instances[instance].color };
+            else { self.log_row_color(list_index, logical).unwrap_or(self.initial_instances[instance].color) };
         self.instances[instance].color = color;
         self.queue.write_buffer(&self.instance_buffer, offset as u64, bytemuck::cast_slice(&color));
-        println!("list-interaction-patch: list={} logical={} physical={} color_offset={} selected={} hovered={}", plan.id, logical, physical, offset, self.list_selected_rows[list_index] == Some(logical), self.list_hovered_rows[list_index] == Some(logical));
+        let level = self.log_level_for(list_index, logical).map(Self::log_level_name).unwrap_or("BASE");
+        println!("list-interaction-patch: list={} logical={} physical={} color_offset={} level={} selected={} hovered={}", list_id, logical, physical, offset, level, self.list_selected_rows[list_index] == Some(logical), self.list_hovered_rows[list_index] == Some(logical));
     }
 
     fn set_list_hover_from_cursor(&mut self) -> bool {
@@ -2331,6 +2515,7 @@ impl Host {
         self.list_selected_rows[index] = Some(logical);
         if let Some(row) = old { self.patch_list_row_color(index, row); }
         self.patch_list_row_color(index, logical);
+        self.patch_log_browser_detail(index, logical);
         self.enqueue_render(RenderRequest::scroll(index, self.virtual_lists[index].current_viewport_slot), "list-selection");
         println!("list-selection: list={} logical={} physical={}", self.virtual_lists[index].id, logical, logical % self.virtual_lists[index].physical_slots);
         true
@@ -2366,6 +2551,9 @@ impl Host {
             // Reuse the sole coalesced executor: winner-write ordering, batch-local composite
             // worklist selection, and RenderRequest enqueue remain exactly the verified path.
             self.execute_coalesced_batch(&plan.activate_batch_id);
+            // A log detail panel shares the action-local tile but owns a disjoint fixed glyph range.
+            // Reapply it after the generic dynamic action glyph patch so selected content remains visible.
+            self.patch_log_browser_detail(plan.list_index, logical);
             return true;
         }
         false
@@ -3369,6 +3557,102 @@ fn tile_mask(tile_ids: &[usize], tile_count: usize, owner: &str) -> Result<u64> 
     Ok(mask)
 }
 
+fn sha256_hex(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+fn safe_font_asset_path(scene_dir: &Path, declared: &str) -> Result<PathBuf> {
+    let relative = Path::new(declared);
+    anyhow::ensure!(!relative.is_absolute() && relative.components().all(|component| matches!(component, std::path::Component::Normal(_))),
+                    "font asset path must be a safe relative path: {declared}");
+    let direct = scene_dir.join(relative);
+    let project_root = scene_dir.parent().unwrap_or(scene_dir);
+    let fallback = project_root.join(relative);
+    let candidate = if direct.is_file() { direct } else { fallback };
+    anyhow::ensure!(candidate.is_file(), "font asset path does not exist relative to Scene: {declared}");
+    Ok(candidate)
+}
+
+fn compiler_font_assets(scene: &Scene, scene_dir: &Path) -> Result<Vec<VerifiedFontAsset>> {
+    let mut face_ids = HashSet::new();
+    let mut atlas_pages = HashSet::new();
+    let mut verified = Vec::with_capacity(scene.font_assets.len());
+    for plan in &scene.font_assets {
+        anyhow::ensure!(plan.abi_schema == FONT_ASSET_PLAN_ABI_SCHEMA && plan.abi_revision == FONT_ASSET_PLAN_ABI_REVISION,
+                        "font asset {} has unsupported ABI {}@{}", plan.face_id, plan.abi_schema, plan.abi_revision);
+        anyhow::ensure!(!plan.face_id.is_empty() && face_ids.insert(plan.face_id.as_str()),
+                        "font asset face_id must be non-empty and unique: {}", plan.face_id);
+        anyhow::ensure!(plan.renderer_kind == "atlas-gray" && plan.activation == "registered-inactive",
+                        "font asset {} uses unsupported renderer/activation {}/{}", plan.face_id, plan.renderer_kind, plan.activation);
+        anyhow::ensure!(plan.atlas_page == 2 && atlas_pages.insert(plan.atlas_page),
+                        "font asset {} must own isolated atlas page 2", plan.face_id);
+        anyhow::ensure!(plan.atlas_channels == 1 && plan.atlas_width > 0 && plan.atlas_height > 0
+                        && plan.pixel_size > 0 && plan.line_height > 0 && plan.glyph_domain_first == 0 && plan.glyph_domain_count > 0,
+                        "font asset {} has invalid R8 geometry or glyph domain", plan.face_id);
+        anyhow::ensure!(plan.font_sha256.len() == 64 && plan.atlas_sha256.len() == 64
+                        && plan.font_sha256.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+                        && plan.atlas_sha256.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()),
+                        "font asset {} hashes must be lowercase SHA-256", plan.face_id);
+        let manifest_path = safe_font_asset_path(scene_dir, &plan.manifest_path)?;
+        let atlas_path = safe_font_asset_path(scene_dir, &plan.atlas_path)?;
+        let manifest_bytes = fs::read(&manifest_path).with_context(|| format!("read font manifest {}", manifest_path.display()))?;
+        let manifest: FontManifest = serde_json::from_slice(&manifest_bytes)
+            .with_context(|| format!("parse font manifest {}", manifest_path.display()))?;
+        anyhow::ensure!(manifest.schema == "noir-font-asset-manifest-v1" && manifest.revision == 1,
+                        "font asset {} manifest ABI mismatch", plan.face_id);
+        anyhow::ensure!(manifest.face_id == plan.face_id && manifest.renderer_kind == plan.renderer_kind
+                        && manifest.font_sha256 == plan.font_sha256 && manifest.atlas_sha256 == plan.atlas_sha256,
+                        "font asset {} Scene/manifest identity mismatch", plan.face_id);
+        anyhow::ensure!(manifest.atlas.width == plan.atlas_width && manifest.atlas.height == plan.atlas_height
+                        && manifest.atlas.channels == plan.atlas_channels && manifest.atlas.mode == "r8"
+                        && manifest.metrics.pixel_size == plan.pixel_size && manifest.metrics.line_height == plan.line_height,
+                        "font asset {} Scene/manifest geometry mismatch", plan.face_id);
+        anyhow::ensure!(manifest.glyph_count == plan.glyph_domain_count
+                        && manifest.glyphs.len() == plan.glyph_domain_count as usize
+                        && manifest.glyphs.iter().enumerate().all(|(index, glyph)| glyph.glyph_id == index as u32),
+                        "font asset {} manifest glyph domain is not dense 0..count-1", plan.face_id);
+        let atlas_bytes = fs::read(&atlas_path).with_context(|| format!("read font atlas {}", atlas_path.display()))?;
+        anyhow::ensure!(atlas_bytes.len() == (plan.atlas_width as usize) * (plan.atlas_height as usize),
+                        "font asset {} R8 length does not match Scene geometry", plan.face_id);
+        anyhow::ensure!(sha256_hex(&atlas_bytes) == plan.atlas_sha256,
+                        "font asset {} atlas SHA-256 mismatch", plan.face_id);
+        println!("compiler font asset: face={} page={} glyphs={} atlas={}x{} r8 activation={} manifest={} atlas={}",
+                 plan.face_id, plan.atlas_page, plan.glyph_domain_count, plan.atlas_width, plan.atlas_height,
+                 plan.activation, manifest_path.display(), atlas_path.display());
+        verified.push(VerifiedFontAsset { plan: plan.clone(), atlas_bytes, manifest_path, atlas_path });
+    }
+    Ok(verified)
+}
+
+fn make_registered_font_atlases(device: &wgpu::Device, queue: &wgpu::Queue, assets: &[VerifiedFontAsset]) -> Result<Vec<RegisteredFontAtlas>> {
+    let mut registered = Vec::with_capacity(assets.len());
+    for asset in assets {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("noir-fontc-r8-atlas-registered-inactive"),
+            size: wgpu::Extent3d { width: asset.plan.atlas_width, height: asset.plan.atlas_height, depth_or_array_layers: 1 },
+            mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo { texture: &texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            &asset.atlas_bytes,
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(asset.plan.atlas_width), rows_per_image: Some(asset.plan.atlas_height) },
+            wgpu::Extent3d { width: asset.plan.atlas_width, height: asset.plan.atlas_height, depth_or_array_layers: 1 },
+        );
+        println!("font-atlas-upload: face={} page={} bytes={} sha256={} renderer=registered-inactive manifest={} atlas={}",
+                 asset.plan.face_id, asset.plan.atlas_page, asset.atlas_bytes.len(), asset.plan.atlas_sha256,
+                 asset.manifest_path.display(), asset.atlas_path.display());
+        registered.push(RegisteredFontAtlas {
+            face_id: asset.plan.face_id.clone(), atlas_page: asset.plan.atlas_page,
+            width: asset.plan.atlas_width, height: asset.plan.atlas_height,
+            atlas_sha256: asset.plan.atlas_sha256.clone(), _texture: texture,
+        });
+    }
+    Ok(registered)
+}
+
 fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
     anyhow::ensure!(scene.abi_contracts.virtual_list_plan.schema == VIRTUAL_LIST_PLAN_ABI_SCHEMA
                     && scene.abi_contracts.virtual_list_plan.revision == VIRTUAL_LIST_PLAN_ABI_REVISION,
@@ -3390,11 +3674,23 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
                     "unsupported list_navigation_plan ABI {}@{}; expected {}@{}",
                     scene.abi_contracts.list_navigation_plan.schema, scene.abi_contracts.list_navigation_plan.revision,
                     LIST_NAVIGATION_PLAN_ABI_SCHEMA, LIST_NAVIGATION_PLAN_ABI_REVISION);
-    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} frozen",
+    anyhow::ensure!(scene.abi_contracts.log_browser_plan.schema == LOG_BROWSER_PLAN_ABI_SCHEMA
+                    && scene.abi_contracts.log_browser_plan.revision == LOG_BROWSER_PLAN_ABI_REVISION,
+                    "unsupported log_browser_plan ABI {}@{}; expected {}@{}",
+                    scene.abi_contracts.log_browser_plan.schema, scene.abi_contracts.log_browser_plan.revision,
+                    LOG_BROWSER_PLAN_ABI_SCHEMA, LOG_BROWSER_PLAN_ABI_REVISION);
+    anyhow::ensure!(scene.abi_contracts.font_asset_plan.schema == FONT_ASSET_PLAN_ABI_SCHEMA
+                    && scene.abi_contracts.font_asset_plan.revision == FONT_ASSET_PLAN_ABI_REVISION,
+                    "unsupported font_asset_plan ABI {}@{}; expected {}@{}",
+                    scene.abi_contracts.font_asset_plan.schema, scene.abi_contracts.font_asset_plan.revision,
+                    FONT_ASSET_PLAN_ABI_SCHEMA, FONT_ASSET_PLAN_ABI_REVISION);
+    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} frozen",
              scene.abi_contracts.virtual_list_plan.schema, scene.abi_contracts.virtual_list_plan.revision,
              scene.abi_contracts.row_activation_plan.schema, scene.abi_contracts.row_activation_plan.revision,
              scene.abi_contracts.scrollbar_plan.schema, scene.abi_contracts.scrollbar_plan.revision,
-             scene.abi_contracts.list_navigation_plan.schema, scene.abi_contracts.list_navigation_plan.revision);
+             scene.abi_contracts.list_navigation_plan.schema, scene.abi_contracts.list_navigation_plan.revision,
+             scene.abi_contracts.log_browser_plan.schema, scene.abi_contracts.log_browser_plan.revision,
+             scene.abi_contracts.font_asset_plan.schema, scene.abi_contracts.font_asset_plan.revision);
     Ok(())
 }
 
@@ -3732,6 +4028,74 @@ fn compiler_list_navigation_plans(
                  artifact.max_viewport, artifact.tile_ids, artifact.packet_worklist_index);
         compiled.push(CompiledListNavigationPlan { id: artifact.id.clone(), list_index, page_step: artifact.page_step,
                                                     max_viewport: artifact.max_viewport, tile_mask: scrollbar.tile_mask });
+    }
+    Ok(compiled)
+}
+
+fn compiler_log_browser_plans(
+    scene: &Scene,
+    lists: &[CompiledVirtualListPlan],
+    interactions: &[CompiledListInteractionPlan],
+    packet_worklists: &[CompiledPacketWorklist],
+) -> Result<Vec<CompiledLogBrowserPlan>> {
+    let mut seen_ids = HashSet::new();
+    let mut seen_lists = HashSet::new();
+    let schedule = scene.render_schedules.first().context("log browser requires a compiler render schedule")?;
+    let expected_names = ["INFO", "WARN", "ERROR", "DEBUG"];
+    let mut compiled = Vec::with_capacity(scene.log_browser_plans.len());
+    for artifact in &scene.log_browser_plans {
+        anyhow::ensure!(artifact.abi_schema == LOG_BROWSER_PLAN_ABI_SCHEMA && artifact.abi_revision == LOG_BROWSER_PLAN_ABI_REVISION,
+                        "log browser {} has unsupported ABI {}@{}", artifact.id, artifact.abi_schema, artifact.abi_revision);
+        anyhow::ensure!(seen_ids.insert(artifact.id.as_str()) && seen_lists.insert(artifact.list_id.as_str()),
+                        "log browser {} duplicates its ID or list binding", artifact.id);
+        let list_index = lists.iter().position(|list| list.id == artifact.list_id)
+            .with_context(|| format!("log browser {} refers to unknown virtual list {}", artifact.id, artifact.list_id))?;
+        let list = &lists[list_index];
+        let table = list.data_register_table.as_ref().context("log browser requires compact data-register table")?;
+        anyhow::ensure!(artifact.packet_worklist_index == RenderRequest::NO_PACKETS
+                        && packet_worklists.get(artifact.packet_worklist_index).map(|worklist| worklist.packet_indices.is_empty()).unwrap_or(false),
+                        "log browser {} widened packet worklist", artifact.id);
+        let update_indices = artifact.append_updates.iter().map(|update| update.index).collect::<Vec<_>>();
+        anyhow::ensure!(!update_indices.is_empty() && update_indices == artifact.append_indices
+                        && update_indices.windows(2).all(|pair| pair[0] + 1 == pair[1])
+                        && *update_indices.last().unwrap() + 1 == list.logical_capacity,
+                        "log browser {} append batch is not a contiguous logical tail", artifact.id);
+        anyhow::ensure!(artifact.append_batch_id == format!("{}-append", artifact.id),
+                        "log browser {} append batch ID is not canonical", artifact.id);
+        for update in &artifact.append_updates {
+            anyhow::ensure!(update.index < list.logical_capacity && update.value.len() <= table.register_width
+                            && update.value.chars().all(|ch| ch == ' ' || ch.is_ascii_uppercase()),
+                            "log browser {} append update escapes fixed uppercase register capacity", artifact.id);
+        }
+        let detail_placements = scene.glyph_placement_plan.iter()
+            .filter(|placement| placement.node == artifact.detail_node_id)
+            .collect::<Vec<_>>();
+        let placement_is_covered = |placement: &&GlyphPlacementEntry| artifact.detail_tile_ids.iter().any(|tile_id| schedule.tiles.get(*tile_id).map(|tile| tile.glyph_packet_ranges.iter().any(|range| (placement.slot as u32) >= range.first_placement && (placement.slot as u32) < range.first_placement + range.placement_count)).unwrap_or(false));
+        let expected_offsets = detail_placements.iter().filter(|placement| placement_is_covered(placement)).map(|placement| placement.glyph_byte_offset).collect::<Vec<_>>();
+        anyhow::ensure!(!expected_offsets.is_empty() && artifact.detail_glyph_offsets == expected_offsets
+                        && artifact.detail_glyph_offsets.windows(2).all(|pair| pair[0] + GLYPH_CELL_BYTES == pair[1])
+                        && artifact.detail_glyph_offsets.iter().all(|offset| offset % 4 == 0 && *offset + 4 <= scene.resource_budget.glyph_capacity * GLYPH_CELL_BYTES),
+                        "log browser {} detail glyph range disagrees with compiler placement plan", artifact.id);
+        anyhow::ensure!(!artifact.detail_tile_ids.is_empty() && artifact.detail_tile_ids.windows(2).all(|pair| pair[0] < pair[1])
+                        && !expected_offsets.is_empty(),
+                        "log browser {} detail tile scope is missing or widened", artifact.id);
+        let detail_tile_mask = artifact.detail_tile_ids.iter().fold(0u64, |mask, tile_id| mask | (1u64 << tile_id));
+        let interaction = interactions.get(list_index).context("log browser list has no interaction color table")?;
+        anyhow::ensure!(artifact.row_color_offsets == interaction.row_color_offsets && artifact.row_color_offsets.len() == list.physical_slots,
+                        "log browser {} row color addresses disagree with frozen list interaction plan", artifact.id);
+        anyhow::ensure!(artifact.levels.len() == expected_names.len()
+                        && artifact.levels.iter().zip(expected_names).all(|(level, name)| level.name == name && level.color.iter().all(|component| component.is_finite() && *component >= 0.0 && *component <= 1.0)),
+                        "log browser {} level palette is not canonical", artifact.id);
+        let level_colors = [artifact.levels[0].color, artifact.levels[1].color, artifact.levels[2].color, artifact.levels[3].color];
+        println!("compiler log browser: id={} list={} append={} records={} detail={} glyph-cells={} tiles={:?} worklist={}",
+                 artifact.id, artifact.list_id, artifact.append_batch_id, artifact.append_updates.len(), artifact.detail_node_id,
+                 artifact.detail_glyph_offsets.len(), artifact.detail_tile_ids, artifact.packet_worklist_index);
+        compiled.push(CompiledLogBrowserPlan {
+            id: artifact.id.clone(), list_index, append_batch_id: artifact.append_batch_id.clone(),
+            append_updates: artifact.append_updates.clone(), detail_glyph_offsets: artifact.detail_glyph_offsets.clone(),
+            detail_tile_mask, row_color_offsets: artifact.row_color_offsets.clone(), level_colors,
+            packet_worklist_index: artifact.packet_worklist_index,
+        });
     }
     Ok(compiled)
 }
@@ -4750,38 +5114,69 @@ fn placement_instances(scene:&Scene)->Result<Vec<GlyphPlacementInstance>>{
 
 fn digit_ids(value:i64,count:usize)->Result<Vec<u32>>{anyhow::ensure!(value>=0,"negative glyph value");let text=format!("{:0width$}",value,width=count);anyhow::ensure!(text.len()<=count,"glyph width overflow");Ok(text.bytes().map(|digit|(digit-b'0')as u32).collect())}
 fn initial_glyph_bytes(scene:&Scene)->Result<Vec<u8>>{let mut bytes=vec![0u8;scene.resource_budget.glyph_capacity.max(1)*GLYPH_CELL_BYTES];if !scene.glyph_placement_plan.is_empty(){for placement in &scene.glyph_placement_plan{let base=placement.glyph_byte_offset;bytes[base..base+4].copy_from_slice(&placement.glyph_id.to_le_bytes());}return Ok(bytes);}for entry in &scene.layout_plan{if !entry.glyph_ids.is_empty(){for(index,glyph)in entry.glyph_ids.iter().enumerate(){let base=entry.glyph_offset+index*GLYPH_CELL_BYTES;bytes[base..base+4].copy_from_slice(&glyph.to_le_bytes());}}}for action in scene.actions.values(){for update in &action.gpu_updates{let value=scene.state_slots.get(update.state_index).with_context(||format!("initial glyph update {} has invalid compiler state_index {}",update.node,update.state_index))?.initial;for(index,glyph_id)in digit_ids(value,update.glyph_count)?.iter().enumerate(){let base=update.offset+index*GLYPH_CELL_BYTES;bytes[base..base+4].copy_from_slice(&glyph_id.to_le_bytes());}}}Ok(bytes)}
-fn digit_atlas_pixels()->Vec<u8>{let patterns:[[u8;5];10]=[[0b111,0b101,0b101,0b101,0b111],[0b010,0b110,0b010,0b010,0b111],[0b111,0b001,0b111,0b100,0b111],[0b111,0b001,0b111,0b001,0b111],[0b101,0b101,0b111,0b001,0b001],[0b111,0b100,0b111,0b001,0b111],[0b111,0b100,0b111,0b101,0b111],[0b111,0b001,0b010,0b010,0b010],[0b111,0b101,0b111,0b101,0b111],[0b111,0b101,0b111,0b001,0b111]];let mut pixels=vec![0u8;(ATLAS_WIDTH*ATLAS_HEIGHT)as usize];for(digit,rows)in patterns.iter().enumerate(){for(row,bits)in rows.iter().enumerate(){for column in 0..3u32{if(bits&(1<<(2-column)))!=0{let x=digit as u32*ATLAS_GLYPH_WIDTH+1+column;let y=1+row as u32;pixels[(y*ATLAS_WIDTH+x)as usize]=255;}}}}pixels}
-
-fn ascii_atlas_pixels()->Vec<u8>{
-    let patterns:[[u8;5];27]=[
-        [0b000,0b000,0b000,0b000,0b000],
-        [0b010,0b101,0b111,0b101,0b101], [0b110,0b101,0b110,0b101,0b110],
-        [0b111,0b100,0b100,0b100,0b111], [0b110,0b101,0b101,0b101,0b110],
-        [0b111,0b100,0b110,0b100,0b111], [0b111,0b100,0b110,0b100,0b100],
-        [0b111,0b100,0b101,0b101,0b111], [0b101,0b101,0b111,0b101,0b101],
-        [0b111,0b010,0b010,0b010,0b111], [0b001,0b001,0b001,0b101,0b111],
-        [0b101,0b101,0b110,0b101,0b101], [0b100,0b100,0b100,0b100,0b111],
-        [0b101,0b111,0b111,0b101,0b101], [0b101,0b111,0b111,0b111,0b101],
-        [0b111,0b101,0b101,0b101,0b111], [0b110,0b101,0b110,0b100,0b100],
-        [0b111,0b101,0b101,0b111,0b001], [0b110,0b101,0b110,0b101,0b101],
-        [0b111,0b100,0b111,0b001,0b111], [0b111,0b010,0b010,0b010,0b010],
-        [0b101,0b101,0b101,0b101,0b111], [0b101,0b101,0b101,0b101,0b010],
-        [0b101,0b101,0b111,0b111,0b101], [0b101,0b101,0b010,0b101,0b101],
-        [0b101,0b101,0b010,0b010,0b010], [0b111,0b001,0b010,0b100,0b111],
-    ];
-    let mut pixels=vec![0u8;(ATLAS_WIDTH*ATLAS_HEIGHT)as usize];
-    for(glyph,rows)in patterns.iter().enumerate(){
-        for(row,bits)in rows.iter().enumerate(){
-            for column in 0..3u32{
-                if(bits&(1<<(2-column)))!=0{
-                    let x=glyph as u32*ATLAS_GLYPH_WIDTH+1+column;
-                    let y=1+row as u32;
-                    pixels[(y*ATLAS_WIDTH+x)as usize]=255;
+fn write_atlas(patterns: &[[u8; 7]]) -> Vec<u8> {
+    let mut pixels = vec![0u8; (ATLAS_WIDTH * ATLAS_HEIGHT) as usize];
+    for (glyph, rows) in patterns.iter().enumerate() {
+        for (row, bits) in rows.iter().enumerate() {
+            for column in 0..5u32 {
+                if bits & (1 << (4 - column)) != 0 {
+                    let x = glyph as u32 * ATLAS_GLYPH_WIDTH + 1 + column;
+                    let y = row as u32;
+                    pixels[(y * ATLAS_WIDTH + x) as usize] = 255;
                 }
             }
         }
     }
     pixels
+}
+
+fn digit_atlas_pixels() -> Vec<u8> {
+    let patterns: [[u8; 7]; 10] = [
+        [0b01110,0b10001,0b10011,0b10101,0b11001,0b10001,0b01110],
+        [0b00100,0b01100,0b00100,0b00100,0b00100,0b00100,0b01110],
+        [0b01110,0b10001,0b00001,0b00010,0b00100,0b01000,0b11111],
+        [0b11110,0b00001,0b00001,0b01110,0b00001,0b00001,0b11110],
+        [0b00010,0b00110,0b01010,0b10010,0b11111,0b00010,0b00010],
+        [0b11111,0b10000,0b10000,0b11110,0b00001,0b00001,0b11110],
+        [0b01110,0b10000,0b10000,0b11110,0b10001,0b10001,0b01110],
+        [0b11111,0b00001,0b00010,0b00100,0b01000,0b01000,0b01000],
+        [0b01110,0b10001,0b10001,0b01110,0b10001,0b10001,0b01110],
+        [0b01110,0b10001,0b10001,0b01111,0b00001,0b00001,0b01110],
+    ];
+    write_atlas(&patterns)
+}
+
+fn ascii_atlas_pixels() -> Vec<u8> {
+    let patterns: [[u8; 7]; 27] = [
+        [0,0,0,0,0,0,0],
+        [0b01110,0b10001,0b10001,0b11111,0b10001,0b10001,0b10001],
+        [0b11110,0b10001,0b10001,0b11110,0b10001,0b10001,0b11110],
+        [0b01110,0b10001,0b10000,0b10000,0b10000,0b10001,0b01110],
+        [0b11110,0b10001,0b10001,0b10001,0b10001,0b10001,0b11110],
+        [0b11111,0b10000,0b10000,0b11110,0b10000,0b10000,0b11111],
+        [0b11111,0b10000,0b10000,0b11110,0b10000,0b10000,0b10000],
+        [0b01110,0b10001,0b10000,0b10111,0b10001,0b10001,0b01110],
+        [0b10001,0b10001,0b10001,0b11111,0b10001,0b10001,0b10001],
+        [0b01110,0b00100,0b00100,0b00100,0b00100,0b00100,0b01110],
+        [0b00001,0b00001,0b00001,0b00001,0b10001,0b10001,0b01110],
+        [0b10001,0b10010,0b10100,0b11000,0b10100,0b10010,0b10001],
+        [0b10000,0b10000,0b10000,0b10000,0b10000,0b10000,0b11111],
+        [0b10001,0b11011,0b10101,0b10101,0b10001,0b10001,0b10001],
+        [0b10001,0b11001,0b10101,0b10011,0b10001,0b10001,0b10001],
+        [0b01110,0b10001,0b10001,0b10001,0b10001,0b10001,0b01110],
+        [0b11110,0b10001,0b10001,0b11110,0b10000,0b10000,0b10000],
+        [0b01110,0b10001,0b10001,0b10001,0b10101,0b10010,0b01101],
+        [0b11110,0b10001,0b10001,0b11110,0b10100,0b10010,0b10001],
+        [0b01111,0b10000,0b10000,0b01110,0b00001,0b00001,0b11110],
+        [0b11111,0b00100,0b00100,0b00100,0b00100,0b00100,0b00100],
+        [0b10001,0b10001,0b10001,0b10001,0b10001,0b10001,0b01110],
+        [0b10001,0b10001,0b10001,0b10001,0b10001,0b01010,0b00100],
+        [0b10001,0b10001,0b10001,0b10101,0b10101,0b10101,0b01010],
+        [0b10001,0b10001,0b01010,0b00100,0b01010,0b10001,0b10001],
+        [0b10001,0b10001,0b01010,0b00100,0b00100,0b00100,0b00100],
+        [0b11111,0b00001,0b00010,0b00100,0b01000,0b10000,0b11111],
+    ];
+    write_atlas(&patterns)
 }
 
 fn main() -> Result<()> {
@@ -4802,6 +5197,7 @@ fn main() -> Result<()> {
     let mut data_update_batch: Option<(String, String)> = None;
     let mut inject_list_release: Option<(String, usize)> = None;
     let mut inject_row_activate: Option<String> = None;
+    let mut inject_log_append: Option<String> = None;
     let mut args = std::env::args().skip(1);
     while let Some(argument) = args.next() {
         match argument.as_str() {
@@ -4836,6 +5232,9 @@ fn main() -> Result<()> {
             "--inject-row-activate" => {
                 inject_row_activate = Some(args.next().context("--inject-row-activate requires list id; use --inject-list-release first to establish selection")?);
             }
+            "--inject-log-append" => {
+                inject_log_append = Some(args.next().context("--inject-log-append requires compiler log-browser id")?);
+            }
             _ => scene_path = argument,
         }
     }
@@ -4860,11 +5259,13 @@ fn main() -> Result<()> {
     let event_loop = builder.build().context("create X11 event loop")?;
     let window = Arc::new(WindowBuilder::new().with_title("Noir Glyph Atlas host")
         .with_inner_size(PhysicalSize::new(WIDTH, HEIGHT)).build(&event_loop).context("create window")?);
-    let mut host = pollster::block_on(Host::new(window.clone(), scene, scene_fingerprint_fnv1a64)).context("initialize host")?;
+    let scene_dir = Path::new(&scene_path).parent().unwrap_or_else(|| Path::new(".")).to_path_buf();
+    let mut host = pollster::block_on(Host::new(window.clone(), scene, scene_dir, scene_fingerprint_fnv1a64)).context("initialize host")?;
     println!("noir-winit-host: {} quad instances, {} glyph placement(s), {} packet(s), profile={}",
              host.instances.len(), host.scene.glyph_placement_plan.len(), host.scene.glyph_draw_packets.len(),
              host.scene.render_schedules.first().map(|schedule| schedule.profile_id.as_str()).unwrap_or("none"));
     if let Some((list, index, value)) = data_register_patch.as_ref() { host.patch_compact_data_register(list, *index, value)?; }
+    if let Some(log_browser) = inject_log_append.as_deref() { host.execute_log_browser_append(log_browser)?; }
     if let Some((list, logical)) = inject_list_release.as_ref() { host.inject_list_release(list, *logical)?; }
     if let Some(list) = inject_row_activate.as_deref() { host.inject_row_activate(list)?; }
     if let Some((list, records)) = data_update_batch.as_ref() {

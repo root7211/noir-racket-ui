@@ -37,18 +37,22 @@ fn vs_main(
   }
   let glyph_index = vertex_index / 6u;
   let corner = corners[vertex_index % 6u];
-  let glyph_width = size.x / f32(glyph_count) * 0.58;
-  let glyph_height = size.y * 0.62;
+  let cell_width = size.x * 0.76 / f32(glyph_count);
+  let glyph_width = cell_width * 0.76;
+  let glyph_height = size.y * 0.72;
   let glyph_pos = vec2<f32>(
-    pos.x + size.x * 0.12 + f32(glyph_index) * (size.x / f32(glyph_count)),
+    pos.x + size.x * 0.12 + f32(glyph_index) * cell_width,
     pos.y + size.y * 0.19,
   );
   let glyph_id = glyph_words[glyph_word_offset + glyph_index * 8u];
   let atlas_page = glyph_id >> 16u;
   let atlas_glyph_index = glyph_id & 0xffffu;
-  let atlas_px = vec2<f32>(f32(atlas_glyph_index) * ATLAS_GLYPH_WIDTH + 1.0, 1.0) + corner * vec2<f32>(3.0, 5.0);
+  let atlas_px = vec2<f32>(f32(atlas_glyph_index) * ATLAS_GLYPH_WIDTH + 1.0, 1.0) + corner * vec2<f32>(5.0, 7.0);
   out.position = vec4<f32>(glyph_pos + corner * vec2<f32>(glyph_width, glyph_height), 0.0, 1.0);
-  out.uv = atlas_px / vec2<f32>(ATLAS_WIDTH, ATLAS_HEIGHT);
+  // Atlas uploads begin at the top row; glyph geometry uses an NDC lower-left origin.
+  out.uv = (vec2<f32>(f32(atlas_glyph_index) * ATLAS_GLYPH_WIDTH + 1.0, 1.0)
+            + vec2<f32>(corner.x, 1.0 - corner.y) * vec2<f32>(5.0, 7.0))
+           / vec2<f32>(ATLAS_WIDTH, ATLAS_HEIGHT);
   out.color = vec4<f32>(0.97, 0.86, 0.34, 1.0);
   out.atlas_page = i32(atlas_page);
   return out;

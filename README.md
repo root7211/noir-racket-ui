@@ -21,6 +21,18 @@ PLTCOLLECTS="$PWD:/usr/share/racket/collects" racket tests/run.rkt
 
 当前仓库的 llvmpipe/Vulkan 数据用于验证编译期工作范围与回归协议，不能直接代表物理GPU性能。主线现在固定为Rust 1.87与wgpu 30；请先运行 `cargo run --release --manifest-path wgpu-verify/Cargo.toml --bin noir_wgpu_probe` 确认真实Vulkan适配器，再阅读 [真实 GPU 性能测量指南](REAL_GPU_BENCHMARKING.md)。WSL用户还应先执行 [`tools/diagnose_wsl_vulkan.sh`](tools/diagnose_wsl_vulkan.sh) 并遵循 [WSL / Dozen 诊断指南](WSL_DOZEN_GPU_DIAGNOSTICS.md)。
 
+## 日志浏览器示例
+
+[`examples/log-browser.rkt`](examples/log-browser.rkt) 是基于冻结列表交互ABI的第一个完整用户示例。它使用10,000条固定容量日志、四列 `LEVEL | TIME | SOURCE | MESSAGE` row template、有限level颜色、tail append、selection详情、scrollbar和 `PageUp`/`PageDown`/`Home`/`End`。日志详情和Enter激活仍然只走编译器已证明的局部tile与 `no-packets` worklist。
+
+```bash
+NOIR_ENTRY_MODULE=examples/log-browser.rkt PLTCOLLECTS="$PWD:" \
+  racket tools/export-dashboard.rkt out/log-browser.scene.json
+./tools/verify_log_browser.sh
+```
+
+该回归会在真实X11/Vulkan窗口中执行：离屏tail append → `End` → 选择 `ERROR` 行 → `Enter` 详情激活，同时拒绝被篡改的 `log_browser_plan` ABI。实现与完整验收记录见 [日志浏览器报告](LOG_BROWSER_REPORT.md) 和 [log-browser-plan v1](LOG_BROWSER_PLAN_ABI_V1.md)。
+
 ## 用户看到的语言
 
 ```racket
@@ -46,6 +58,8 @@ PLTCOLLECTS="$PWD:/usr/share/racket/collects" racket tests/run.rkt
 | `noir/ui/lang/reader.rkt` | `#lang noir/ui` 的 reader。仅把模块交给 `noir/ui/main`。 |
 | `noir/ui/main.rkt` | 原语宏 parser、静态检查、Scene IR、JSON 导出和 wgpu-plan 降低接口。 |
 | `examples/dashboard.rkt` | 成功编译的 DSL 示例。 |
+| `examples/log-browser.rkt` | 10,000条固定容量日志浏览器：four-column row、tail append、详情与长列表交互。 |
+| `tools/verify_log_browser.sh` | 真实X11/Vulkan日志工作流与log-browser ABI篡改回归。 |
 | `tests/run.rkt` | Scene 预算、更新计划和 JSON 导出的断言。 |
 | `tests/duplicate-id.rkt` | 失败样例；演示带源位置的宏诊断。 |
 

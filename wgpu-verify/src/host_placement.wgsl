@@ -37,15 +37,18 @@ fn vs_main(
     atlas_uv = vec4<f32>(
       (f32(glyph_index) * ATLAS_GLYPH_WIDTH + 1.0) / ATLAS_WIDTH,
       1.0 / ATLAS_HEIGHT,
-      3.0 / ATLAS_WIDTH,
-      5.0 / ATLAS_HEIGHT,
+      5.0 / ATLAS_WIDTH,
+      7.0 / ATLAS_HEIGHT,
     );
   }
 
   var out: VsOut;
   out.position = vec4<f32>(pos + corner * size, 0.0, 1.0);
-  out.uv = atlas_uv.xy + corner * atlas_uv.zw;
-  out.color = vec4<f32>(0.97, 0.86, 0.34, 1.0);
+  // Placement positions are NDC lower-left quads while texture uploads use a top-row origin.
+  // Preserve U and flip only V so glyphs remain left-to-right but no longer render upside down.
+  out.uv = atlas_uv.xy + vec2<f32>(corner.x, 1.0 - corner.y) * atlas_uv.zw;
+  // Cool near-white foreground keeps the 3×5 atlas legible on Noir's dark application surfaces.
+  out.color = vec4<f32>(0.90, 0.95, 1.0, 1.0);
   out.atlas_page = i32(atlas_page);
   return out;
 }

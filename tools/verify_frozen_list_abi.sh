@@ -23,6 +23,7 @@ fi
 grep -Fq '"abi_contracts"' "$SCENE"
 grep -Fq '"schema":"noir-virtual-list-plan-v1"' "$SCENE"
 grep -Fq '"schema":"noir-row-activation-plan-v1"' "$SCENE"
+grep -Fq '"schema":"noir-log-browser-plan-v1"' "$SCENE"
 grep -Fq '"abi_schema":"noir-virtual-list-plan-v1"' "$SCENE"
 grep -Fq '"abi_schema":"noir-row-activation-plan-v1"' "$SCENE"
 
@@ -44,7 +45,7 @@ sleep 4
 kill "$HOST_PID" 2>/dev/null || true
 wait "$HOST_PID" 2>/dev/null || true
 HOST_PID=""
-grep -Fq 'compiler ABI contracts: virtual-list=noir-virtual-list-plan-v1@1 row-activation=noir-row-activation-plan-v1@1 scrollbar=noir-scrollbar-plan-v1@1 list-navigation=noir-list-navigation-plan-v1@1 frozen' "$SUCCESS_LOG"
+grep -Fq 'compiler ABI contracts: virtual-list=noir-virtual-list-plan-v1@1 row-activation=noir-row-activation-plan-v1@1 scrollbar=noir-scrollbar-plan-v1@1 list-navigation=noir-list-navigation-plan-v1@1 log-browser=noir-log-browser-plan-v1@1 frozen' "$SUCCESS_LOG"
 grep -Fq 'compiler virtual lists: telemetry-registers capacity=4 viewport=3x28 row-tiles=[0, 1, 2]' "$SUCCESS_LOG"
 grep -Fq 'compiler row activation: list=telemetry-registers action=refresh-tick slot=0 batch=coalesced-activate-refresh-registers tile-mask=0x0000000000000001 worklist=2' "$SUCCESS_LOG"
 

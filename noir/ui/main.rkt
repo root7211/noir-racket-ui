@@ -16,6 +16,8 @@
                      racket/set
                      racket/string
                      racket/port
+                     racket/file
+                     racket/path
                      json
                      syntax/parse))
 
@@ -50,7 +52,11 @@ scene-glyph-draw-packets
          scene-keyboard-map
          scene-keyboard-command-map
          scene-virtual-list-plans
+         scene-log-browser-plans
+         scene-font-assets
          (struct-out virtual-list-plan)
+         (struct-out log-browser-plan)
+         (struct-out font-asset-plan)
          (struct-out render-schedule)
          (struct-out render-tile)
          (struct-out draw-range)
@@ -103,6 +109,11 @@ scene-glyph-draw-packets
 (define scrollbar-plan-abi-revision 1)
 (define list-navigation-plan-abi-schema "noir-list-navigation-plan-v1")
 (define list-navigation-plan-abi-revision 1)
+;; Application-level artifact. It references the frozen list plans but never rewrites them.
+(define log-browser-plan-abi-schema "noir-log-browser-plan-v1")
+(define log-browser-plan-abi-revision 1)
+(define font-asset-plan-abi-schema "noir-font-asset-plan-v1")
+(define font-asset-plan-abi-revision 1)
 
 (define (abi-contracts->jsexpr)
   (hash 'virtual_list_plan
@@ -116,12 +127,18 @@ scene-glyph-draw-packets
               'revision scrollbar-plan-abi-revision)
         'list_navigation_plan
         (hash 'schema list-navigation-plan-abi-schema
-              'revision list-navigation-plan-abi-revision)))
+              'revision list-navigation-plan-abi-revision)
+        'log_browser_plan
+        (hash 'schema log-browser-plan-abi-schema
+              'revision log-browser-plan-abi-revision)
+        'font_asset_plan
+        (hash 'schema font-asset-plan-abi-schema
+              'revision font-asset-plan-abi-revision)))
 
 (struct ui-node (tag id props children source) #:transparent)
 ;; Scene 以静态树和增量执行计划共同组成。state/actions 由 `noir-app`
 ;; 的扩展语法生成；普通 `(ui ...)` 保持空状态表，仍可独立使用。
-(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans) #:transparent)
+(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets) #:transparent)
 ;; state-slot 的 index 是所有 runtime state read/write 的唯一地址；id/initial 只保留为启动期 proof 与可审计导出。
 (struct state-slot (index id initial) #:transparent)
 ;; action-slot 与 state-slot 一样为 macro expansion 生成的 dense canonical address。
@@ -201,6 +218,12 @@ scene-glyph-draw-packets
 (struct scrollbar-plan (id list-id track-id thumb-id track-instance-offset thumb-instance-offset track-x track-y track-width track-height thumb-height max-viewport tile-ids packet-worklist-index physical-slot-rule) #:transparent)
 ;; A four-key viewport transition table. It only references frozen list/scrollbar plans.
 (struct list-navigation-plan (id list-id scrollbar-id page-step max-viewport transitions tile-ids packet-worklist-index physical-slot-rule) #:transparent)
+;; Application-level selected-row details and fixed tail append recipe. This is intentionally
+;; separate from virtual-list-plan v1 so the list ABI remains frozen.
+(struct log-browser-plan (id list-id append-batch-id append-indices append-updates detail-node-id detail-glyph-offsets detail-tile-ids row-color-offsets levels packet-worklist-index) #:transparent)
+;; A v1 asset is uploaded and startup-proved but registered inactive until a later
+;; placement plan explicitly targets atlas page 2 with fontc UV/metrics.
+(struct font-asset-plan (face-id manifest-path atlas-path font-sha256 atlas-sha256 atlas-width atlas-height atlas-channels pixel-size line-height glyph-domain-first glyph-domain-count atlas-page activation) #:transparent)
 
 (define (value->jsexpr v)
   (cond
@@ -220,6 +243,25 @@ scene-glyph-draw-packets
         'id (symbol->string (ui-node-id n))
         'props (value->jsexpr (ui-node-props n))
         'children (map node->jsexpr (ui-node-children n))))
+
+(define (font-asset-plan->jsexpr plan)
+  (hash 'abi_schema font-asset-plan-abi-schema
+        'abi_revision font-asset-plan-abi-revision
+        'face_id (font-asset-plan-face-id plan)
+        'renderer_kind "atlas-gray"
+        'manifest_path (font-asset-plan-manifest-path plan)
+        'atlas_path (font-asset-plan-atlas-path plan)
+        'font_sha256 (font-asset-plan-font-sha256 plan)
+        'atlas_sha256 (font-asset-plan-atlas-sha256 plan)
+        'atlas_width (font-asset-plan-atlas-width plan)
+        'atlas_height (font-asset-plan-atlas-height plan)
+        'atlas_channels (font-asset-plan-atlas-channels plan)
+        'pixel_size (font-asset-plan-pixel-size plan)
+        'line_height (font-asset-plan-line-height plan)
+        'glyph_domain_first (font-asset-plan-glyph-domain-first plan)
+        'glyph_domain_count (font-asset-plan-glyph-domain-count plan)
+        'atlas_page (font-asset-plan-atlas-page plan)
+        'activation (font-asset-plan-activation plan)))
 
 (define (state-slot->jsexpr slot)
   (hash 'index (state-slot-index slot)
@@ -671,6 +713,22 @@ scene-glyph-draw-packets
         'packet_worklist_index (list-navigation-plan-packet-worklist-index plan)
         'physical_slot_rule (symbol->string (list-navigation-plan-physical-slot-rule plan))))
 
+(define (log-browser-plan->jsexpr plan)
+  (hash 'abi_schema log-browser-plan-abi-schema
+        'abi_revision log-browser-plan-abi-revision
+        'id (symbol->string (log-browser-plan-id plan))
+        'list_id (symbol->string (log-browser-plan-list-id plan))
+        'append_batch_id (symbol->string (log-browser-plan-append-batch-id plan))
+        'append_indices (log-browser-plan-append-indices plan)
+        'append_updates (for/list ([entry (in-list (log-browser-plan-append-updates plan))])
+                          (hash 'index (car entry) 'value (cdr entry)))
+        'detail_node_id (symbol->string (log-browser-plan-detail-node-id plan))
+        'detail_glyph_offsets (log-browser-plan-detail-glyph-offsets plan)
+        'detail_tile_ids (log-browser-plan-detail-tile-ids plan)
+        'row_color_offsets (log-browser-plan-row-color-offsets plan)
+        'levels (value->jsexpr (log-browser-plan-levels plan))
+        'packet_worklist_index (log-browser-plan-packet-worklist-index plan)))
+
 (define (row-activation-plan->jsexpr plan)
   (hash 'abi_schema row-activation-plan-abi-schema
         'abi_revision row-activation-plan-abi-revision
@@ -691,8 +749,8 @@ scene-glyph-draw-packets
         'row_height (virtual-list-plan-row-height plan)
         ;; QuadInstance color starts at byte 16; runtime may only patch these compiler addresses.
         'row_color_offsets (map (lambda (offset) (+ offset 16)) (virtual-list-plan-row-layout-offsets plan))
-        'hover_color '(0.10 0.24 0.40 1.0)
-        'selected_color '(0.08 0.48 0.30 1.0)
+'hover_color '(0.10 0.17 0.25 1.0)
+         'selected_color '(0.16 0.25 0.38 1.0)
         'navigation (hash 'up_delta -1 'down_delta 1
                           'minimum_logical_row 0
                           'maximum_logical_row (sub1 (virtual-list-plan-logical-capacity plan)))
@@ -735,6 +793,8 @@ scene-glyph-draw-packets
         'row_activation_plans (map row-activation-plan->jsexpr (scene-row-activation-plans s))
         'scrollbar_plans (map scrollbar-plan->jsexpr (scene-scrollbar-plans s))
         'list_navigation_plans (map list-navigation-plan->jsexpr (scene-list-navigation-plans s))
+        'log_browser_plans (map log-browser-plan->jsexpr (scene-log-browser-plans s))
+        'font_assets (map font-asset-plan->jsexpr (scene-font-assets s))
         'text_field_visuals (text-field-visuals->jsexpr s)))
   (if build-attestation
       (hash-set base 'build_attestation (value->jsexpr build-attestation))
@@ -816,6 +876,11 @@ scene-glyph-draw-packets
   (struct c-scrollbar-plan (id list-id track-id thumb-id track-instance-offset thumb-instance-offset track-x track-y track-width track-height thumb-height max-viewport tile-ids packet-worklist-index physical-slot-rule) #:transparent)
   (struct c-list-navigation-spec (id list-id scrollbar-id source) #:transparent)
   (struct c-list-navigation-plan (id list-id scrollbar-id page-step max-viewport transitions tile-ids packet-worklist-index physical-slot-rule) #:transparent)
+  ;; Application-only spec: list and detail glyph addresses are resolved after layout.
+  (struct c-log-browser-spec (id list-id detail-id append-updates source) #:transparent)
+  (struct c-log-browser-plan (id list-id append-batch-id append-updates detail-node-id detail-glyph-offsets detail-tile-ids row-color-offsets levels packet-worklist-index) #:transparent)
+  (struct c-font-asset-spec (manifest-path atlas-path source) #:transparent)
+  (struct c-font-asset-plan (face-id manifest-path atlas-path font-sha256 atlas-sha256 atlas-width atlas-height atlas-channels pixel-size line-height glyph-domain-first glyph-domain-count atlas-page activation) #:transparent)
   (struct c-action-plan (id action action-index text-updates instance-updates damage tile-ids) #:transparent)
   ;; Layout Plan 是后端可直接消费的静态几何契约。instance-offset 以
   ;; QuadInstance 的 44-byte packed layout 为单位，和 Rust vertex layout 对齐。
@@ -1382,11 +1447,95 @@ scene-glyph-draw-packets
       (raise-syntax-error who "expected an identifier" x))
     v)
 
+  ;; A theme exists only while `noir-app` expands its one static root.  Property
+  ;; parsing resolves tokens here, so the runtime Scene cannot observe a theme map.
+  (define current-static-theme (make-parameter #f))
+
+  (define (parse-theme-hex who stx)
+    (define text (syntax-e stx))
+    (unless (and (string? text)
+                 (regexp-match? #px"^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$" text))
+      (raise-syntax-error who "theme colors must be #RRGGBB or #RRGGBBAA string literals" stx))
+    (define (channel start)
+      (/ (string->number (string-append "#x" (substring text start (+ start 2)))) 255.0))
+    (list (channel 1) (channel 3) (channel 5)
+          (if (= (string-length text) 9) (channel 7) 1.0)))
+
+  (define (parse-theme-pairs who section value-parser)
+    (define items (cdr (syntax->list section)))
+    (unless (and items (even? (length items)))
+      (raise-syntax-error who "theme section requires identifier/value pairs" section))
+    (for/fold ([result (hash)]) ([index (in-range 0 (length items) 2)])
+      (define name-stx (list-ref items index))
+      (define value-stx (list-ref items (add1 index)))
+      (define name (expect-symbol who name-stx))
+      (when (hash-has-key? result name)
+        (raise-syntax-error who (format "duplicate theme token ~a" name) name-stx))
+      (hash-set result name (value-parser value-stx))))
+
+  (define (parse-theme-form form)
+    (define pieces (syntax->list form))
+    (unless (and pieces (>= (length pieces) 3) (eq? (syntax-e (first pieces)) 'theme))
+      (raise-syntax-error 'theme "expected (theme name (color ...) (space ...) (type ...) (radius ...))" form))
+    (define theme-id (expect-symbol 'theme (second pieces)))
+    (define sections (drop pieces 2))
+    (define parsed (make-hash))
+    (for ([section (in-list sections)])
+      (define section-items (syntax->list section))
+      (unless (and section-items (pair? section-items))
+        (raise-syntax-error 'theme "theme section must be a parenthesized literal section" section))
+      (define kind (syntax-e (first section-items)))
+      (when (hash-has-key? parsed kind)
+        (raise-syntax-error 'theme (format "duplicate theme section ~a" kind) section))
+      (define parser
+        (case kind
+          [(color) (lambda (value) (parse-theme-hex 'theme value))]
+          [(space type radius)
+           (lambda (value)
+             (define number (syntax-e value))
+             (unless (and (real? number) (> number 0))
+               (raise-syntax-error 'theme "theme numeric values must be positive literals" value))
+             number)]
+          [else (raise-syntax-error 'theme "theme sections are color, space, type, or radius" section)]))
+      (hash-set! parsed kind (parse-theme-pairs 'theme section parser)))
+    (for ([required '(color space type radius)])
+      (unless (hash-has-key? parsed required)
+        (raise-syntax-error 'theme (format "theme is missing required ~a section" required) form)))
+    (hash 'id theme-id
+          'color (hash-ref parsed 'color)
+          'space (hash-ref parsed 'space)
+          'type (hash-ref parsed 'type)
+          'radius (hash-ref parsed 'radius)))
+
+  (define (theme-token-value who kind x)
+    (define call (syntax->list x))
+    (define expected-head (case kind
+                            [(color) 'theme-color]
+                            [(space) 'theme-space]
+                            [(type) 'theme-type]
+                            [(radius) 'theme-radius]))
+    (cond
+      [(and call (= (length call) 2) (eq? (syntax-e (first call)) expected-head))
+       (define theme (current-static-theme))
+       (unless theme
+         (raise-syntax-error who "theme token requires a (theme ...) declaration in the same noir-app" x))
+       (define token (expect-symbol who (second call)))
+       (hash-ref (hash-ref theme kind)
+                 token
+                 (lambda () (raise-syntax-error who (format "unknown ~a token ~a" kind token) (second call))))]
+      [else #f]))
+
+  (define (number-or-token who kind x)
+    (or (theme-token-value who kind x) (expect-number who x)))
+
   (define (property-value who kw x)
     (case kw
       [(#:id) (expect-symbol who x)]
-      [(#:gap #:padding #:x #:y #:width #:height #:grow #:radius #:opacity #:z)
+      [(#:gap #:padding) (number-or-token who 'space x)]
+      [(#:radius) (number-or-token who 'radius x)]
+      [(#:x #:y #:width #:height #:grow #:opacity #:z)
        (expect-number who x)]
+      [(#:background) (or (theme-token-value who 'color x) (syntax-e x))]
       [(#:align #:justify)
        (define v (syntax-e x))
        (unless (memq v '(start center end stretch space-between))
@@ -2293,20 +2442,40 @@ scene-glyph-draw-packets
       (define damage (map c-instance-binding-layout geometry-updates))
       (c-action-plan (c-action-id action) action (hash-ref action-indexes (c-action-id action)) text-updates geometry-updates damage '())))
 
-  (define (layout-color node depth)
+  ;; Background symbols lower to a fixed palette at compile time. They only alter static
+  ;; QuadInstance color fields; the runtime never resolves theme names or computes styles.
+  (define (background-palette name)
     (cond
-      [(eq? (c-node-id node) 'dashboard) '(0.035 0.055 0.095 1.0)]
-      [(eq? (c-node-tag node) 'button) '(0.08 0.72 0.47 1.0)]
+      [(and (list? name) (= (length name) 4) (andmap real? name)) name]
+      [else (case name
+      [(dark)    '(0.025 0.040 0.070 1.0)]
+      [(surface) '(0.045 0.070 0.115 1.0)]
+      [(panel)   '(0.070 0.100 0.155 1.0)]
+      [(header)  '(0.090 0.130 0.200 1.0)]
+      [(muted)   '(0.110 0.145 0.205 1.0)]
+      [(accent)  '(0.075 0.310 0.265 1.0)]
+      [(danger)  '(0.270 0.065 0.085 1.0)]
+      [else #f])]))
+  (define (layout-color node depth)
+    (define explicit-background
+      (background-palette (hash-ref (c-node-props node) '#:background #f)))
+    (cond
+      [explicit-background explicit-background]
+      [(eq? (c-node-id node) 'dashboard) '(0.025 0.040 0.070 1.0)]
+      [(eq? (c-node-tag node) 'button) '(0.075 0.310 0.265 1.0)]
       [(eq? (c-node-tag node) 'progress) '(0.25 0.86 0.62 1.0)]
-      [(eq? (c-node-tag node) 'scrollbar) '(0.055 0.085 0.135 1.0)]
-      [(eq? (c-node-tag node) 'scrollbar-thumb) '(0.20 0.66 1.0 1.0)]
+      [(eq? (c-node-tag node) 'scrollbar) '(0.045 0.070 0.115 1.0)]
+      [(eq? (c-node-tag node) 'scrollbar-thumb) '(0.28 0.72 1.0 1.0)]
       [(eq? (c-node-tag node) 'overlay)
        (cond [(regexp-match? #rx"\\$caret$" (symbol->string (c-node-id node)))
               (list 0.45 0.92 1.0 (hash-ref (c-node-props node) '#:opacity))]
              [(regexp-match? #rx"\\$focus$" (symbol->string (c-node-id node)))
               (list 0.20 0.66 1.0 (hash-ref (c-node-props node) '#:opacity))]
              [else (list 0.95 0.30 0.38 (hash-ref (c-node-props node) '#:opacity))])]
-      [(eq? (c-node-tag node) 'text) (list 0.84 0.90 1.0 (hash-ref (c-node-props node) '#:opacity 1.0))]
+      ;; Glyphs are rendered by the placement pipeline, so an unspecified text leaf has no
+      ;; opaque quad of its own. This preserves the parent/row surface behind static text;
+      ;; explicit `#:background` above remains a compiler-fixed visible surface.
+      [(eq? (c-node-tag node) 'text) (list 0.0 0.0 0.0 0.0)]
       [else (define shade (+ 0.11 (* depth 0.025)))
             (list shade (+ shade 0.035) (+ shade 0.09) 1.0)]))
 
@@ -2815,8 +2984,8 @@ scene-glyph-draw-packets
       ;; 单个 cell 的可采样 3×5 bitmap 永远位于 6×8 cell 的 (1,1) padding 后。
       (list (/ (+ (* glyph-index 6.0) 1.0) 162.0)
             (/ 1.0 8.0)
-            (/ 3.0 162.0)
-            (/ 5.0 8.0)))
+            (/ 5.0 162.0)
+            (/ 7.0 8.0)))
     (define placements
       (append-map
        (lambda (binding)
@@ -2842,8 +3011,13 @@ scene-glyph-draw-packets
            (raise-syntax-error 'text "glyph advance sum must be positive" (c-node-source node)))
          (define run-pos (layout-ndc-pos layout))
          (define run-size (layout-ndc-size layout))
-         (define unit-advance (/ (first run-size) total-advance))
-         (define glyph-height (* (second run-size) 0.62))
+         ;; The 12% side inset is part of the compiler-owned typography geometry. Earlier
+         ;; lowering distributed all glyph advances across 100% of the run *after* adding
+         ;; that inset, so long labels overflowed their fixed clip. Reserve both insets
+         ;; before assigning glyph cells; the host still receives only fixed NDC quads.
+         (define text-run-width (* (first run-size) 0.76))
+         (define unit-advance (/ text-run-width total-advance))
+         (define glyph-height (* (second run-size) 0.72))
          (define start-x (+ (first run-pos) (* (first run-size) 0.12)))
          (define batch-key
            (string->symbol
@@ -2861,7 +3035,7 @@ scene-glyph-draw-packets
                                            (* glyph-index glyph-instance-bytes)))
               (define glyph-pos (list (+ start-x (* prefix unit-advance))
                                       (+ (second run-pos) (* (second run-size) 0.19))))
-              (define glyph-size (list (* unit-advance advance 0.58) glyph-height))
+              (define glyph-size (list (* unit-advance advance 0.76) glyph-height))
               (define slot (quotient glyph-byte-offset glyph-instance-bytes))
               (loop (cdr ids) (cdr advance-list) (add1 glyph-index) (+ prefix advance)
                     (cons (c-glyph-placement
@@ -4158,6 +4332,196 @@ scene-glyph-draw-packets
   (define (scrollbar-plans->datum plans)
     `(list ,@(map scrollbar-plan->datum plans)))
 
+  (define (manifest-ref who object key source)
+    (define missing (gensym 'missing))
+    (define value (hash-ref object (string->symbol key) missing))
+    (define resolved (if (eq? value missing) (hash-ref object key missing) value))
+    (when (eq? resolved missing)
+      (raise-syntax-error who (format "font manifest is missing ~a" key) source))
+    resolved)
+
+  (define (font-asset-source-path source relative)
+    (define from-project (simplify-path (build-path (current-directory) relative)))
+    (cond
+      [(file-exists? from-project) from-project]
+      [else
+       (define origin (syntax-source source))
+       (define base (if (path? origin) (or (path-only origin) (current-directory)) (current-directory)))
+       (simplify-path (build-path base relative))]))
+
+  (define (parse-font-asset-forms forms)
+    (for/list ([form (in-list forms)])
+      (syntax-parse form
+        #:datum-literals (font-asset)
+        [(font-asset #:manifest manifest:string #:atlas atlas:string)
+         (c-font-asset-spec (syntax-e #'manifest) (syntax-e #'atlas) form)]
+        [_ (raise-syntax-error 'font-asset "expected (font-asset #:manifest relative-path #:atlas relative-path)" form)])))
+
+  (define (compile-font-asset-plans specs)
+    (define seen (mutable-set))
+    (for/list ([spec (in-list specs)])
+      (define manifest-source (font-asset-source-path (c-font-asset-spec-source spec) (c-font-asset-spec-manifest-path spec)))
+      (define atlas-source (font-asset-source-path (c-font-asset-spec-source spec) (c-font-asset-spec-atlas-path spec)))
+      (unless (file-exists? manifest-source)
+        (raise-syntax-error 'font-asset "manifest path does not exist at macro expansion" (c-font-asset-spec-source spec)))
+      (unless (file-exists? atlas-source)
+        (raise-syntax-error 'font-asset "atlas path does not exist at macro expansion" (c-font-asset-spec-source spec)))
+      (define manifest (call-with-input-file manifest-source read-json))
+      (unless (equal? (manifest-ref 'font-asset manifest "schema" (c-font-asset-spec-source spec)) "noir-font-asset-manifest-v1")
+        (raise-syntax-error 'font-asset "manifest schema must be noir-font-asset-manifest-v1" (c-font-asset-spec-source spec)))
+      (unless (= (manifest-ref 'font-asset manifest "revision" (c-font-asset-spec-source spec)) 1)
+        (raise-syntax-error 'font-asset "manifest revision must be 1" (c-font-asset-spec-source spec)))
+      (define face-id (manifest-ref 'font-asset manifest "face_id" (c-font-asset-spec-source spec)))
+      (unless (and (string? face-id) (not (string=? face-id "")))
+        (raise-syntax-error 'font-asset "manifest face_id must be non-empty" (c-font-asset-spec-source spec)))
+      (when (set-member? seen face-id)
+        (raise-syntax-error 'font-asset "font asset face_id must be unique" (c-font-asset-spec-source spec)))
+      (set-add! seen face-id)
+      (unless (equal? (manifest-ref 'font-asset manifest "renderer_kind" (c-font-asset-spec-source spec)) "atlas-gray")
+        (raise-syntax-error 'font-asset "v1 only accepts renderer_kind atlas-gray" (c-font-asset-spec-source spec)))
+      (define atlas (manifest-ref 'font-asset manifest "atlas" (c-font-asset-spec-source spec)))
+      (define metrics (manifest-ref 'font-asset manifest "metrics" (c-font-asset-spec-source spec)))
+      (define glyphs (manifest-ref 'font-asset manifest "glyphs" (c-font-asset-spec-source spec)))
+      (define glyph-count (manifest-ref 'font-asset manifest "glyph_count" (c-font-asset-spec-source spec)))
+      (unless (and (list? glyphs) (exact-nonnegative-integer? glyph-count) (= (length glyphs) glyph-count)
+                   (equal? (map (lambda (glyph) (manifest-ref 'font-asset glyph "glyph_id" (c-font-asset-spec-source spec))) glyphs) (range glyph-count)))
+        (raise-syntax-error 'font-asset "manifest glyph IDs must be dense 0..glyph_count-1" (c-font-asset-spec-source spec)))
+      (define width (manifest-ref 'font-asset atlas "width" (c-font-asset-spec-source spec)))
+      (define height (manifest-ref 'font-asset atlas "height" (c-font-asset-spec-source spec)))
+      (define channels (manifest-ref 'font-asset atlas "channels" (c-font-asset-spec-source spec)))
+      (unless (and (exact-positive-integer? width) (exact-positive-integer? height) (= channels 1))
+        (raise-syntax-error 'font-asset "atlas must have positive width/height and one R8 channel" (c-font-asset-spec-source spec)))
+      (unless (= (file-size atlas-source) (* width height channels))
+        (raise-syntax-error 'font-asset "atlas R8 byte length does not match manifest dimensions" (c-font-asset-spec-source spec)))
+      (c-font-asset-plan face-id (c-font-asset-spec-manifest-path spec) (c-font-asset-spec-atlas-path spec)
+                         (manifest-ref 'font-asset manifest "font_sha256" (c-font-asset-spec-source spec))
+                         (manifest-ref 'font-asset manifest "atlas_sha256" (c-font-asset-spec-source spec))
+                         width height channels
+                         (manifest-ref 'font-asset metrics "pixel_size" (c-font-asset-spec-source spec))
+                         (manifest-ref 'font-asset metrics "line_height" (c-font-asset-spec-source spec))
+                         0 glyph-count 2 "registered-inactive")))
+
+  (define (font-asset-plan->datum plan)
+    `(font-asset-plan ,(c-font-asset-plan-face-id plan)
+                      ,(c-font-asset-plan-manifest-path plan)
+                      ,(c-font-asset-plan-atlas-path plan)
+                      ,(c-font-asset-plan-font-sha256 plan)
+                      ,(c-font-asset-plan-atlas-sha256 plan)
+                      ,(c-font-asset-plan-atlas-width plan)
+                      ,(c-font-asset-plan-atlas-height plan)
+                      ,(c-font-asset-plan-atlas-channels plan)
+                      ,(c-font-asset-plan-pixel-size plan)
+                      ,(c-font-asset-plan-line-height plan)
+                      ,(c-font-asset-plan-glyph-domain-first plan)
+                      ,(c-font-asset-plan-glyph-domain-count plan)
+                      ,(c-font-asset-plan-atlas-page plan)
+                      ,(c-font-asset-plan-activation plan)))
+
+  (define (font-asset-plans->datum plans)
+    `(list ,@(map font-asset-plan->datum plans)))
+
+  (define (parse-log-browser-forms forms)
+    (for/list ([form (in-list forms)])
+      (syntax-parse form
+        #:datum-literals (log-browser)
+        [(log-browser #:id id:id #:for list-id:id #:detail detail-id:id
+                      #:append ((index value) ...+))
+         (define indices (map syntax-e (syntax->list #'(index ...))))
+         (define values (map (lambda (item) (component-literal-string 'log-browser item))
+                             (syntax->list #'(value ...))))
+         (unless (andmap exact-nonnegative-integer? indices)
+           (raise-syntax-error 'log-browser "append indices must be non-negative integer literals" form))
+         (unless (= (length indices) (length (remove-duplicates indices)))
+           (raise-syntax-error 'log-browser "append indices must be unique" form))
+         (c-log-browser-spec (syntax-e #'id) (syntax-e #'list-id) (syntax-e #'detail-id)
+                            (map cons indices values) form)]
+        [_ (raise-syntax-error 'log-browser "expected (log-browser #:id id #:for list #:detail text-id #:append ((index UPPERCASE_RECORD) ...+))" form)])))
+
+  (define (compile-log-browser-plans specs root layouts glyph-placements virtual-list-plans render-schedules)
+    (define list-by-id (for/hash ([plan (in-list virtual-list-plans)])
+                         (values (c-virtual-list-plan-id plan) plan)))
+    (define layout-by-id (for/hash ([layout (in-list layouts)])
+                           (values (c-layout-id layout) layout)))
+    (define node-by-id (for/hash ([node (in-list (walk-nodes root))])
+                          (values (c-node-id node) node)))
+    (define schedule (and (pair? render-schedules) (car render-schedules)))
+    (for/list ([spec (in-list specs)])
+      (define list-plan
+        (hash-ref list-by-id (c-log-browser-spec-list-id spec)
+                  (lambda () (raise-syntax-error 'log-browser "#:for must reference a virtual-list in the same root" (c-log-browser-spec-source spec)))))
+      (define table (c-virtual-list-plan-data-register-table list-plan))
+      (unless table
+        (raise-syntax-error 'log-browser "requires compact data-register-table virtual-list" (c-log-browser-spec-source spec)))
+      (define capacity (c-virtual-list-plan-logical-capacity list-plan))
+      (define width (hash-ref table 'register-width))
+      (define updates (sort (c-log-browser-spec-append-updates spec) < #:key car))
+      (define indices (map car updates))
+      (unless (and (= (last indices) (sub1 capacity))
+                   (equal? indices (range (first indices) (add1 (last indices)))))
+        (raise-syntax-error 'log-browser "append records must form a contiguous tail interval ending at logical_capacity-1" (c-log-browser-spec-source spec)))
+      (for ([entry (in-list updates)])
+        (define value (cdr entry))
+        (unless (and (<= (string-length value) width)
+                     (for/and ([ch (in-string value)]) (or (char=? ch #\space) (char<=? #\A ch #\Z))))
+          (raise-syntax-error 'log-browser "append records must be fixed-width uppercase ASCII" (c-log-browser-spec-source spec))))
+      (define detail-id (c-log-browser-spec-detail-id spec))
+      (define detail-layout (hash-ref layout-by-id detail-id
+                                      (lambda () (raise-syntax-error 'log-browser "#:detail must reference a layout node" (c-log-browser-spec-source spec)))))
+      (define detail-node (hash-ref node-by-id detail-id))
+      (unless (eq? (c-node-tag detail-node) 'text)
+        (raise-syntax-error 'log-browser "#:detail must reference a text node" (c-log-browser-spec-source spec)))
+      (define detail-placements (filter (lambda (placement) (eq? (c-glyph-placement-node-id placement) detail-id)) glyph-placements))
+      (unless (pair? detail-placements)
+        (raise-syntax-error 'log-browser "detail text requires a fixed glyph placement range" (c-log-browser-spec-source spec)))
+      (define detail-tile-ids
+        (if schedule
+            (for/list ([tile (in-list (c-render-schedule-tiles schedule))] [tile-id (in-naturals)]
+                       #:when (rect-intersection (layout-rect detail-layout) (tile-rect tile))) tile-id)
+            '()))
+      (unless (pair? detail-tile-ids)
+        (raise-syntax-error 'log-browser "detail panel must intersect a compiled render tile" (c-log-browser-spec-source spec)))
+      ;; A layout rect may extend past a clipped tile. Export only the glyph cells contained in
+      ;; the already-compiled packet subranges; the host must never patch clipped placements.
+      (define detail-covered-slots
+        (for*/set ([tile-id (in-list detail-tile-ids)]
+                   [range (in-list (c-render-tile-glyph-packet-ranges (list-ref (c-render-schedule-tiles schedule) tile-id)))]
+                   [slot (in-range (c-glyph-packet-range-first-placement range)
+                                   (+ (c-glyph-packet-range-first-placement range)
+                                      (c-glyph-packet-range-placement-count range)))])
+          slot))
+      (define detail-offsets
+        (for/list ([placement (in-list detail-placements)]
+                   #:when (set-member? detail-covered-slots (c-glyph-placement-slot placement)))
+          (c-glyph-placement-glyph-byte-offset placement)))
+      (unless (and (pair? detail-offsets)
+                   (equal? detail-offsets (sort detail-offsets <))
+                   (andmap (lambda (offset) (= (modulo offset 4) 0)) detail-offsets))
+        (raise-syntax-error 'log-browser "detail glyph offsets must be tile-covered, strictly increasing and 4-byte aligned" (c-log-browser-spec-source spec)))
+      (c-log-browser-plan (c-log-browser-spec-id spec) (c-log-browser-spec-list-id spec)
+                          (string->symbol (format "~a-append" (c-log-browser-spec-id spec))) updates detail-id detail-offsets detail-tile-ids
+                          (map (lambda (offset) (+ offset 16)) (c-virtual-list-plan-row-layout-offsets list-plan))
+(list (hash 'name 'INFO 'color '(0.055 0.095 0.150 1.0))
+                                 (hash 'name 'WARN 'color '(0.20 0.14 0.045 1.0))
+                                 (hash 'name 'ERROR 'color '(0.22 0.045 0.065 1.0))
+                                 (hash 'name 'DEBUG 'color '(0.10 0.075 0.18 1.0)))
+                          2)))
+
+  (define (log-browser-plan->datum plan)
+    `(log-browser-plan ',(c-log-browser-plan-id plan)
+                       ',(c-log-browser-plan-list-id plan)
+                       ',(c-log-browser-plan-append-batch-id plan)
+                       ',(map car (c-log-browser-plan-append-updates plan))
+                       ',(c-log-browser-plan-append-updates plan)
+                       ',(c-log-browser-plan-detail-node-id plan)
+                       ',(c-log-browser-plan-detail-glyph-offsets plan)
+                       ',(c-log-browser-plan-detail-tile-ids plan)
+                       ',(c-log-browser-plan-row-color-offsets plan)
+                       ',(c-log-browser-plan-levels plan)
+                       ,(c-log-browser-plan-packet-worklist-index plan)))
+
+  (define (log-browser-plans->datum plans)
+    `(list ,@(map log-browser-plan->datum plans)))
+
   (define (compile-list-navigation-plans specs virtual-list-plans scrollbar-plans)
     (define list-by-id (for/hash ([plan (in-list virtual-list-plans)])
                          (values (c-virtual-list-plan-id plan) plan)))
@@ -4707,8 +5071,10 @@ scene-glyph-draw-packets
                    [KEYBOARD-COMMAND-MAP (datum-stx stx (keyboard-command-map->datum keyboard-command-map))]
                    [VIRTUAL-LISTS (datum-stx stx (virtual-list-plans->datum virtual-list-plans))]
                    [SCROLLBARS (datum-stx stx (scrollbar-plans->datum scrollbar-plans))]
-                   [LIST-NAVIGATIONS (datum-stx stx (list-navigation-plans->datum list-navigation-plans))])
-       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS))]
+                   [LIST-NAVIGATIONS (datum-stx stx (list-navigation-plans->datum list-navigation-plans))]
+                   [LOG-BROWSERS (datum-stx stx ''())]
+                   [FONT-ASSETS (datum-stx stx ''())])
+       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS))]
     [(_ root:expr extra:expr ...)
      (raise-syntax-error 'ui "expects exactly one root layout node" stx)]))
 
@@ -4721,23 +5087,34 @@ scene-glyph-draw-packets
      (define transaction-forms (filter (lambda (form) (eq? (form-head-symbol form) 'commit-group)) forms))
      (define command-table-forms (filter (lambda (form) (eq? (form-head-symbol form) 'command-table)) forms))
      (define list-navigation-forms (filter (lambda (form) (eq? (form-head-symbol form) 'list-navigation)) forms))
+     (define log-browser-forms (filter (lambda (form) (eq? (form-head-symbol form) 'log-browser)) forms))
+     (define font-asset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'font-asset)) forms))
+     (define theme-forms (filter (lambda (form) (eq? (form-head-symbol form) 'theme)) forms))
      (define layout-forms
        (filter (lambda (form)
-                 (not (memq (form-head-symbol form) '(state action commit-group command-table list-navigation))))
+                 (not (memq (form-head-symbol form) '(state action commit-group command-table list-navigation log-browser font-asset theme))))
                forms))
      (unless (= (length state-forms) 1)
        (raise-syntax-error 'noir-app "expects exactly one (state ...) form" stx))
      (unless (= (length layout-forms) 1)
        (raise-syntax-error 'noir-app "expects exactly one root layout form" stx))
+     (unless (<= (length theme-forms) 1)
+       (raise-syntax-error 'noir-app "accepts at most one (theme ...) declaration" stx))
+     (define static-theme (and (pair? theme-forms) (parse-theme-form (car theme-forms))))
      (define states (parse-state-form (car state-forms)))
      (define state-indexes (state-index-by-id states))
      (define actions (parse-action-forms action-forms (list->set (map c-state-id states))))
      (define transactions (parse-transaction-forms transaction-forms (list->set (map c-state-id states))))
      (define command-specs (parse-command-table-forms command-table-forms (list->set (map c-action-id actions))))
      (define list-navigation-specs (parse-list-navigation-forms list-navigation-forms))
+     (define log-browser-specs (parse-log-browser-forms log-browser-forms))
+     (define font-asset-specs (parse-font-asset-forms font-asset-forms))
+     (define font-assets (compile-font-asset-plans font-asset-specs))
      (define action-indexes (action-index-by-id actions))
      (define transaction-indexes (transaction-index-by-id transactions))
-     (define-values (root-node _) (parse-node (car layout-forms) (set)))
+     (define-values (root-node _)
+       (parameterize ([current-static-theme static-theme])
+         (parse-node (car layout-forms) (set))))
      (define-values (total dynamic budget updates) (compile-scene root-node))
      (define layouts (compile-layout-plan root-node))
      (define-values (glyph-placements glyph-packets)
@@ -4755,6 +5132,7 @@ scene-glyph-draw-packets
      (define virtual-list-plans (compile-virtual-list-plans root-node layouts glyph-placements))
      (define scrollbar-plans (compile-scrollbar-plans root-node layouts virtual-list-plans render-schedules))
      (define list-navigation-plans (compile-list-navigation-plans list-navigation-specs virtual-list-plans scrollbar-plans))
+     (define log-browser-plans (compile-log-browser-plans log-browser-specs root-node layouts glyph-placements virtual-list-plans render-schedules))
      ;; Coalesced batch must be built after packet-local task annotation; this prevents a
      ;; runtime batch executor from reconstructing glyph dependencies.
      (define focus-graph (compile-focus-graph root-node layouts render-schedules state-indexes))
@@ -4806,7 +5184,9 @@ scene-glyph-draw-packets
                    [VIRTUAL-LISTS (datum-stx stx (virtual-list-plans->datum virtual-list-plans))]
                    [ROW-ACTIVATIONS (datum-stx stx (row-activation-plans->datum row-activation-plans))]
                    [SCROLLBARS (datum-stx stx (scrollbar-plans->datum scrollbar-plans))]
-                   [LIST-NAVIGATIONS (datum-stx stx (list-navigation-plans->datum list-navigation-plans))])
+                   [LIST-NAVIGATIONS (datum-stx stx (list-navigation-plans->datum list-navigation-plans))]
+                   [LOG-BROWSERS (datum-stx stx (log-browser-plans->datum log-browser-plans))]
+                   [FONT-ASSETS (datum-stx stx (font-asset-plans->datum font-assets))])
        #'(begin
-           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS))
+           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS))
            (provide app-scene)))]))
