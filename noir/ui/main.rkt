@@ -1619,8 +1619,8 @@ scene-glyph-draw-packets
          (define kw (syntax-e (car rest)))
          (unless (set-member? allowed kw)
            (raise-syntax-error who (format "property ~a is not allowed here" kw) (car rest)))
-         (when (hash-has-key? props kw)
-           (raise-syntax-error who (format "duplicate property ~a" kw) (car rest)))
+          (when (hash-has-key? props kw)
+            (raise-syntax-error who (format "duplicate property ~a" kw) (car rest)))
          (loop (cddr rest)
                (hash-set props kw (property-value who kw (cadr rest))))])))
 
@@ -2051,6 +2051,140 @@ scene-glyph-draw-packets
                              "expected (control-button #:id id #:label string #:on action [#:width n] [#:height n] [#:grow n])"
                              stx)]))
 
+  ;; Desktop chrome v1 is syntax compression only. These parsers lower directly
+  ;; into the existing primitive grammar; no c-node ever carries a component tag.
+  (define (parse-app-shell stx seen)
+    (syntax-parse stx
+      #:datum-literals (app-shell)
+      [(app-shell #:id id:id
+                  (~optional (~seq #:gap gap) #:defaults ([gap #'(theme-space sm)]))
+                  (~optional (~seq #:padding padding) #:defaults ([padding #'(theme-space lg)]))
+                  (~optional (~seq #:background background) #:defaults ([background #'(theme-color canvas)]))
+                  (~optional (~seq #:radius radius) #:defaults ([radius #'(theme-radius panel)]))
+                  child:expr ...+)
+       (define lowered
+         (datum->syntax stx
+                        `(column #:id ,(syntax-e #'id)
+                                 #:gap ,(syntax->datum #'gap)
+                                 #:padding ,(syntax->datum #'padding)
+                                 #:background ,(syntax->datum #'background)
+                                 #:radius ,(syntax->datum #'radius)
+                                 ,@(map syntax->datum (syntax->list #'(child ...))))
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'app-shell
+                             "expected (app-shell #:id id [#:gap n] [#:padding n] [#:background color] [#:radius n] child ...+)"
+                             stx)]))
+
+  (define (parse-surface stx seen)
+    (syntax-parse stx
+      #:datum-literals (surface)
+      [(surface #:id id:id
+                (~optional (~seq #:height height) #:defaults ([height #'#f]))
+                (~optional (~seq #:background background) #:defaults ([background #'(theme-color surface)]))
+                (~optional (~seq #:radius radius) #:defaults ([radius #'#f]))
+                (~optional (~seq #:clip clip) #:defaults ([clip #'#f]))
+                child:expr ...+)
+       (define optional-props
+         (append (if (eq? (syntax-e #'height) #f) '() (list '#:height (syntax->datum #'height)))
+                 (if (eq? (syntax-e #'radius) #f) '() (list '#:radius (syntax->datum #'radius)))))
+       (define lowered
+         (datum->syntax stx
+                        `(stack #:id ,(syntax-e #'id) ,@optional-props
+                                #:clip ,(syntax->datum #'clip)
+                                #:background ,(syntax->datum #'background)
+                                ,@(map syntax->datum (syntax->list #'(child ...))))
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'surface
+                             "expected (surface #:id id [#:height n] [#:background color] [#:radius n] [#:clip bool] child ...+)"
+                             stx)]))
+
+  (define (parse-toolbar stx seen)
+    (syntax-parse stx
+      #:datum-literals (toolbar)
+      [(toolbar #:id id:id #:text-id text-id:id #:label label #:font-face face:id
+                (~optional (~seq #:height height) #:defaults ([height #'34]))
+                (~optional (~seq #:background background) #:defaults ([background #'(theme-color header)])))
+       (define label-value (component-literal-string 'toolbar #'label))
+       (define lowered
+         (datum->syntax stx
+                        `(stack #:id ,(syntax-e #'id) #:height ,(syntax->datum #'height)
+                                #:background ,(syntax->datum #'background)
+                           (text #:id ,(syntax-e #'text-id) #:height ,(syntax->datum #'height)
+                                 #:background ,(syntax->datum #'background)
+                                 #:font-face ,(syntax-e #'face) ,label-value))
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'toolbar
+                             "expected (toolbar #:id id #:text-id id #:label string #:font-face face [#:height n] [#:background color])"
+                             stx)]))
+
+  (define (parse-table-header stx seen)
+    (syntax-parse stx
+      #:datum-literals (table-header)
+      [(table-header #:id id:id #:text-id text-id:id #:label label #:font-face face:id
+                     (~optional (~seq #:height height) #:defaults ([height #'24]))
+                     (~optional (~seq #:background background) #:defaults ([background #'(theme-color surface)])))
+       (define label-value (component-literal-string 'table-header #'label))
+       (define lowered
+         (datum->syntax stx
+                        `(stack #:id ,(syntax-e #'id) #:height ,(syntax->datum #'height)
+                                #:background ,(syntax->datum #'background)
+                           (text #:id ,(syntax-e #'text-id) #:height ,(syntax->datum #'height)
+                                 #:background ,(syntax->datum #'background)
+                                 #:font-face ,(syntax-e #'face) ,label-value))
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'table-header
+                             "expected (table-header #:id id #:text-id id #:label string #:font-face face [#:height n] [#:background color])"
+                             stx)]))
+
+  (define (parse-status-pill stx seen)
+    (syntax-parse stx
+      #:datum-literals (status-pill)
+      [(status-pill #:id id:id #:button-id button-id:id #:label-id label-id:id
+                    #:button-label button-label #:label label #:font-face face:id #:on action:id
+                    (~optional (~seq #:height height) #:defaults ([height #'30]))
+                    #:background background)
+       (define button-label-value (component-literal-string 'status-pill #'button-label))
+       (define label-value (component-literal-string 'status-pill #'label))
+       (define lowered
+         (datum->syntax stx
+                        `(stack #:id ,(syntax-e #'id) #:height ,(syntax->datum #'height)
+                                #:background ,(syntax->datum #'background)
+                           (button #:id ,(syntax-e #'button-id) #:height ,(syntax->datum #'height)
+                                   #:background ,(syntax->datum #'background)
+                                   ,button-label-value #:on ,(syntax-e #'action))
+                           (text #:id ,(syntax-e #'label-id) #:height ,(syntax->datum #'height)
+                                 #:background ,(syntax->datum #'background)
+                                 #:font-face ,(syntax-e #'face) ,label-value))
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'status-pill
+                             "expected (status-pill #:id id #:button-id id #:label-id id #:button-label string #:label string #:font-face face #:on action [#:height n] #:background color)"
+                             stx)]))
+
+  (define (parse-detail-panel stx seen)
+    (syntax-parse stx
+      #:datum-literals (detail-panel)
+      [(detail-panel #:id id:id #:text-id text-id:id #:dynamic state:id #:max-chars max
+                     (~optional (~seq #:height height) #:defaults ([height #'34]))
+                     (~optional (~seq #:background background) #:defaults ([background #'(theme-color surface)])))
+       (define max-value (expect-positive-integer 'detail-panel #'max))
+       (define lowered
+         (datum->syntax stx
+                        `(stack #:id ,(syntax-e #'id) #:height ,(syntax->datum #'height)
+                                #:background ,(syntax->datum #'background)
+                           (text #:id ,(syntax-e #'text-id) #:height ,(syntax->datum #'height)
+                                 #:background ,(syntax->datum #'background)
+                                 #:dynamic ,(syntax-e #'state) #:max-chars ,max-value))
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'detail-panel
+                             "expected (detail-panel #:id id #:text-id id #:dynamic state #:max-chars positive-int [#:height n] [#:background color])"
+                             stx)]))
+
   ;; `repeat/ui` 只接受固定的 datum table：
   ;; (repeat/ui ((id state label)
   ;;             (cpu-0 cpu0 "CPU 0")
@@ -2357,8 +2491,14 @@ scene-glyph-draw-packets
 
   (define (parse-node stx seen)
     (syntax-parse stx
-#:datum-literals (row column stack grid text text-field button transaction-button multi-field-event multi-action-event virtual-list scrollbar control-button metric-card form-row settings-form repeat/ui progress overlay spacer)
-       [(form-row form ...) (parse-form-row stx seen)]
+#:datum-literals (row column stack grid text text-field button transaction-button multi-field-event multi-action-event virtual-list scrollbar control-button metric-card form-row settings-form app-shell surface toolbar table-header status-pill detail-panel repeat/ui progress overlay spacer)
+        [(app-shell form ...) (parse-app-shell stx seen)]
+        [(surface form ...) (parse-surface stx seen)]
+        [(toolbar form ...) (parse-toolbar stx seen)]
+        [(table-header form ...) (parse-table-header stx seen)]
+        [(status-pill form ...) (parse-status-pill stx seen)]
+        [(detail-panel form ...) (parse-detail-panel stx seen)]
+        [(form-row form ...) (parse-form-row stx seen)]
        [(settings-form form ...) (parse-settings-form stx seen)]
        [(metric-card form ...) (parse-metric-card stx seen)]
       [(control-button form ...) (parse-control-button stx seen)]
@@ -2378,7 +2518,7 @@ scene-glyph-draw-packets
       [(overlay form ...) (parse-overlay stx (syntax->list #'(form ...)) seen)]
       [(spacer form ...) (parse-spacer stx (syntax->list #'(form ...)) seen)]
       [_ (raise-syntax-error 'ui
-                             "expected row, column, stack, grid, text, text-field, button, transaction-button, multi-field-event, multi-action-event, virtual-list, scrollbar, control-button, metric-card, form-row, settings-form, repeat/ui (as a layout child), progress, overlay, or spacer"
+                             "expected row, column, stack, grid, text, text-field, button, transaction-button, multi-field-event, multi-action-event, virtual-list, scrollbar, control-button, metric-card, form-row, settings-form, app-shell, surface, toolbar, table-header, status-pill, detail-panel, repeat/ui (as a layout child), progress, overlay, or spacer"
                              stx)]))
 
   (define (dynamic-node? n)

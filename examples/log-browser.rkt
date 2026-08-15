@@ -21,15 +21,12 @@
    #:append ((9997 "WARN  TIME  AUTH  TOKEN RETRY")
              (9998 "ERROR TIME  AUTH  TOKEN DENIED")
              (9999 "DEBUG TIME  CACHE ROTATE DONE")))
- (column #:id log-browser-dashboard #:gap (theme-space sm) #:padding (theme-space lg) #:background (theme-color canvas) #:radius (theme-radius panel)
-   ;; Top application bar: the title remains on a dark, fixed high-contrast surface.
-   (stack #:id log-app-bar #:height 34 #:background (theme-color header)
-     (text #:id log-title #:height 34 #:background (theme-color header) #:font-face noir-desktop-sans-18 "SYSTEM LOG BROWSER"))
-   ;; A distinct, compiler-fixed table header makes the row template legible as four fields.
-   (stack #:id log-column-header #:height 24 #:background (theme-color surface)
-     (text #:id log-columns #:height 24 #:background (theme-color surface) #:font-face noir-desktop-sans-18 "LEVEL TIME SOURCE MESSAGE"))
-   ;; The list itself keeps its original 3-row / 4-slot compact arena and scrollbar ABI.
-   (stack #:id log-list-shell #:height 84 #:clip true #:background (theme-color panel)
+ (app-shell #:id log-browser-dashboard
+   ;; toolbar/table-header expand to the same stack + static page-2 text primitives.
+   (toolbar #:id log-app-bar #:text-id log-title #:label "SYSTEM LOG BROWSER" #:font-face noir-desktop-sans-18)
+   (table-header #:id log-column-header #:text-id log-columns #:label "LEVEL TIME SOURCE MESSAGE" #:font-face noir-desktop-sans-18)
+   ;; surface expands to the original fixed list stack; the list ABI remains untouched.
+   (surface #:id log-list-shell #:height 84 #:background (theme-color panel) #:clip true
      (virtual-list #:id system-log
                    #:logical-capacity 10000
                    #:physical-slots 4
@@ -46,12 +43,9 @@
                       (log-row-d "INFO  TIME  CORE  STARTUP"))))
      (scrollbar #:id log-scrollbar #:for system-log
                 #:x 554 #:y 0 #:width 12 #:height 84 #:thumb-height 18))
-   ;; Dynamic placement makes this compiler-fixed glyph range part of the local action tile.
-   ;; Selection and activation overwrite the same admitted cells with selected-row detail.
-   (stack #:id log-detail-panel #:height 34 #:background (theme-color surface)
-     (text #:id log-detail #:height 34 #:background (theme-color surface) #:dynamic detail-damage #:max-chars 29))
-   ;; Button geometry remains the only interactive target. Its separate text overlay is a
-   ;; compiler-fixed accessible label instead of relying on unrendered button labels.
-   (stack #:id log-append-bar #:height 30 #:background (theme-color accent)
-     (button #:id append-tail #:height 30 #:background (theme-color accent) "APPEND TAIL" #:on open-log-detail)
-     (text #:id append-tail-label #:height 30 #:background (theme-color accent) #:font-face noir-desktop-sans-18 "APPEND FIXED TAIL"))))
+   ;; detail-panel preserves the same dynamic glyph range and local action tile.
+   (detail-panel #:id log-detail-panel #:text-id log-detail #:dynamic detail-damage #:max-chars 29)
+   ;; status-pill expands to the original interactive button plus static page-2 label.
+   (status-pill #:id log-append-bar #:button-id append-tail #:label-id append-tail-label
+                #:button-label "APPEND TAIL" #:label "APPEND FIXED TAIL"
+                #:font-face noir-desktop-sans-18 #:on open-log-detail #:background (theme-color accent))))

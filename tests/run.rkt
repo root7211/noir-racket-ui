@@ -5,6 +5,8 @@
          racket/list
          (only-in "../examples/dashboard.rkt" app-scene)
          (only-in "../examples/component-dashboard.rkt" [app-scene component-app-scene])
+         (only-in "../examples/log-browser.rkt" [app-scene log-browser-app-scene])
+         (only-in "../examples/realtime-monitor.rkt" [app-scene realtime-monitor-app-scene])
          (only-in "../examples/repeat-dashboard.rkt" [app-scene repeat-app-scene])
          (only-in "../examples/focus-dashboard.rkt" [app-scene focus-app-scene])
          (only-in "../examples/command-dashboard.rkt" [app-scene command-app-scene])
@@ -71,6 +73,21 @@
 (check-equal? (instance-update-node (first (action-plan-instance-updates
                                              (third (scene-actions component-app-scene)))))
               'component-throughput)
+
+;; Desktop component macro v1 oracle: the two full applications use only source-level
+;; chrome components. Their compiler output must still be established primitive tags and
+;; preserve the application-plan IDs that Rust consumes directly.
+(define desktop-component-tags '(app-shell surface toolbar table-header status-pill detail-panel))
+(for ([app-scene* (in-list (list log-browser-app-scene realtime-monitor-app-scene))])
+  (define layout (scene-layout-plan app-scene*))
+  (check-false (ormap (lambda (entry) (memq (hash-ref entry 'tag) desktop-component-tags)) layout))
+  (check-equal? (length (scene-font-assets app-scene*)) 1))
+(check-not-false (findf (lambda (entry) (eq? (hash-ref entry 'id) 'log-detail))
+                         (scene-layout-plan log-browser-app-scene)))
+(check-not-false (findf (lambda (entry) (eq? (hash-ref entry 'id) 'monitor-detail))
+                         (scene-layout-plan realtime-monitor-app-scene)))
+(check-equal? (map event-binding-node (scene-event-map log-browser-app-scene)) '(append-tail))
+(check-equal? (map event-binding-node (scene-event-map realtime-monitor-app-scene)) '(refresh-telemetry))
 
 ;; Static repeater oracle: the datum table produces four distinct base card subtrees. Its
 ;; collection cardinality enters every existing static resource plan; no runtime list/key exists.

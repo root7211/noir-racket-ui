@@ -21,15 +21,10 @@
    #:append ((9997 "WARN TAILA 090 700 080 020 010")
              (9998 "ERROR TAILB 097 882 091 024 021")
              (9999 "DEBUG TAILC 011 101 004 003 001")))
- (column #:id monitor-shell #:gap (theme-space sm) #:padding (theme-space lg)
-         #:background (theme-color canvas) #:radius (theme-radius panel)
-   (stack #:id monitor-app-bar #:height 34 #:background (theme-color header)
-     (text #:id monitor-title #:height 34 #:background (theme-color header)
-           #:font-face noir-desktop-sans-18 "REALTIME MONITOR TABLE"))
-   (stack #:id monitor-column-header #:height 24 #:background (theme-color surface)
-     (text #:id monitor-columns #:height 24 #:background (theme-color surface)
-           #:font-face noir-desktop-sans-18 "STATE HOST CPU MEM NET LAT JIT"))
-   (stack #:id monitor-list-shell #:height 84 #:clip true #:background (theme-color panel)
+ (app-shell #:id monitor-shell
+   (toolbar #:id monitor-app-bar #:text-id monitor-title #:label "REALTIME MONITOR TABLE" #:font-face noir-desktop-sans-18)
+   (table-header #:id monitor-column-header #:text-id monitor-columns #:label "STATE HOST CPU MEM NET LAT JIT" #:font-face noir-desktop-sans-18)
+   (surface #:id monitor-list-shell #:height 84 #:background (theme-color panel) #:clip true
      (virtual-list #:id telemetry-grid
                    #:logical-capacity 10000
                    #:physical-slots 4
@@ -49,11 +44,7 @@
                       (telemetry-row-d "NOMINAL ALPHA LOW MID LOW FAST LOW"))))
      (scrollbar #:id monitor-scrollbar #:for telemetry-grid
                 #:x 554 #:y 0 #:width 12 #:height 84 #:thumb-height 18))
-   (stack #:id monitor-detail-panel #:height 34 #:background (theme-color surface)
-     (text #:id monitor-detail #:height 34 #:background (theme-color surface)
-           #:dynamic monitor-detail-damage #:max-chars 29))
-   (stack #:id monitor-refresh-bar #:height 30 #:background (theme-color accent)
-     (button #:id refresh-telemetry #:height 30 #:background (theme-color accent)
-             "REFRESH BATCH" #:on open-monitor-detail)
-     (text #:id refresh-telemetry-label #:height 30 #:background (theme-color accent)
-           #:font-face noir-desktop-sans-18 "REFRESH FIXED BATCH"))))
+   (detail-panel #:id monitor-detail-panel #:text-id monitor-detail #:dynamic monitor-detail-damage #:max-chars 29)
+   (status-pill #:id monitor-refresh-bar #:button-id refresh-telemetry #:label-id refresh-telemetry-label
+                #:button-label "REFRESH BATCH" #:label "REFRESH FIXED BATCH"
+                #:font-face noir-desktop-sans-18 #:on open-monitor-detail #:background (theme-color accent))))

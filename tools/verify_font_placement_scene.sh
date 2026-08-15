@@ -6,7 +6,19 @@ SCENE="$ROOT/out/log-browser.scene.json"
 BIN="$ROOT/wgpu-verify/target/release/noir_winit_host"
 TOOLCHAIN=/home/ubuntu/.rustup-noir-wgpu30/toolchains/1.87.0-x86_64-unknown-linux-gnu/bin
 LOG=/tmp/noir-font-placement-regression.log
-BASE_DISPLAY=$((180 + ($$ % 20) * 3))
+find_display_group() {
+  local base candidate
+  for base in $(seq 240 3 480); do
+    for candidate in "$base" "$((base + 1))" "$((base + 2))"; do
+      [[ ! -e "/tmp/.X${candidate}-lock" && ! -S "/tmp/.X11-unix/X${candidate}" ]] || continue 2
+    done
+    printf '%s\n' "$base"
+    return 0
+  done
+  echo "no free contiguous X11 display group" >&2
+  return 1
+}
+BASE_DISPLAY=$(find_display_group)
 FACE_DISPLAY=:$BASE_DISPLAY
 UV_DISPLAY=:$((BASE_DISPLAY + 1))
 POSITIVE_DISPLAY=:$((BASE_DISPLAY + 2))
