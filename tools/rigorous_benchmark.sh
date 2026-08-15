@@ -151,7 +151,7 @@ EOF
         batch_id=$((batch_id + 1))
         
         # 进度报告
-        if (( batch_id % 50 == 0 )); then
+        if (( batch_id > 0 && batch_id % 50 == 0 )); then
             echo "    Progress: $batch_id/$((MEASUREMENT_BATCHES * 2)) batches (noir: $noir_count, gpui: $gpui_count)" | tee -a "$OUTPUT_DIR/progress.log"
         fi
     done
