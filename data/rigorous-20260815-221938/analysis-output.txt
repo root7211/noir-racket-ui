@@ -1,0 +1,68 @@
+======================================================================
+Rigorous Benchmark Analysis
+======================================================================
+Protocol: rigorous-v1
+Sessions: 5
+Warmup: 50 batches
+Measurement: 200 batches per framework
+Total observations: 1000 per framework
+
+Found 5 sessions: session-01, session-02, session-03, session-04, session-05
+
+session-01: noir=200 batches, gpui=200 batches (using 200)
+session-02: noir=200 batches, gpui=200 batches (using 200)
+session-03: noir=200 batches, gpui=200 batches (using 200)
+session-04: noir=200 batches, gpui=200 batches (using 200)
+session-05: noir=200 batches, gpui=200 batches (using 200)
+
+======================================================================
+Statistical Analysis
+======================================================================
+
+[Descriptive Statistics]
+Noir:
+  Median: 0.636 ms
+  Mean:   0.666 ms
+  Std:    0.133 ms
+  P95:    0.774 ms
+  P99:    1.290 ms
+
+GPUI:
+  Median: 1.194 ms
+  Mean:   1.203 ms
+  Std:    0.149 ms
+  P95:    1.331 ms
+  P99:    1.423 ms
+
+[Effect Size Estimation]
+Hodges-Lehmann difference: -0.545 ms
+  95% Bootstrap CI: [-0.552, -0.537] ms
+Relative improvement: 46.7%
+  GPUI median - Noir median = 0.558 ms
+
+[Session Consistency]
+Sessions favoring Noir: 5/5
+  Session 1: Noir (Noir 0.631 ms vs GPUI 1.151 ms, +45.2%)
+  Session 2: Noir (Noir 0.642 ms vs GPUI 1.209 ms, +46.9%)
+  Session 3: Noir (Noir 0.643 ms vs GPUI 1.218 ms, +47.2%)
+  Session 4: Noir (Noir 0.638 ms vs GPUI 1.224 ms, +47.8%)
+  Session 5: Noir (Noir 0.624 ms vs GPUI 1.142 ms, +45.4%)
+
+[Hypothesis Testing]
+Wilcoxon signed-rank test (H1: Noir < GPUI):
+  p-value: 0.000000
+Paired t-test (H1: Noir < GPUI):
+  p-value: 0.000000
+
+TOST equivalence test (margin = ±5%):
+  p-value: 1.000000
+
+======================================================================
+Conclusion
+======================================================================
+✓ SIGNIFICANT AND PRACTICALLY MEANINGFUL
+  - 95% CI excludes zero: True
+  - Session consistency: 5/5 (≥80%: True)
+  - Meets practical threshold (≥10%): True (46.7%)
+
+Results saved to: data/rigorous-20260815-221938/analysis-results.json

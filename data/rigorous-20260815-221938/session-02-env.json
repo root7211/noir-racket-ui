@@ -1,0 +1,19 @@
+{
+  "session_id": "session-02",
+  "session_number": 2,
+  "start_time": "2026-08-15T22:37:57+08:00",
+  "adapter": {
+    "probe_output": "Error: read compiled Scene
+N/A"
+  },
+  "system": {
+    "os": "Linux 6.6.87.2-microsoft-standard-WSL2",
+    "cpu_governor": "unknown",
+    "power_state": "unknown"
+  },
+  "build": {
+    "git_commit": "2c41bcb",
+    "noir_binary_sha256": "0d1699a1d0a9d133df6d91a7fd7be09ba244911bb85750c85bd13e8bcc2e725f",
+    "gpui_binary_sha256": "0469492eb850de6757fbfeb11fd366d661db9f1760d001e99cba76542b30f823"
+  }
+}
