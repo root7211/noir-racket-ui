@@ -5,7 +5,18 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SCENE="$ROOT/out/log-browser.scene.json"
 BIN="$ROOT/wgpu-verify/target/release/noir_winit_host"
 LOG=/tmp/noir-log-browser-regression.log
-BASE_DISPLAY=$((300 + ($$ % 40) * 2))
+find_free_display_group() {
+  local base offset ok
+  for base in $(seq 500 2 698); do
+    ok=1
+    for offset in 0 1; do
+      if [[ -e "/tmp/.X$((base + offset))-lock" || -e "/tmp/.X11-unix/X$((base + offset))" ]]; then ok=0; break; fi
+    done
+    [[ $ok -eq 1 ]] && { echo "$base"; return 0; }
+  done
+  return 1
+}
+BASE_DISPLAY=$(find_free_display_group)
 TAMPER_DISPLAY=:$BASE_DISPLAY
 DISPLAY_NUM=:$((BASE_DISPLAY + 1))
 PIDS=()
@@ -26,7 +37,7 @@ start_xvfb() {
   local display=$1
   local log=$2
   local number=${display#:}
-  [[ ! -e "/tmp/.X${number}-lock" ]] || { echo "display $display is already in use" >&2; return 1; }
+  [[ ! -e "/tmp/.X${number}-lock" && ! -e "/tmp/.X11-unix/X${number}" ]] || { echo "display $display is already in use" >&2; return 1; }
   Xvfb "$display" -screen 0 1280x720x24 >"$log" 2>&1 &
   LAST_XVFB_PID=$!
   PIDS+=("$LAST_XVFB_PID")
@@ -80,8 +91,9 @@ DISPLAY="$DISPLAY_NUM" xdotool windowfocus --sync "$WID"
 [[ "$(DISPLAY="$DISPLAY_NUM" xdotool getwindowfocus)" == "$WID" ]]
 DISPLAY="$DISPLAY_NUM" xdotool key --clearmodifiers End
 sleep 2
-# Compiler log records the list scissor at y=146; row 9998 is the second 28px row.
-DISPLAY="$DISPLAY_NUM" xdotool mousemove --sync 120 186 click 1
+# Visual v2 compiler log records the list scissor at y=312; viewport 9996 makes
+# logical row 9998 the third fixed 32px row.
+DISPLAY="$DISPLAY_NUM" xdotool mousemove --sync 300 392 click 1
 sleep 1
 DISPLAY="$DISPLAY_NUM" xdotool key --clearmodifiers Return
 sleep 3
@@ -92,14 +104,14 @@ grep -F 'compiler log browser: id=system-log-browser' "$LOG"
 grep -F 'data-update-batch: list=system-log updates=3 visible=0 arena-only=3 gpu-glyph-writes=0 render-request=false' "$LOG"
 grep -F 'log-browser append: id=system-log-browser batch=system-log-browser-append records=3 tail=9997..9999 source=compiler-artifact' "$LOG"
 # Real End, real ERROR row release, and real Enter all use compiler-proved paths.
-grep -F 'list-navigation-plan: id=log-navigation key=End list=system-log from=0 to=9997' "$LOG"
+grep -F 'list-navigation-plan: id=log-navigation key=End list=system-log from=0 to=9996' "$LOG"
 grep -F 'list-selection: list=system-log logical=9998 physical=2' "$LOG"
 grep -F 'log-browser detail: id=system-log-browser logical=9998 level=ERROR glyph-writes=29' "$LOG"
 grep -F 'row-activation: list=system-log logical=9998 physical=2 action-slot=0 batch=coalesced-activate-append-tail' "$LOG"
 grep -F 'coalesced-batch execute: coalesced-activate-append-tail' "$LOG"
 grep -F 'packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty' "$LOG"
 # The visible tail keeps three rows in the four-slot ring and emits fixed compact subranges.
-grep -F 'compact-register scroll: list=system-log table=system-log-data capacity=10000 target=9997 row-tiles=[1, 2, 3] physical-slots=4' "$LOG"
-grep -F 'glyph-direct-draw tile=0 packet=2 page=0 placements=[171..200) lanes=29 reason=no-vertex-subgroup-compatible-direct' "$LOG"
+grep -F 'compact-register scroll: list=system-log table=system-log-data capacity=10000 target=9996 row-tiles=[0, 1, 2, 3] physical-slots=4' "$LOG"
+grep -F 'glyph-direct-draw tile=0 packet=5 page=1 placements=[403..432) lanes=29 reason=no-vertex-subgroup-compatible-direct' "$LOG"
 
 echo "log browser regression: PASS"

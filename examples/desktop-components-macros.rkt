@@ -6,7 +6,8 @@
  (font-asset #:manifest "assets/fontc/noir-desktop-sans-18/manifest.json"
              #:atlas "assets/fontc/noir-desktop-sans-18/atlas.r8")
  (theme fixture-theme
-   (color canvas "#0E1117" surface "#171B24" panel "#1F2633" header "#202E46"
+   (color canvas "#0E1117" surface "#171B24" surface-raised "#202E46"
+          panel "#1F2633" header "#202E46" border-subtle "#2B313E" border-strong "#465268"
           accent "#4C8DFF" danger "#F06A6A" text "#F4F7FB" muted "#9AA6B7")
    (space xs 4 sm 8 md 12 lg 16 xl 24 page 32)
    (type caption 13 body 15 label 16 title 28 display 36)

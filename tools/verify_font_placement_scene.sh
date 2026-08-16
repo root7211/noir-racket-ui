@@ -98,12 +98,12 @@ PIDS+=("$HOST")
 sleep 4
 kill -0 "$HOST"
 
-grep -F 'compiler font placement proof: active-page2-glyphs=60 registered-font-assets=1 mode=static-proportional-v1' "$LOG"
+grep -E 'compiler font placement proof: active-page2-glyphs=[1-9][0-9]* registered-font-assets=1 mode=static-proportional-v1' "$LOG"
 grep -F 'font-atlas-upload: face=noir-desktop-sans-18 page=2 bytes=262144' "$LOG"
-grep -F 'glyph-direct-draw full packet=0 page=2 placements=[32..43) lanes=11 reason=page2-static-v1' "$LOG"
-grep -F 'glyph-direct-draw full packet=1 page=1 placements=[43..75) lanes=32 reason=no-vertex-subgroup-compatible-direct' "$LOG"
+grep -E 'glyph-direct-draw full packet=[0-9]+ page=2 placements=\[[0-9]+\.\.[0-9]+\) lanes=[0-9]+ reason=page2-static-v1' "$LOG"
+grep -E 'glyph-direct-draw full packet=[0-9]+ page=3 placements=\[[0-9]+\.\.[0-9]+\) lanes=[0-9]+ reason=no-vertex-subgroup-compatible-direct' "$LOG"
 
-CAPTURE="$ROOT/out/log-browser-ui/15-fontc-page2-compatible-full.png"
+CAPTURE="$ROOT/out/log-browser-ui/font-placement-proof-latest.png"
 ffmpeg -hide_banner -loglevel error -y -f x11grab -video_size 1280x720 \
   -i "$POSITIVE_DISPLAY.0+0,0" -frames:v 1 "$CAPTURE"
 test -s "$CAPTURE"

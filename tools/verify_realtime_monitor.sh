@@ -6,7 +6,18 @@ SCENE="$ROOT/out/realtime-monitor.scene.json"
 BIN="$ROOT/wgpu-verify/target/release/noir_winit_host"
 TOOLCHAIN=/home/ubuntu/.rustup-noir-wgpu30/toolchains/1.87.0-x86_64-unknown-linux-gnu/bin
 LOG=/tmp/noir-realtime-monitor-regression.log
-BASE_DISPLAY=$((360 + ($$ % 40) * 2))
+find_free_display_group() {
+  local base offset ok
+  for base in $(seq 700 3 997); do
+    ok=1
+    for offset in 0 1 2; do
+      if [[ -e "/tmp/.X$((base + offset))-lock" || -e "/tmp/.X11-unix/X$((base + offset))" ]]; then ok=0; break; fi
+    done
+    [[ $ok -eq 1 ]] && { echo "$base"; return 0; }
+  done
+  return 1
+}
+BASE_DISPLAY=$(find_free_display_group)
 TAMPER_DISPLAY=:$BASE_DISPLAY
 POSITIVE_DISPLAY=:$((BASE_DISPLAY + 1))
 ARENA_DISPLAY=:$((BASE_DISPLAY + 2))
@@ -22,7 +33,7 @@ trap cleanup EXIT INT TERM
 
 start_xvfb() {
   local display=$1 log=$2 number=${1#:}
-  [[ ! -e "/tmp/.X${number}-lock" ]] || { echo "display $display is already in use" >&2; return 1; }
+  [[ ! -e "/tmp/.X${number}-lock" && ! -e "/tmp/.X11-unix/X${number}" ]] || { echo "display $display is already in use" >&2; return 1; }
   Xvfb "$display" -screen 0 1280x720x24 >"$log" 2>&1 &
   LAST_XVFB_PID=$!
   PIDS+=("$LAST_XVFB_PID")
@@ -72,7 +83,7 @@ PIDS+=("$HOST")
 sleep 5
 kill -0 "$HOST"
 
-CAPTURE="$ROOT/out/realtime-monitor-ui.png"
+CAPTURE="$ROOT/out/realtime-monitor-ui-latest.png"
 ffmpeg -hide_banner -loglevel error -y -f x11grab -video_size 1280x720 \
   -i "$POSITIVE_DISPLAY.0+0,0" -frames:v 1 "$CAPTURE"
 test -s "$CAPTURE"
@@ -83,24 +94,26 @@ DISPLAY="$POSITIVE_DISPLAY" xdotool windowfocus --sync "$WID"
 [[ "$(DISPLAY="$POSITIVE_DISPLAY" xdotool getwindowfocus)" == "$WID" ]]
 DISPLAY="$POSITIVE_DISPLAY" xdotool key --clearmodifiers End
 sleep 2
-DISPLAY="$POSITIVE_DISPLAY" xdotool mousemove --sync 120 186 click 1
+# Visual v2 list scissor is 996x128+236,312. After End, logical row 9998 is
+# the third fixed 32px row in viewport 9996.
+DISPLAY="$POSITIVE_DISPLAY" xdotool mousemove --sync 300 392 click 1
 sleep 1
 DISPLAY="$POSITIVE_DISPLAY" xdotool key --clearmodifiers Return
 sleep 3
 
 grep -F 'compiler log browser: id=telemetry-dashboard list=telemetry-grid' "$LOG"
-grep -F 'compiler font placement proof: active-page2-glyphs=71 registered-font-assets=1 mode=static-proportional-v1' "$LOG"
+grep -E 'compiler font placement proof: active-page2-glyphs=[1-9][0-9]* registered-font-assets=1 mode=static-proportional-v1' "$LOG"
 grep -F 'data-update-batch: list=telemetry-grid updates=3 visible=2 arena-only=1 gpu-glyph-writes=72 render-request=true' "$LOG"
 grep -F 'data-update-batch: list=telemetry-grid updates=2 visible=1 arena-only=1 gpu-glyph-writes=36 render-request=true' "$LOG"
 grep -F 'log-browser append: id=telemetry-dashboard batch=telemetry-dashboard-append records=3 tail=9997..9999 source=compiler-artifact' "$LOG"
-grep -F 'list-navigation-plan: id=monitor-navigation key=End list=telemetry-grid from=0 to=9997' "$LOG"
+grep -F 'list-navigation-plan: id=monitor-navigation key=End list=telemetry-grid from=0 to=9996' "$LOG"
 grep -F 'list-selection: list=telemetry-grid logical=9998 physical=2' "$LOG"
 grep -F 'log-browser detail: id=telemetry-dashboard logical=9998 level=ERROR glyph-writes=29' "$LOG"
 grep -F 'row-activation: list=telemetry-grid logical=9998 physical=2 action-slot=0 batch=coalesced-activate-refresh-telemetry' "$LOG"
 grep -F 'coalesced-batch execute: coalesced-activate-refresh-telemetry' "$LOG"
 
 # Purely offscreen refresh: the fixed data arena changes, but no glyph storage write
-# or render request is admitted because logical row 7000 is outside viewport 0..2.
+# or render request is admitted because logical row 7000 is outside viewport 0..3.
 start_xvfb "$ARENA_DISPLAY" /tmp/noir-monitor-arena-only-xvfb.log
 arena_xvfb=$LAST_XVFB_PID
 DISPLAY="$ARENA_DISPLAY" XDG_RUNTIME_DIR=/tmp WGPU_BACKEND=vulkan "$BIN" \

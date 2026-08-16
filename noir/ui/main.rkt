@@ -1518,11 +1518,11 @@ scene-glyph-draw-packets
                      (< (c-command-matcher-packed left) (c-command-matcher-packed right)))))))
 
   (define layout-props
-(set '#:id '#:gap '#:padding '#:x '#:width '#:height '#:grow '#:align '#:justify
-          '#:clip '#:background '#:radius '#:opacity '#:z '#:visual-flow))
+(set '#:id '#:gap '#:padding '#:x '#:y '#:width '#:height '#:grow '#:align '#:justify
+          '#:clip '#:background '#:radius '#:opacity '#:z '#:visual-flow '#:visual-anchor))
   (define leaf-props
 (set '#:id '#:x '#:y '#:width '#:height '#:grow '#:align '#:clip '#:background
-          '#:radius '#:opacity '#:max '#:z))
+          '#:radius '#:opacity '#:max '#:z '#:font-scale '#:text-inset))
 
   (define (keyword-stx? x) (keyword? (syntax-e x)))
 
@@ -1676,10 +1676,31 @@ scene-glyph-draw-packets
       [(#:radius) (number-or-token who 'radius x)]
       [(#:x #:y #:width #:height #:grow #:opacity #:z)
        (expect-number who x)]
-      [(#:visual-flow)
+      [(#:font-scale)
+       (define value (syntax-e x))
+       (unless (and (real? value) (<= 0.70 value 1.60))
+         (raise-syntax-error who "#:font-scale must be a literal in [0.70, 1.60]" x))
+       value]
+      [(#:text-inset)
+       (define value (syntax-e x))
+       (unless (and (real? value) (<= 0.0 value 0.25))
+         (raise-syntax-error who "#:text-inset must be a literal fraction in [0.0, 0.25]" x))
+       value]
+      [(#:clip)
+       (define value (syntax-e x))
+       (cond [(boolean? value) value]
+             [(eq? value 'true) #t]
+             [(eq? value 'false) #f]
+             [else (raise-syntax-error who "#:clip expects true, false, #t, or #f" x)])]
+      [(#:visual-flow #:visual-anchor)
        (define value (syntax-e x))
        (unless (boolean? value)
-         (raise-syntax-error who "#:visual-flow expects a boolean literal" x))
+         (raise-syntax-error who "visual layout markers expect a boolean literal" x))
+       value]
+      [(#:charset)
+       (define value (syntax-e x))
+       (unless (memq value '(digits ascii-upper))
+         (raise-syntax-error who "#:charset must be digits or ascii-upper" x))
        value]
       [(#:background) (or (theme-token-value who 'color x) (syntax-e x))]
       [(#:align #:justify)
@@ -1752,7 +1773,7 @@ scene-glyph-draw-packets
     ;; 文本允许属性与内容交错出现：
     ;; (text #:id title "static")
     ;; (text #:id fps #:dynamic frame-rate #:max-chars 3)
-    (define allowed (set-add (set-add leaf-props '#:max-chars) '#:font-face))
+    (define allowed (set-add (set-add (set-add leaf-props '#:max-chars) '#:font-face) '#:charset))
     (let loop ([rest forms] [props (hash)] [static-value #f] [dynamic-value #f])
       (cond
         [(null? rest)
@@ -1762,22 +1783,31 @@ scene-glyph-draw-packets
            (raise-syntax-error 'text "expected a string literal or #:dynamic identifier" stx))
          (when (and dynamic-value (not (hash-has-key? props '#:max-chars)))
            (raise-syntax-error 'text "dynamic text needs #:max-chars" stx))
-         (when (and static-value (hash-has-key? props '#:max-chars))
-           (raise-syntax-error 'text "#:max-chars is valid only for dynamic text" stx))
-         (when (and dynamic-value (hash-has-key? props '#:font-face))
-           (raise-syntax-error 'text "#:font-face currently admits static text only; dynamic text stays on its frozen legacy atlas path" stx))
-         (when (and static-value (hash-has-key? props '#:font-face))
-           (font-asset-by-face 'text (font-face-id 'text (hash-ref props '#:font-face) stx) stx))
+          (when (and static-value (hash-has-key? props '#:max-chars))
+            (raise-syntax-error 'text "#:max-chars is valid only for dynamic text" stx))
+          (when (and static-value (hash-has-key? props '#:charset))
+            (raise-syntax-error 'text "#:charset is valid only for dynamic text" stx))
+          (when (and dynamic-value (hash-has-key? props '#:font-face))
+            (raise-syntax-error 'text "#:font-face currently admits static text only; dynamic text stays on its frozen legacy atlas path" stx))
+          (when (and dynamic-value (hash-has-key? props '#:font-scale))
+            (raise-syntax-error 'text "#:font-scale is compile-time static fontc typography only" stx))
+          (when (and static-value (hash-has-key? props '#:font-scale)
+                     (not (hash-has-key? props '#:font-face)))
+            (raise-syntax-error 'text "#:font-scale requires an explicit static #:font-face" stx))
+          (when (and static-value (hash-has-key? props '#:font-face))
+            (font-asset-by-face 'text (font-face-id 'text (hash-ref props '#:font-face) stx) stx))
          (define-values (id clean-props seen*) (register-id 'text stx props seen))
-         (define final-props
-           (if dynamic-value
-               (hash-set
+          (define final-props
+            (if dynamic-value
                 (hash-set
-                 (hash-set (hash-remove clean-props '#:max-chars)
-                           'value `(dynamic ,dynamic-value))
-                 'max-chars (hash-ref props '#:max-chars))
-                ;; 表面语法仍是 `text`，但动态节点的 IR lowering 明确是固定长度 text-run。
-                'lowering 'text-run)
+                 (hash-set
+                  (hash-set
+                   (hash-set (hash-remove (hash-remove clean-props '#:max-chars) '#:charset)
+                             'value `(dynamic ,dynamic-value))
+                   'max-chars (hash-ref props '#:max-chars))
+                  'charset (hash-ref props '#:charset 'digits))
+                 ;; 表面语法仍是 `text`，但动态节点的 IR lowering 明确是固定长度 text-run。
+                 'lowering 'text-run)
                (hash-set
                 (if (hash-has-key? clean-props '#:font-face)
                     (hash-set (hash-remove clean-props '#:font-face)
@@ -2172,6 +2202,9 @@ scene-glyph-draw-packets
     (syntax-parse stx
       #:datum-literals (surface)
       [(surface #:id id:id
+                (~optional (~seq #:x x) #:defaults ([x #'#f]))
+                (~optional (~seq #:y y) #:defaults ([y #'#f]))
+                (~optional (~seq #:width width) #:defaults ([width #'#f]))
                 (~optional (~seq #:height height) #:defaults ([height #'#f]))
                 (~optional (~seq #:background background) #:defaults ([background #'(theme-color surface)]))
                 (~optional (~seq #:elevation elevation) #:defaults ([elevation #'(theme-elevation flat)]))
@@ -2179,6 +2212,9 @@ scene-glyph-draw-packets
                 (~optional (~seq #:clip clip) #:defaults ([clip #'#f]))
                 child:expr ...+)
        (define id-value (syntax-e #'id))
+       (define x-value (and (not (eq? (syntax-e #'x) #f)) (expect-number 'surface #'x)))
+       (define y-value (and (not (eq? (syntax-e #'y) #f)) (expect-number 'surface #'y)))
+       (define width-value (and (not (eq? (syntax-e #'width) #f)) (expect-number 'surface #'width)))
        (define height-value (and (not (eq? (syntax-e #'height) #f)) (expect-number 'surface #'height)))
        (define elevation-value
          (or (theme-token-value 'surface 'elevation #'elevation)
@@ -2189,7 +2225,10 @@ scene-glyph-draw-packets
        (when (and (> elevation-value 0) (not height-value))
          (raise-syntax-error 'surface "border/raised/overlay surface needs a fixed #:height" stx))
        (define optional-props
-         (append (if height-value (list '#:height height-value) '())
+         (append (if x-value (list '#:x x-value) '())
+                 (if y-value (list '#:y y-value) '())
+                 (if width-value (list '#:width width-value) '())
+                 (if height-value (list '#:height height-value) '())
                  (if (eq? (syntax-e #'radius) #f) '() (list '#:radius (syntax->datum #'radius)))))
        ;; Elevation is a finite compile-time overlay recipe. No blur, query or dynamic shadow exists.
        (define decorations
@@ -2201,14 +2240,15 @@ scene-glyph-draw-packets
        (define lowered
          (datum->syntax stx
                         `(stack #:id ,id-value ,@optional-props
+                                #:visual-anchor #t
                                 #:clip ,(syntax->datum #'clip)
                                 #:background ,(syntax->datum #'background)
                                 ,@decorations
                                 ,@(map syntax->datum (syntax->list #'(child ...))))
                         stx stx))
        (parse-node lowered seen)]
-      [_ (raise-syntax-error 'surface
-                             "expected (surface #:id id [#:height n] [#:background color] [#:elevation 0..3] [#:radius n] [#:clip bool] child ...+)"
+       [_ (raise-syntax-error 'surface
+                             "expected (surface #:id id [#:x n] [#:y n] [#:width n] [#:height n] [#:background color] [#:elevation 0..3] [#:radius n] [#:clip bool] child ...+)"
                              stx)]))
 
   (define (parse-divider stx seen)
@@ -2321,25 +2361,182 @@ scene-glyph-draw-packets
     (syntax-parse stx
       #:datum-literals (detail-panel)
       [(detail-panel #:id id:id #:text-id text-id:id #:dynamic state:id #:max-chars max
+                     (~optional (~seq #:x x) #:defaults ([x #'0]))
+                     (~optional (~seq #:y y) #:defaults ([y #'0]))
+                     (~optional (~seq #:width width) #:defaults ([width #'#f]))
                      (~optional (~seq #:height height) #:defaults ([height #'34]))
                      (~optional (~seq #:background background) #:defaults ([background #'(theme-color surface-raised)])))
        (define id-value (syntax-e #'id))
        (define max-value (expect-positive-integer 'detail-panel #'max))
+       (define x-value (expect-number 'detail-panel #'x))
+       (define y-value (expect-number 'detail-panel #'y))
+       (define width-value (and (not (eq? (syntax-e #'width) #f)) (expect-positive-integer 'detail-panel #'width)))
        (define height-value (expect-positive-integer 'detail-panel #'height))
        (define lowered
          (datum->syntax stx
-                        `(stack #:id ,id-value #:height ,height-value
+                        `(stack #:id ,id-value #:x ,x-value #:y ,y-value
+                                ,@(if width-value (list '#:width width-value) '())
+                                #:height ,height-value #:visual-anchor #t
                                 #:background ,(syntax->datum #'background)
                            (text #:id ,(syntax-e #'text-id) #:height ,height-value
                                  #:background ,(syntax->datum #'background)
-                                 #:dynamic ,(syntax-e #'state) #:max-chars ,max-value)
+                                 #:dynamic ,(syntax-e #'state) #:max-chars ,max-value #:charset ascii-upper)
                            (overlay #:id ,(component-child-id id-value 'divider)
                                     #:height 1 #:background (theme-color border-subtle) #:opacity 1.0 #:z 10))
                         stx stx))
        (parse-node lowered seen)]
       [_ (raise-syntax-error 'detail-panel
-                             "expected (detail-panel #:id id #:text-id id #:dynamic state #:max-chars positive-int [#:height n] [#:background color])"
+                             "expected (detail-panel #:id id #:text-id id #:dynamic state #:max-chars positive-int [#:x n] [#:y n] [#:width n] [#:height n] [#:background color])"
                              stx)]))
+
+  ;; Visual Language v2 components remain syntax-only. Every child coordinate is
+  ;; resolved during expansion against the fixed desktop-wide canvas; none of these
+  ;; tags survives in c-node or the runtime Scene.
+  (define (parse-workspace-shell stx seen)
+    (syntax-parse stx
+      #:datum-literals (workspace-shell)
+      [(workspace-shell #:id id:id #:rail-id rail-id:id #:brand-id brand-id:id #:meta-id meta-id:id
+                        #:brand brand #:meta meta #:font-face face:id
+                        (~optional (~seq #:rail-width rail-width) #:defaults ([rail-width #'168]))
+                        (~optional (~seq #:workspace-x workspace-x) #:defaults ([workspace-x #'188]))
+                        (~optional (~seq #:background background) #:defaults ([background #'(theme-color canvas)]))
+                        (~optional (~seq #:rail-background rail-background) #:defaults ([rail-background #'(theme-color rail)]))
+                        child:expr ...+)
+       (define id-value (syntax-e #'id))
+       (define rail-width-value (expect-positive-integer 'workspace-shell #'rail-width))
+       (define workspace-x-value (expect-positive-integer 'workspace-shell #'workspace-x))
+       (define frame-height (- (canvas-height) (* 2.0 (canvas-margin))))
+       (define frame-width (- (canvas-width) (* 2.0 (canvas-margin))))
+       (define workspace-width (- frame-width workspace-x-value))
+       (define brand-value (component-literal-string 'workspace-shell #'brand))
+       (define meta-value (component-literal-string 'workspace-shell #'meta))
+       (define lowered
+         (datum->syntax
+          stx
+          `(stack #:id ,id-value #:width ,frame-width #:height ,frame-height #:clip #t
+                  #:background ,(syntax->datum #'background)
+             (overlay #:id ,(syntax-e #'rail-id) #:width ,rail-width-value #:height ,frame-height
+                      #:background ,(syntax->datum #'rail-background) #:opacity 1.0 #:z 1)
+             (overlay #:id ,(component-child-id id-value 'rail-accent) #:width 4 #:height 72
+                      #:background (theme-color accent) #:opacity 1.0 #:z 3)
+             (text #:id ,(syntax-e #'brand-id) #:x 20 #:y 22 #:width ,(- rail-width-value 36) #:height 42
+                   #:font-face ,(syntax-e #'face) #:font-scale 0.85 #:text-inset 0.0 ,brand-value)
+             (text #:id ,(syntax-e #'meta-id) #:x 20 #:y 76 #:width ,(- rail-width-value 36) #:height 24
+                   #:font-face ,(syntax-e #'face) #:font-scale 0.72 #:text-inset 0.0 ,meta-value)
+             (overlay #:id ,(component-child-id id-value 'workspace) #:x ,workspace-x-value
+                      #:width ,workspace-width #:height ,frame-height
+                      #:background (theme-color canvas-quiet) #:opacity 1.0 #:z 0)
+             ,@(map syntax->datum (syntax->list #'(child ...))))
+          stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'workspace-shell
+                             "expected stable IDs, static brand/meta strings, a font face, and fixed children"
+                             stx)]))
+
+  (define (parse-page-header stx seen)
+    (syntax-parse stx
+      #:datum-literals (page-header)
+      [(page-header #:id id:id #:eyebrow-id eyebrow-id:id #:title-id title-id:id #:meta-id meta-id:id
+                    #:eyebrow eyebrow #:title title #:meta meta #:font-face face:id
+                    #:x x #:y y #:width width
+                    (~optional (~seq #:height height) #:defaults ([height #'76]))
+                    (~optional (~seq #:background background) #:defaults ([background #'(theme-color surface-raised)])))
+       (define id-value (syntax-e #'id))
+       (define x-value (expect-number 'page-header #'x))
+       (define y-value (expect-number 'page-header #'y))
+       (define width-value (expect-positive-integer 'page-header #'width))
+       (define height-value (expect-positive-integer 'page-header #'height))
+       (define eyebrow-value (component-literal-string 'page-header #'eyebrow))
+       (define title-value (component-literal-string 'page-header #'title))
+       (define meta-value (component-literal-string 'page-header #'meta))
+       (define lowered
+         (datum->syntax
+          stx
+          `(stack #:id ,id-value #:x ,x-value #:y ,y-value #:width ,width-value #:height ,height-value
+                  #:background ,(syntax->datum #'background)
+             (text #:id ,(syntax-e #'eyebrow-id) #:x ,(+ x-value 24) #:y ,(+ y-value 6)
+                   #:width ,(- width-value 48) #:height 18 #:font-face ,(syntax-e #'face)
+                   #:font-scale 0.72 #:text-inset 0.0 ,eyebrow-value)
+             (text #:id ,(syntax-e #'title-id) #:x ,(+ x-value 24) #:y ,(+ y-value 22)
+                   #:width ,(- width-value 48) #:height 44 #:font-face ,(syntax-e #'face)
+                   #:font-scale 1.00 #:text-inset 0.0 ,title-value)
+             (text #:id ,(syntax-e #'meta-id) #:x ,(+ x-value 632) #:y ,(+ y-value 23)
+                   #:width ,(- width-value 656) #:height 28 #:font-face ,(syntax-e #'face)
+                   #:font-scale 0.72 #:text-inset 0.0 ,meta-value)
+             (overlay #:id ,(component-child-id id-value 'divider) #:x ,x-value #:y ,(+ y-value height-value -1)
+                      #:width ,width-value #:height 1 #:background (theme-color border-subtle) #:opacity 1.0 #:z 8))
+          stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'page-header "expected fixed x/y/width, stable IDs and static typography" stx)]))
+
+  (define (parse-metric-tile stx seen)
+    (syntax-parse stx
+      #:datum-literals (metric-tile)
+      [(metric-tile #:id id:id #:label-id label-id:id #:value-id value-id:id
+                    #:label label #:value value #:font-face face:id #:x x #:y y #:width width
+                    (~optional (~seq #:height height) #:defaults ([height #'72]))
+                    (~optional (~seq #:background background) #:defaults ([background #'(theme-color surface)]))
+                    (~optional (~seq #:accent accent) #:defaults ([accent #'(theme-color accent)])))
+       (define id-value (syntax-e #'id))
+       (define x-value (expect-number 'metric-tile #'x))
+       (define y-value (expect-number 'metric-tile #'y))
+       (define width-value (expect-positive-integer 'metric-tile #'width))
+       (define height-value (expect-positive-integer 'metric-tile #'height))
+       (define label-value (component-literal-string 'metric-tile #'label))
+       (define metric-value (component-literal-string 'metric-tile #'value))
+       (define lowered
+         (datum->syntax
+          stx
+          `(stack #:id ,id-value #:x ,x-value #:y ,y-value #:width ,width-value #:height ,height-value
+                  #:background ,(syntax->datum #'background)
+             (overlay #:id ,(component-child-id id-value 'accent) #:x ,x-value #:y ,y-value #:width 4 #:height ,height-value
+                      #:background ,(syntax->datum #'accent) #:opacity 1.0 #:z 5)
+             (text #:id ,(syntax-e #'label-id) #:x ,(+ x-value 18) #:y ,(+ y-value 8)
+                   #:width ,(- width-value 30) #:height 18 #:font-face ,(syntax-e #'face)
+                   #:font-scale 0.72 #:text-inset 0.0 ,label-value)
+             (text #:id ,(syntax-e #'value-id) #:x ,(+ x-value 18) #:y ,(+ y-value 27)
+                   #:width ,(- width-value 30) #:height 34 #:font-face ,(syntax-e #'face)
+                   #:font-scale 0.82 #:text-inset 0.0 ,metric-value)
+             (overlay #:id ,(component-child-id id-value 'border) #:x ,x-value #:y ,(+ y-value height-value -1)
+                      #:width ,width-value #:height 1 #:background (theme-color border-subtle) #:opacity 1.0 #:z 6))
+          stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'metric-tile "expected stable IDs, static label/value, font face and fixed geometry" stx)]))
+
+  (define (parse-action-button-v2 stx seen)
+    (syntax-parse stx
+      #:datum-literals (action-button)
+      [(action-button #:id id:id #:button-id button-id:id #:label-id label-id:id
+                      #:label label #:font-face face:id #:on action:id #:x x #:y y
+                      (~optional (~seq #:width width) #:defaults ([width #'176]))
+                      (~optional (~seq #:height height) #:defaults ([height #'40]))
+                      (~optional (~seq #:variant variant:id) #:defaults ([variant #'filled])))
+       (define id-value (syntax-e #'id))
+       (define x-value (expect-number 'action-button #'x))
+       (define y-value (expect-number 'action-button #'y))
+       (define width-value (expect-positive-integer 'action-button #'width))
+       (define height-value (expect-positive-integer 'action-button #'height))
+       (define variant-value (syntax-e #'variant))
+       (unless (memq variant-value '(filled outline))
+         (raise-syntax-error 'action-button "#:variant must be filled or outline" #'variant))
+       (define label-value (component-literal-string 'action-button #'label))
+       (define fill (if (eq? variant-value 'filled) '(theme-color accent) '(theme-color surface-raised)))
+       (define border (if (eq? variant-value 'filled) '(theme-color accent) '(theme-color border-strong)))
+       (define lowered
+         (datum->syntax
+          stx
+          `(stack #:id ,id-value #:x ,x-value #:y ,y-value #:width ,width-value #:height ,height-value
+                  #:background ,fill
+             (button #:id ,(syntax-e #'button-id) #:x ,x-value #:y ,y-value #:width ,width-value #:height ,height-value
+                     #:radius (theme-radius card) #:background ,fill ,label-value #:on ,(syntax-e #'action))
+             (text #:id ,(syntax-e #'label-id) #:x ,(+ x-value 12) #:y ,(+ y-value 6)
+                   #:width ,(- width-value 24) #:height ,(- height-value 12) #:font-face ,(syntax-e #'face)
+                   #:font-scale 0.72 #:text-inset 0.0 ,label-value)
+             (overlay #:id ,(component-child-id id-value 'border) #:x ,x-value #:y ,(+ y-value height-value -1)
+                      #:width ,width-value #:height 1 #:background ,border #:opacity 1.0 #:z 10))
+          stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'action-button "expected stable IDs, static label, action and fixed geometry" stx)]))
 
   ;; `repeat/ui` 只接受固定的 datum table：
   ;; (repeat/ui ((id state label)
@@ -2672,7 +2869,7 @@ scene-glyph-draw-packets
 
   (define (parse-node stx seen)
     (syntax-parse stx
-#:datum-literals (row column stack grid text text-field button transaction-button multi-field-event multi-action-event virtual-list scrollbar control-button metric-card form-row settings-form app-shell surface divider status-indicator toolbar table-header status-pill detail-panel repeat/ui progress overlay spacer)
+#:datum-literals (row column stack grid text text-field button transaction-button multi-field-event multi-action-event virtual-list scrollbar control-button metric-card form-row settings-form app-shell surface divider status-indicator toolbar table-header status-pill detail-panel workspace-shell page-header metric-tile action-button repeat/ui progress overlay spacer)
         [(app-shell form ...) (parse-app-shell stx seen)]
         [(surface form ...) (parse-surface stx seen)]
         [(divider form ...) (parse-divider stx seen)]
@@ -2681,6 +2878,10 @@ scene-glyph-draw-packets
         [(table-header form ...) (parse-table-header stx seen)]
         [(status-pill form ...) (parse-status-pill stx seen)]
         [(detail-panel form ...) (parse-detail-panel stx seen)]
+        [(workspace-shell form ...) (parse-workspace-shell stx seen)]
+        [(page-header form ...) (parse-page-header stx seen)]
+        [(metric-tile form ...) (parse-metric-tile stx seen)]
+        [(action-button form ...) (parse-action-button-v2 stx seen)]
         [(form-row form ...) (parse-form-row stx seen)]
        [(settings-form form ...) (parse-settings-form stx seen)]
        [(metric-card form ...) (parse-metric-card stx seen)]
@@ -2701,7 +2902,7 @@ scene-glyph-draw-packets
       [(overlay form ...) (parse-overlay stx (syntax->list #'(form ...)) seen)]
       [(spacer form ...) (parse-spacer stx (syntax->list #'(form ...)) seen)]
       [_ (raise-syntax-error 'ui
-                             "expected row, column, stack, grid, text, text-field, button, transaction-button, multi-field-event, multi-action-event, virtual-list, scrollbar, control-button, metric-card, form-row, settings-form, app-shell, surface, divider, status-indicator, toolbar, table-header, status-pill, detail-panel, repeat/ui (as a layout child), progress, overlay, or spacer"
+                             "expected row, column, stack, grid, text, text-field, button, transaction-button, multi-field-event, multi-action-event, virtual-list, scrollbar, control-button, metric-card, form-row, settings-form, app-shell, surface, divider, status-indicator, toolbar, table-header, status-pill, detail-panel, workspace-shell, page-header, metric-tile, action-button, repeat/ui (as a layout child), progress, overlay, or spacer"
                              stx)]))
 
   (define (dynamic-node? n)
@@ -2948,12 +3149,18 @@ scene-glyph-draw-packets
             (range (length (c-node-children node)))))
          (values (cons current child-results) (+ y height 10.0))]
         [(eq? (c-node-tag node) 'stack)
-          ;; stack 的子节点共享同一 rect；可被 `#:clip` 作为编译期 clip stack 使用。
+          ;; A visual-anchor stack exposes its already-resolved local frame to children.
+          ;; This is still expansion-time geometry; ordinary legacy stacks retain their
+          ;; historical parent-frame semantics for ABI compatibility.
+          (define anchored? (hash-ref (c-node-props node) '#:visual-anchor #f))
+          (define child-x (if anchored? resolved-x x))
+          (define child-y (if anchored? resolved-y y))
+          (define child-width (if anchored? resolved-width width))
           (define child-results
             (append-map
              (lambda (child)
                (define-values (layouts ignored-y)
-                 (node-layout child (+ depth 1) x y width))
+                 (node-layout child (+ depth 1) child-x child-y child-width))
                layouts)
              (c-node-children node)))
           (values (cons current child-results) (+ y height 10.0))]
@@ -3486,6 +3693,11 @@ scene-glyph-draw-packets
          (define effective-atlas-page (if dynamic-tabular? 3 (c-binding-atlas-page binding)))
          (define effective-face-id (if dynamic-tabular? (c-dynamic-font-cell-asset-face-id dynamic-cell-asset)
                                       (c-binding-face-id binding)))
+         ;; font-scale is a static page-2 typography transform. It never changes UV,
+         ;; glyph IDs, storage addresses, packet membership, or the 48-byte GPU ABI.
+         (define font-scale (hash-ref (c-node-props node) '#:font-scale 1.0))
+         (when (and (not (= font-scale 1.0)) (or dynamic-tabular? state-id (not effective-face-id)))
+           (raise-syntax-error 'text "scaled typography requires a static page-2 fontc placement" (c-node-source node)))
          (unless (= (length glyph-ids) (length advances))
            (raise-syntax-error 'text "glyph IDs and advance plan have different lengths" (c-node-source node)))
          (define total-advance (apply + advances))
@@ -3493,14 +3705,13 @@ scene-glyph-draw-packets
            (raise-syntax-error 'text "glyph advance sum must be positive" (c-node-source node)))
          (define run-pos (layout-ndc-pos layout))
          (define run-size (layout-ndc-size layout))
-         ;; The 12% side inset is part of the compiler-owned typography geometry. Earlier
-         ;; lowering distributed all glyph advances across 100% of the run *after* adding
-         ;; that inset, so long labels overflowed their fixed clip. Reserve both insets
-         ;; before assigning glyph cells; the host still receives only fixed NDC quads.
-         (define text-run-width (* (first run-size) 0.76))
+         ;; Side inset is a compiler-owned typography geometry token. It is resolved once
+         ;; into placement NDC; the host never measures or aligns text.
+         (define text-inset (hash-ref (c-node-props node) '#:text-inset 0.12))
+         (define text-run-width (* (first run-size) (- 1.0 (* 2.0 text-inset))))
          (define unit-advance (/ text-run-width total-advance))
          (define glyph-height (* (second run-size) 0.72))
-         (define start-x (+ (first run-pos) (* (first run-size) 0.12)))
+         (define start-x (+ (first run-pos) (* (first run-size) text-inset)))
          (define batch-key
            (string->symbol
                     (format "glyph-atlas|page:~a|clip:~a|blend:alpha"
@@ -3517,25 +3728,37 @@ scene-glyph-draw-packets
                                            (* glyph-index glyph-instance-bytes)))
               (define font-glyph (fontc-glyph binding glyph-id))
               (define-values (glyph-pos glyph-size)
-                (if font-glyph
-                    (let* ([asset (hash-ref font-assets-by-face (c-binding-face-id binding))]
-                           ;; line scale is compile-time typography geometry: 72% of the text
-                           ;; run is reserved for the manifest line box, with a fixed 14% lower inset.
-                           [line-scale (/ (* (second run-size) 0.72)
-                                          (c-font-asset-plan-line-height asset))]
-                           [baseline-y (+ (second run-pos)
-                                          (* (second run-size) 0.14)
-                                          (* line-scale (- (c-font-asset-plan-line-height asset)
-                                                           (c-font-asset-plan-pixel-size asset)
-                                                           (c-font-glyph-bearing-y font-glyph))))]
-                           [x (+ start-x (* prefix line-scale) (* (c-font-glyph-bearing-x font-glyph) line-scale))]
-                           [y (+ baseline-y (* (c-font-glyph-bearing-y font-glyph) line-scale))])
-                      (values (list x y)
-                              (list (* (c-font-glyph-width font-glyph) line-scale)
-                                    (* (c-font-glyph-height font-glyph) line-scale))))
-                    (values (list (+ start-x (* prefix unit-advance))
-                                  (+ (second run-pos) (* (second run-size) 0.19)))
-                            (list (* unit-advance advance 0.76) glyph-height))))
+                (cond
+                  [dynamic-tabular?
+                   ;; PAGE-3 is a true fixed-cell font: prefix/advance are manifest pixels,
+                   ;; converted directly to NDC once. The row may be wide, but glyphs never
+                   ;; stretch to fill it and the runtime never measures the string.
+                   (define px-x-scale (/ 2.0 (canvas-width)))
+                   (define px-y-scale (/ 2.0 (canvas-height)))
+                   (values (list (+ (first run-pos) (* 16.0 px-x-scale) (* prefix px-x-scale))
+                                 (+ (second run-pos) (* (second run-size) 0.25)))
+                           (list (* 10.0 px-x-scale) (* 16.0 px-y-scale)))]
+                  [font-glyph
+                   (let* ([asset (hash-ref font-assets-by-face (c-binding-face-id binding))]
+                          ;; line scale is compile-time typography geometry: 72% of the text
+                          ;; run is reserved for the manifest line box, with a fixed lower inset.
+                          [line-scale (* font-scale
+                                         (/ (* (second run-size) 0.72)
+                                            (c-font-asset-plan-line-height asset)))]
+                          [baseline-y (+ (second run-pos)
+                                         (* (second run-size) 0.14)
+                                         (* line-scale (- (c-font-asset-plan-line-height asset)
+                                                          (c-font-asset-plan-pixel-size asset)
+                                                          (c-font-glyph-bearing-y font-glyph))))]
+                          [x (+ start-x (* prefix line-scale) (* (c-font-glyph-bearing-x font-glyph) line-scale))]
+                          [y (+ baseline-y (* (c-font-glyph-bearing-y font-glyph) line-scale))])
+                     (values (list x y)
+                             (list (* (c-font-glyph-width font-glyph) line-scale)
+                                   (* (c-font-glyph-height font-glyph) line-scale))))]
+                  [else
+                   (values (list (+ start-x (* prefix unit-advance))
+                                 (+ (second run-pos) (* (second run-size) 0.19)))
+                           (list (* unit-advance advance 0.76) glyph-height))]))
               (define slot (quotient glyph-byte-offset glyph-instance-bytes))
               (loop (cdr ids) (cdr advance-list) (add1 glyph-index) (+ prefix advance)
                     (cons (c-glyph-placement
@@ -5164,12 +5387,12 @@ scene-glyph-draw-packets
       (c-log-browser-plan (c-log-browser-spec-id spec) (c-log-browser-spec-list-id spec)
                           (string->symbol (format "~a-append" (c-log-browser-spec-id spec))) updates detail-id detail-offsets detail-tile-ids
                           (map (lambda (offset) (+ offset 16)) (c-virtual-list-plan-row-layout-offsets list-plan))
-(list (hash 'name 'INFO 'color '(0.055 0.095 0.150 0.72))
-                                  ;; Semantic warning/error tints remain legible but no longer
-                                  ;; turn an entire dense row into an opaque high-saturation slab.
-                                  (hash 'name 'WARN 'color '(0.52 0.31 0.05 0.42))
-                                  (hash 'name 'ERROR 'color '(0.62 0.10 0.16 0.42))
-                                  (hash 'name 'DEBUG 'color '(0.20 0.16 0.42 0.36)))
+(list (hash 'name 'INFO 'color '(0.025 0.040 0.065 1.0))
+                                  ;; Row quads are opaque in this renderer, so semantic tints use
+                                  ;; low luminance rather than misleading alpha values.
+                                  (hash 'name 'WARN 'color '(0.055 0.035 0.010 1.0))
+                                  (hash 'name 'ERROR 'color '(0.070 0.015 0.026 1.0))
+                                  (hash 'name 'DEBUG 'color '(0.035 0.025 0.060 1.0)))
                           2)))
 
   (define (log-browser-plan->datum plan)

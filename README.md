@@ -35,7 +35,7 @@ NOIR_ENTRY_MODULE=examples/log-browser.rkt PLTCOLLECTS="$PWD:" \
 
 ## 实时监控表格示例
 
-[`examples/realtime-monitor.rkt`](examples/realtime-monitor.rkt) 是第二个完整用户示例。它复用冻结的虚拟列表与data-register ABI，提供10,000条逻辑容量、固定 `STATE | HOST | CPU | MEM | NET | LAT | JIT` 列、数字page 0/字母page 1动态glyph域、比例字体静态chrome、状态颜色、selected-row detail、scrollbar，以及 `PageUp`/`PageDown`/`Home`/`End`。
+[`examples/realtime-monitor.rkt`](examples/realtime-monitor.rkt) 是第二个完整用户示例。它复用冻结的虚拟列表与data-register ABI，提供10,000条逻辑容量、固定 `STATE | HOST | CPU | MEM | NET | LAT | JIT` 列、page 3受限tabular动态正文、page 2比例静态chrome、低压状态tint、selected-row detail、scrollbar，以及 `PageUp`/`PageDown`/`Home`/`End`。
 
 ```bash
 NOIR_ENTRY_MODULE=examples/realtime-monitor.rkt PLTCOLLECTS="$PWD:" \
@@ -58,17 +58,17 @@ face、page、UV、固定advance、quad、cell地址、tile、packet/worklist与
 
 第二个入口执行Racket导出、Rust 1.87 release、双应用真实X11/Vulkan page-3采样、face/UV/glyph-word-offset篡改拒绝、列表交互与可见性分流回归。完整ABI与交付记录见[Tabular Body Font Asset v1](TABULAR_BODY_FONT_ASSET_V1.md)、[Dynamic Font Cell Plan ABI v1](DYNAMIC_FONT_CELL_PLAN_ABI_V1.md)和[交付报告](DYNAMIC_FONT_CELL_PLAN_V1_REPORT.md)。
 
-## 编译期桌面视觉语言 v1
+## 编译期桌面视觉语言 v2
 
-Noir的视觉语言v1不在运行时解析theme，也不允许宿主从layout猜测尺度。`(visual-preset desktop-wide)` 会在宏展开期固定1280×720 canvas和32px margin；Racket以该唯一真值计算layout NDC、glyph bounds、tile、scroll scissor和scrollbar，Scene导出`noir-visual-language-plan-v1@1`。Rust在创建窗口前验证schema、preset、精确canvas和全部layout containment，再用同一尺寸配置window与offscreen canvas。
+Noir的视觉语言v2把EUI-NEO式桌面信息层级转译为可证明编译产物：固定品牌rail、page header、summary tiles、table card、detail card和主操作区。`(visual-preset desktop-wide)` 在宏展开期固定1280×720 canvas和32px margin；Racket以该唯一真值计算layout NDC、glyph bounds、tile、scroll scissor与scrollbar，Scene导出`noir-visual-language-plan-v1@1`。Rust在创建窗口前验证schema、preset、精确canvas和全部layout containment，再用同一尺寸配置window与offscreen canvas。
 
-两个完整应用已经采用语义色彩、surface/raised surface、subtle/strong divider、低压WARN/ERROR tint、比例字体静态chrome和desktop-wide frame。所有颜色与elevation均在宏展开期lower为固定RGBA与quad，运行时没有样式对象、theme查询或组件tag。
+两个应用采用Neutral Ink语义色阶、raised surface、subtle/strong divider、低压WARN/ERROR tint、page 2比例静态chrome和page 3固定cell正文。颜色、elevation、font scale、文本inset和卡片几何均在宏展开期lower为固定RGBA、quad与glyph placement；运行时没有样式对象、theme查询、组件tag或reflow。
 
 ```bash
 ./tools/verify_visual_language.sh
 ```
 
-该入口会审计两个Scene的canvas containment，拒绝schema、preset和canvas尺寸篡改，并继续执行font placement、日志浏览器与实时监控表格的真实X11/Vulkan回归。完整设计、截图、proof与已保留的动态列表字体边界见[视觉语言规范](VISUAL_LANGUAGE_V1.md)和[交付报告](VISUAL_LANGUAGE_V1_REPORT.md)。
+该入口审计两个Scene的v2结构、canvas containment、primitive-only lowering和page分布，拒绝schema、preset和canvas尺寸篡改，并继续执行组件等价性、font placement、日志浏览器与实时监控表格的真实X11/Vulkan回归，且重新生成最终截图。完整设计、前后对照、proof与保留边界见[视觉语言规范](VISUAL_LANGUAGE_V2.md)和[交付报告](VISUAL_LANGUAGE_V2_REPORT.md)。
 
 ## 桌面组件宏 v1
 
@@ -110,7 +110,9 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/verify_log_browser.sh` | 真实X11/Vulkan日志工作流与log-browser ABI篡改回归。 |
 | `tools/verify_realtime_monitor.sh` | 实时监控表格的真实X11/Vulkan、glyph-domain篡改、可见性分流与键鼠回归。 |
 | `tools/verify_desktop_component_macros.sh` | 编译期组件宏与手写primitive Scene等价性回归。 |
-| `tools/verify_visual_language.sh` | desktop-wide视觉canvas、Scene篡改拒绝与三套真实X11/Vulkan回归。 |
+| `tools/verify_visual_language.sh` | visual v2结构、canvas篡改、组件内联、字体与双应用真实X11/Vulkan回归，并生成最终截图。 |
+| `tools/verify_visual_language_v2.py` | visual v2固定几何、primitive-only lowering、page分布与冻结列表ABI的Scene结构oracle。 |
+| `tools/make_visual_language_v2_comparison.py` | 从同分辨率真实帧确定性生成视觉v1/v2前后对照图。 |
 | `tools/verify_tabular_body_font.sh` | 受限tabular正文face的确定性、闭域、固定advance与语料覆盖回归。 |
 | `tools/verify_dynamic_font_cell_plan.sh` | page-3动态cell的Racket/Rust/X11正向路径、face/UV/word-offset拒绝与两应用交互回归。 |
 | `tools/audit_visual_canvas.py` | 对visual_language_plan将NDC反算为像素rect并审计layout containment。 |
