@@ -50,6 +50,8 @@ const ROUNDED_SURFACE_PLAN_ABI_SCHEMA: &str = "noir-rounded-surface-plan-v1";
 const ROUNDED_SURFACE_PLAN_ABI_REVISION: u32 = 1;
 const SHADOW_SURFACE_PLAN_ABI_SCHEMA: &str = "noir-shadow-surface-plan-v1";
 const SHADOW_SURFACE_PLAN_ABI_REVISION: u32 = 1;
+const NAVIGATION_SELECTION_PLAN_ABI_SCHEMA: &str = "noir-navigation-selection-plan-v1";
+const NAVIGATION_SELECTION_PLAN_ABI_REVISION: u32 = 1;
 
 #[derive(Debug, Deserialize)]
 struct Scene {
@@ -65,6 +67,9 @@ struct Scene {
     #[serde(default)] packet_activity_contract: Option<PacketActivityContract>,
     #[serde(default)] packet_worklists: Vec<PacketWorklistEntry>,
     event_map: Vec<EventBinding>,
+    // Mandatory compiler output: each pointer target owns one finite release track.
+    // The host admits only the canonical v1 80ms ease-out form below.
+    animation_tracks: Vec<AnimationTrack>,
     actions: HashMap<String, ActionPlan>,
     #[serde(default)] action_slots: Vec<ActionSlot>,
     #[serde(default)] transactions: Vec<TransactionPlan>,
@@ -93,6 +98,8 @@ struct Scene {
     rounded_surface_plan: Option<RoundedSurfacePlan>,
     #[serde(deserialize_with = "deserialize_shadow_surface_plan_option")]
     shadow_surface_plan: Option<ShadowSurfacePlan>,
+    #[serde(deserialize_with = "deserialize_navigation_selection_plan_option")]
+    navigation_selection_plan: Option<NavigationSelectionPlan>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -110,6 +117,7 @@ struct AbiContracts {
     visual_language_plan: AbiContract,
     rounded_surface_plan: AbiContract,
     shadow_surface_plan: AbiContract,
+    navigation_selection_plan: AbiContract,
 }
 
 #[derive(Debug, Deserialize)]
@@ -187,6 +195,43 @@ where D: Deserializer<'de> {
         ShadowSurfacePlanWire::Plan(plan) => Ok(Some(plan)),
         ShadowSurfacePlanWire::Disabled(false) => Ok(None),
         ShadowSurfacePlanWire::Disabled(true) => Err(serde::de::Error::custom("shadow_surface_plan may be an object or false, never true")),
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct NavigationSelectionDestination {
+    id: String,
+    event_node: String,
+    action: String,
+    action_slot_index: usize,
+    target_value: i64,
+    instance_offset: usize,
+    selected_color: [f32; 4],
+    unselected_color: [f32; 4],
+    tile_ids: Vec<usize>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct NavigationSelectionPlan {
+    abi_schema: String,
+    abi_revision: u32,
+    rail_id: String,
+    state: String,
+    state_index: usize,
+    initial_destination: String,
+    initial_value: i64,
+    destinations: Vec<NavigationSelectionDestination>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum NavigationSelectionPlanWire { Plan(NavigationSelectionPlan), Disabled(bool) }
+fn deserialize_navigation_selection_plan_option<'de, D>(deserializer: D) -> std::result::Result<Option<NavigationSelectionPlan>, D::Error>
+where D: Deserializer<'de> {
+    match NavigationSelectionPlanWire::deserialize(deserializer)? {
+        NavigationSelectionPlanWire::Plan(plan) => Ok(Some(plan)),
+        NavigationSelectionPlanWire::Disabled(false) => Ok(None),
+        NavigationSelectionPlanWire::Disabled(true) => Err(serde::de::Error::custom("navigation_selection_plan may be an object or false, never true")),
     }
 }
 
@@ -524,6 +569,25 @@ struct CompiledListNavigationPlan {
     page_step: usize,
     max_viewport: usize,
     tile_mask: u64,
+}
+
+#[derive(Clone, Debug)]
+struct CompiledNavigationSelectionDestination {
+    id: String,
+    event_slot: usize,
+    action_slot_index: usize,
+    target_value: i64,
+    instance_offset: usize,
+    selected_color: [f32; 4],
+    unselected_color: [f32; 4],
+    tile_mask: u64,
+}
+#[derive(Clone, Debug)]
+struct CompiledNavigationSelectionPlan {
+    rail_id: String,
+    state_index: usize,
+    destinations: Vec<CompiledNavigationSelectionDestination>,
+    selected_index: usize,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -913,6 +977,30 @@ struct EventBinding {
     instance_offset: usize,
     base_color: [f32; 4], hover_color: [f32; 4], pressed_color: [f32; 4],
     base_pos: [f32; 2], pressed_pos: [f32; 2],
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct AnimationDamage {
+    kind: String,
+    node: String,
+    x: f32, y: f32, width: f32, height: f32,
+    instance_offset: usize,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct AnimationTrack {
+    id: String,
+    node: String,
+    instance_offset: usize,
+    pos_offset: usize,
+    color_offset: usize,
+    duration_ms: u32,
+    easing: String,
+    pos_from: [f32; 2],
+    pos_to: [f32; 2],
+    color_from: [f32; 4],
+    color_to: [f32; 4],
+    damage: AnimationDamage,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1492,6 +1580,27 @@ impl RenderRequest {
     }
 }
 
+#[derive(Clone, Debug)]
+struct CompiledReleaseTrack {
+    id: String,
+    event_slot: usize,
+    instance_offset: usize,
+    pos_offset: usize,
+    color_offset: usize,
+    duration_ms: u32,
+    pos_from: [f32; 2],
+    pos_to: [f32; 2],
+    color_from: [f32; 4],
+    color_to: [f32; 4],
+    tile_mask: u64,
+}
+
+#[derive(Clone, Debug)]
+struct ActiveReleaseTrack {
+    track_index: usize,
+    started_at: Instant,
+}
+
 struct Host {
     scene_fingerprint_fnv1a64: String,
     source_fingerprint_fnv1a64: String,
@@ -1553,6 +1662,10 @@ struct Host {
     coalesced_batches: HashMap<String, CompiledBatch>,
     event_batch_ids: Vec<EventBatchIds>,
     frame_task_event_slots: HashMap<String, usize>,
+    // Tracks are compiler-proved one-to-one with release tasks. At runtime the only
+    // mutable animation state is the start Instant for an already-indexed track.
+    release_tracks: Vec<CompiledReleaseTrack>,
+    active_release_tracks: Vec<ActiveReleaseTrack>,
     // Compiler-proved fixed-capacity viewport tables. Future scroll paths select
     // row-tile ranges from this table; they never measure rows or walk UI nodes.
     virtual_lists: Vec<CompiledVirtualListPlan>,
@@ -1563,6 +1676,7 @@ struct Host {
     scrollbar_plans: Vec<CompiledScrollbarPlan>,
     active_scrollbar: Option<usize>,
     list_navigation_plans: Vec<CompiledListNavigationPlan>,
+    navigation_selection_plan: Option<CompiledNavigationSelectionPlan>,
     log_browser_plans: Vec<CompiledLogBrowserPlan>,
     log_levels: Vec<Vec<LogLevel>>,
     // Registered v1 fontc atlases. They deliberately remain separate from legacy
@@ -1649,6 +1763,7 @@ impl Host {
         compiler_action_state_slots(&scene, &state_slot_ids)?;
         let initial_state_slot_values = state_slot_values.clone();
         let (action_tile_masks, event_tile_masks) = compiler_tile_selection(&scene)?;
+        let release_tracks = compiler_release_motion_tracks(&scene, &event_tile_masks)?;
         let focus = compiler_focus_graph(&scene)?;
         let keyboard = compiler_keyboard_map(&scene, focus.as_ref())?;
         let keyboard_cursors = keyboard.as_ref().map(|map| vec![0; map.fields.len()]).unwrap_or_default();
@@ -1677,6 +1792,7 @@ impl Host {
         let keyboard_commands = compiler_keyboard_command_map(&scene, focus.as_ref(), keyboard.as_ref(), &compiled_transactions)?;
         let visuals = compiler_text_field_visuals(&scene, focus.as_ref(), keyboard.as_ref())?;
         let (coalesced_batches, event_batch_ids, frame_task_event_slots, transient_task_ids) = compiler_coalesced_batches(&scene)?;
+        let navigation_selection_plan = compiler_navigation_selection_plan(&scene, &state_slot_ids, &action_slot_ids, &action_tile_masks, &event_tile_masks, &packet_worklists)?;
         let row_activation_plans = compiler_row_activation_plans(&scene, &virtual_lists, &action_slot_ids, &action_tile_masks, &coalesced_batches, &packet_worklists)?;
         println!("compiler action tile selection: {} action mask(s), {} event transient mask(s), fixed-mask=u64", action_tile_masks.len(), event_tile_masks.len());
         if let Some(graph) = &focus {
@@ -1749,7 +1865,7 @@ impl Host {
         let initial_glyph_bytes = glyph_bytes.clone();
         let virtual_list_count = virtual_lists.len();
         let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, canvas_width: visual_canvas.width, canvas_height: visual_canvas.height, canvas_margin: visual_canvas.margin, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, rounded_surface_bind_group, _rounded_surface_buffer: rounded_surface_buffer, shadow_pipeline, shadow_surface_bind_group, shadow_instance_buffer, shadow_instance_count, _shadow_surface_buffer: shadow_surface_buffer, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group,
- cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
+ cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, release_tracks, active_release_tracks: Vec::new(), virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, navigation_selection_plan, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
         host.sync_focus_visuals();
         host.execute_scene_data_update_batches()?;
         host.redraw_canvas_full();
@@ -2182,6 +2298,7 @@ impl Host {
                 } else {
                     let batch_id = self.event_batch_ids[index].activate.clone();
                     self.dispatch_compiler_batch(&batch_id);
+                    self.apply_navigation_selection(index);
                 }
             } else {
                 // 取消点击仍必须恢复 button。该路径没有 action，直接执行 compiler release task。
@@ -2191,26 +2308,72 @@ impl Host {
         }
     }
 
+    fn apply_navigation_selection(&mut self, event_slot: usize) -> bool {
+        let Some(plan_snapshot) = self.navigation_selection_plan.clone() else { return false; };
+        let Some(next_index) = plan_snapshot.destinations.iter().position(|destination| destination.event_slot == event_slot) else { return false; };
+        let previous_index = plan_snapshot.selected_index;
+        if previous_index == next_index {
+            println!("navigation-selection: rail={} destination={} unchanged=true state-slot={} target={}",
+                     plan_snapshot.rail_id, plan_snapshot.destinations[next_index].id,
+                     plan_snapshot.state_index, plan_snapshot.destinations[next_index].target_value);
+            return true;
+        }
+        let next = &plan_snapshot.destinations[next_index];
+        if self.state_slot_values.get(plan_snapshot.state_index).copied() != Some(next.target_value) {
+            eprintln!("navigation-selection rejected: state slot {} did not receive target {}", plan_snapshot.state_index, next.target_value);
+            return false;
+        }
+        let previous = &plan_snapshot.destinations[previous_index];
+        for (destination, color) in [(previous, previous.unselected_color), (next, next.selected_color)] {
+            let slot = destination.instance_offset / std::mem::size_of::<QuadInstance>();
+            self.instances[slot].color = color;
+            self.queue.write_buffer(&self.instance_buffer, (destination.instance_offset + 16) as u64, bytemuck::cast_slice(&color));
+        }
+        let selection_mask = previous.tile_mask | next.tile_mask;
+        if let Some(request) = self.pending_render.last_mut() {
+            if request.packet_worklist_index == RenderRequest::NO_PACKETS && request.scroll_list_index.is_none() {
+                request.tile_mask |= selection_mask;
+                println!("navigation-selection render-coalesce: mask=0x{:016x} worklist=no-packets", request.tile_mask);
+            } else {
+                self.enqueue_render(RenderRequest::no_packets(selection_mask), "navigation-selection");
+            }
+        } else {
+            self.enqueue_render(RenderRequest::no_packets(selection_mask), "navigation-selection");
+        }
+        self.navigation_selection_plan.as_mut().expect("cloned navigation selection remains resident").selected_index = next_index;
+        println!("navigation-selection: rail={} old={} new={} state-slot={} target={} color-patches=2 tile-mask=0x{:016x} worklist=no-packets",
+                 plan_snapshot.rail_id, previous.id, next.id, plan_snapshot.state_index, next.target_value, selection_mask);
+        true
+    }
+
     fn apply_transient_winner_write(&mut self, task_id: &str, offset: usize, byte_length: usize) -> Result<()> {
         let event_slot = *self.frame_task_event_slots.get(task_id)
             .with_context(|| format!("winner task {task_id} has no compiler Event Map slot"))?;
-        let event = &self.scene.event_map[event_slot];
+        let (pos_offset, color_offset, pressed_pos, pressed_color, base_pos, hover_color) = {
+            let event = &self.scene.event_map[event_slot];
+            (event.instance_offset, event.instance_offset + 16, event.pressed_pos, event.pressed_color, event.base_pos, event.hover_color)
+        };
+        if task_id.starts_with("release-") {
+            anyhow::ensure!((offset == pos_offset && byte_length == 8) || (offset == color_offset && byte_length == 16),
+                            "release winner task {task_id} write [{offset}..{}) does not match its fixed visual field", offset + byte_length);
+            // The compiler emits the position write before its color write. Start exactly once
+            // on color ownership, so all visual fields remain in the pressed endpoint until tick.
+            if offset == color_offset { self.start_release_motion(event_slot); }
+            println!("coalesced-winner transient {task_id}: [{offset}..{}) motion=scheduled", offset + byte_length);
+            return Ok(());
+        }
         let (pos, color) = if task_id.starts_with("pressed-") {
-            (event.pressed_pos, event.pressed_color)
-        } else if task_id.starts_with("release-") {
-            (event.base_pos, event.base_color)
+            (pressed_pos, pressed_color)
         } else if task_id.starts_with("hover-") {
-            (event.base_pos, event.hover_color)
+            (base_pos, hover_color)
         } else {
             anyhow::bail!("non-action winner task {task_id} has unsupported compiler kind")
         };
-        let pos_offset = event.instance_offset;
-        let color_offset = event.instance_offset + 16;
         if offset == pos_offset && byte_length == 8 {
             self.instances[pos_offset / 44].pos = pos;
             self.queue.write_buffer(&self.instance_buffer, offset as u64, bytemuck::cast_slice(&pos));
         } else if offset == color_offset && byte_length == 16 {
-            self.instances[event.instance_offset / 44].color = color;
+            self.instances[pos_offset / 44].color = color;
             self.queue.write_buffer(&self.instance_buffer, offset as u64, bytemuck::cast_slice(&color));
         } else {
             anyhow::bail!("winner task {task_id} write [{offset}..{}) does not match its fixed visual field", offset + byte_length)
@@ -2219,18 +2382,71 @@ impl Host {
         Ok(())
     }
 
+    fn start_release_motion(&mut self, event_slot: usize) {
+        let Some(track_index) = self.release_tracks.iter().position(|track| track.event_slot == event_slot) else {
+            eprintln!("release motion ignored: event slot {event_slot} has no compiler track");
+            return;
+        };
+        self.active_release_tracks.retain(|active| self.release_tracks[active.track_index].event_slot != event_slot);
+        let track = &self.release_tracks[track_index];
+        self.active_release_tracks.push(ActiveReleaseTrack { track_index, started_at: Instant::now() });
+        println!("release-motion start: id={} event-slot={} duration-ms={} tile-mask=0x{:016x}",
+                 track.id, event_slot, track.duration_ms, track.tile_mask);
+    }
+
+    fn tick_release_motion(&mut self) -> bool {
+        if self.active_release_tracks.is_empty() { return false; }
+        let now = Instant::now();
+        let active = std::mem::take(&mut self.active_release_tracks);
+        let mut continuing = Vec::with_capacity(active.len());
+        let mut dirty_mask = 0u64;
+        for active_track in active {
+            let track = self.release_tracks[active_track.track_index].clone();
+            let elapsed_ms = now.duration_since(active_track.started_at).as_secs_f32() * 1000.0;
+            let linear = (elapsed_ms / track.duration_ms as f32).clamp(0.0, 1.0);
+            // v1 admits exactly the compiler-selected ease-out quadratic; no runtime curve dispatch.
+            let t = 1.0 - (1.0 - linear) * (1.0 - linear);
+            let pos = [
+                track.pos_from[0] + (track.pos_to[0] - track.pos_from[0]) * t,
+                track.pos_from[1] + (track.pos_to[1] - track.pos_from[1]) * t,
+            ];
+            let color = [
+                track.color_from[0] + (track.color_to[0] - track.color_from[0]) * t,
+                track.color_from[1] + (track.color_to[1] - track.color_from[1]) * t,
+                track.color_from[2] + (track.color_to[2] - track.color_from[2]) * t,
+                track.color_from[3] + (track.color_to[3] - track.color_from[3]) * t,
+            ];
+            let slot = track.instance_offset / std::mem::size_of::<QuadInstance>();
+            self.instances[slot].pos = pos;
+            self.instances[slot].color = color;
+            self.queue.write_buffer(&self.instance_buffer, track.pos_offset as u64, bytemuck::cast_slice(&pos));
+            self.queue.write_buffer(&self.instance_buffer, track.color_offset as u64, bytemuck::cast_slice(&color));
+            dirty_mask |= track.tile_mask;
+            if linear < 1.0 {
+                continuing.push(active_track);
+            } else {
+                println!("release-motion complete: id={} event-slot={} frames=bounded", track.id, track.event_slot);
+            }
+        }
+        self.active_release_tracks = continuing;
+        if dirty_mask != 0 { self.mark_dirty_tiles(dirty_mask, "release-motion"); }
+        !self.active_release_tracks.is_empty()
+    }
+
     fn apply_action_winner_writes(&mut self, action_id: &str, writes: &[FrameCoalescedWrite]) -> Result<()> {
         let action = self.scene.actions.get(action_id).cloned()
             .with_context(|| format!("coalesced batch references unknown action {action_id}"))?;
         println!("event-map dispatch: {action_id}");
         for state_write in &action.writes {
-            if state_write.op == "add" {
-                let slot = self.state_slot_values.get_mut(state_write.state_index)
-                    .expect("compiler state-slot proof validated action write index");
-                *slot += state_write.value;
-                println!("state-slot write: action={} state={} index={} op=add value={}",
-                         action_id, state_write.state, state_write.state_index, *slot);
+            let slot = self.state_slot_values.get_mut(state_write.state_index)
+                .expect("compiler state-slot proof validated action write index");
+            match state_write.op.as_str() {
+                "add" => *slot += state_write.value,
+                "set" => *slot = state_write.value,
+                other => { eprintln!("unsupported compiler state write operation {other} for action {action_id}"); return Err(anyhow::anyhow!("unsupported action state write")); }
             }
+            println!("state-slot write: action={} state={} index={} op={} value={}",
+                     action_id, state_write.state, state_write.state_index, state_write.op, *slot);
         }
         for update in &action.gpu_updates {
             if update.kind != "text-run" { continue; }
@@ -2322,13 +2538,7 @@ impl Host {
 
     fn execute_release_task(&mut self, task_id: &str) {
         let Some(&event_slot) = self.frame_task_event_slots.get(task_id) else { return; };
-        let (base_color, base_pos) = {
-            let event = &self.scene.event_map[event_slot];
-            (event.base_color, event.base_pos)
-        };
-        self.patch_color(event_slot, base_color);
-        self.patch_pos(event_slot, base_pos);
-        self.mark_dirty_tiles(self.event_tile_masks[event_slot].release, task_id);
+        self.start_release_motion(event_slot);
     }
 
     fn bind_glyph_placement_pipeline<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
@@ -4326,7 +4536,12 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
                     "unsupported shadow_surface_plan ABI {}@{}; expected {}@{}",
                     scene.abi_contracts.shadow_surface_plan.schema, scene.abi_contracts.shadow_surface_plan.revision,
                     SHADOW_SURFACE_PLAN_ABI_SCHEMA, SHADOW_SURFACE_PLAN_ABI_REVISION);
-    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} rounded-surface={}@{} shadow-surface={}@{} frozen",
+    anyhow::ensure!(scene.abi_contracts.navigation_selection_plan.schema == NAVIGATION_SELECTION_PLAN_ABI_SCHEMA
+                    && scene.abi_contracts.navigation_selection_plan.revision == NAVIGATION_SELECTION_PLAN_ABI_REVISION,
+                    "unsupported navigation_selection_plan ABI {}@{}; expected {}@{}",
+                    scene.abi_contracts.navigation_selection_plan.schema, scene.abi_contracts.navigation_selection_plan.revision,
+                    NAVIGATION_SELECTION_PLAN_ABI_SCHEMA, NAVIGATION_SELECTION_PLAN_ABI_REVISION);
+    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} rounded-surface={}@{} shadow-surface={}@{} navigation-selection={}@{} frozen",
              scene.abi_contracts.virtual_list_plan.schema, scene.abi_contracts.virtual_list_plan.revision,
              scene.abi_contracts.row_activation_plan.schema, scene.abi_contracts.row_activation_plan.revision,
              scene.abi_contracts.scrollbar_plan.schema, scene.abi_contracts.scrollbar_plan.revision,
@@ -4337,7 +4552,8 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
              scene.abi_contracts.dynamic_font_cell_plan.schema, scene.abi_contracts.dynamic_font_cell_plan.revision,
              scene.abi_contracts.visual_language_plan.schema, scene.abi_contracts.visual_language_plan.revision,
              scene.abi_contracts.rounded_surface_plan.schema, scene.abi_contracts.rounded_surface_plan.revision,
-             scene.abi_contracts.shadow_surface_plan.schema, scene.abi_contracts.shadow_surface_plan.revision);
+             scene.abi_contracts.shadow_surface_plan.schema, scene.abi_contracts.shadow_surface_plan.revision,
+             scene.abi_contracts.navigation_selection_plan.schema, scene.abi_contracts.navigation_selection_plan.revision);
     Ok(())
 }
 
@@ -4847,6 +5063,164 @@ fn compiler_list_navigation_plans(
     Ok(compiled)
 }
 
+fn compiler_navigation_selection_plan(
+    scene: &Scene,
+    state_slot_ids: &[String],
+    action_slot_ids: &[String],
+    action_tile_masks: &HashMap<String, u64>,
+    event_tile_masks: &[EventTileMasks],
+    packet_worklists: &[CompiledPacketWorklist],
+) -> Result<Option<CompiledNavigationSelectionPlan>> {
+    let Some(plan) = &scene.navigation_selection_plan else {
+        let material_rail_declared = scene.layout_plan.iter().any(|entry| entry.id == "material-nav-rail");
+        anyhow::ensure!(!material_rail_declared,
+                        "desktop-wide visual Scene with material-nav-rail may not disable navigation_selection_plan v1");
+        println!("compiler navigation selection: disabled destinations=0");
+        return Ok(None);
+    };
+    anyhow::ensure!(plan.abi_schema == NAVIGATION_SELECTION_PLAN_ABI_SCHEMA
+                    && plan.abi_revision == NAVIGATION_SELECTION_PLAN_ABI_REVISION,
+                    "navigation selection has unsupported ABI {}@{}", plan.abi_schema, plan.abi_revision);
+    anyhow::ensure!((3..=7).contains(&plan.destinations.len()),
+                    "navigation selection {} must have 3..7 fixed destinations", plan.rail_id);
+    anyhow::ensure!(plan.state_index < state_slot_ids.len() && state_slot_ids[plan.state_index] == plan.state,
+                    "navigation selection {} state slot disagrees with compiler State Slot table", plan.rail_id);
+    let state_slot = scene.state_slots.get(plan.state_index)
+        .with_context(|| format!("navigation selection {} state slot is absent", plan.rail_id))?;
+    anyhow::ensure!(state_slot.id == plan.state && state_slot.initial == plan.initial_value,
+                    "navigation selection {} initial state proof disagrees", plan.rail_id);
+    anyhow::ensure!(packet_worklists.get(RenderRequest::NO_PACKETS)
+                    .map(|worklist| worklist.packet_indices.is_empty()).unwrap_or(false),
+                    "navigation selection requires compiler no-packets worklist");
+    let mut seen_ids = HashSet::new();
+    let mut seen_events = HashSet::new();
+    let mut seen_actions = HashSet::new();
+    let mut seen_offsets = HashSet::new();
+    let mut compiled = Vec::with_capacity(plan.destinations.len());
+    for (index, destination) in plan.destinations.iter().enumerate() {
+        anyhow::ensure!(destination.target_value == index as i64
+                        && seen_ids.insert(destination.id.as_str())
+                        && seen_events.insert(destination.event_node.as_str())
+                        && seen_actions.insert(destination.action.as_str())
+                        && seen_offsets.insert(destination.instance_offset),
+                        "navigation selection {} has duplicate or non-canonical destination transition", plan.rail_id);
+        anyhow::ensure!(destination.action_slot_index < action_slot_ids.len()
+                        && action_slot_ids[destination.action_slot_index] == destination.action,
+                        "navigation destination {} action slot disagrees", destination.id);
+        let action = scene.actions.get(&destination.action)
+            .with_context(|| format!("navigation destination {} references unknown action {}", destination.id, destination.action))?;
+        anyhow::ensure!(action.action_index == destination.action_slot_index
+                        && action.writes.len() == 1
+                        && action.writes[0].state == plan.state
+                        && action.writes[0].state_index == plan.state_index
+                        && action.writes[0].op == "set"
+                        && action.writes[0].value == destination.target_value
+                        && action.gpu_updates.is_empty()
+                        && action.instance_updates.is_empty(),
+                        "navigation destination {} action is not a closed literal state selection", destination.id);
+        let source = scene.layout_plan.iter().find(|layout| layout.id == destination.id)
+            .with_context(|| format!("navigation destination {} source layout is absent", destination.id))?;
+        anyhow::ensure!(source.tag == "stack" && source._instance_offset == destination.instance_offset
+                        && destination.instance_offset > 0
+                        && destination.instance_offset % std::mem::size_of::<QuadInstance>() == 0
+                        && destination.instance_offset / std::mem::size_of::<QuadInstance>() < scene.resource_budget.instance_capacity,
+                        "navigation destination {} source instance witness is invalid", destination.id);
+        anyhow::ensure!(destination.selected_color.iter().chain(destination.unselected_color.iter()).all(|value| value.is_finite() && (0.0..=1.0).contains(value)),
+                        "navigation destination {} has noncanonical RGBA", destination.id);
+        let is_initial = destination.id == plan.initial_destination;
+        anyhow::ensure!(source.color == if is_initial { destination.selected_color } else { destination.unselected_color },
+                        "navigation destination {} initial source color disagrees with selection state", destination.id);
+        let event_slot = scene.event_map.iter().position(|event| event.node == destination.event_node)
+            .with_context(|| format!("navigation destination {} event target is absent", destination.id))?;
+        let event = &scene.event_map[event_slot];
+        let source_x = (source.ndc_pos[0] + 1.0) * scene.visual_language_plan.canvas.width * 0.5;
+        let source_y = (1.0 - source.ndc_pos[1] - source.ndc_size[1]) * scene.visual_language_plan.canvas.height * 0.5;
+        let source_width = source.ndc_size[0] * scene.visual_language_plan.canvas.width * 0.5;
+        let source_height = source.ndc_size[1] * scene.visual_language_plan.canvas.height * 0.5;
+        anyhow::ensure!(event._action.as_deref() == Some(destination.action.as_str())
+                        && event.action_index == Some(destination.action_slot_index)
+                        && event.instance_offset % std::mem::size_of::<QuadInstance>() == 0
+                        && (event.x - source_x).abs() < 0.001
+                        && (event.y - source_y).abs() < 0.001
+                        && (event.width - source_width).abs() < 0.001
+                        && (event.height - source_height).abs() < 0.001,
+                        "navigation destination {} event geometry/action disagrees with source layout", destination.id);
+        anyhow::ensure!(event.base_color == [0.0, 0.0, 0.0, 0.0],
+                        "navigation destination {} hit target must remain transparent", destination.id);
+        let tile_mask = tile_mask(&destination.tile_ids, scene.render_schedules[0].tiles.len(), &format!("navigation destination {}", destination.id))?;
+        anyhow::ensure!(tile_mask != 0
+                        && action_tile_masks.get(&destination.action).copied() == Some(tile_mask)
+                        && event_tile_masks.get(event_slot).map(|masks| masks.release == tile_mask).unwrap_or(false),
+                        "navigation destination {} widened or mismatched local tile scope", destination.id);
+        compiled.push(CompiledNavigationSelectionDestination {
+            id: destination.id.clone(), event_slot, action_slot_index: destination.action_slot_index,
+            target_value: destination.target_value, instance_offset: destination.instance_offset,
+            selected_color: destination.selected_color, unselected_color: destination.unselected_color, tile_mask,
+        });
+    }
+    let selected_index = usize::try_from(plan.initial_value).context("navigation selection initial value is negative")?;
+    anyhow::ensure!(selected_index < compiled.len() && compiled[selected_index].id == plan.initial_destination,
+                    "navigation selection initial destination/value disagree");
+    println!("compiler navigation selection: rail={} state={} slot={} destinations={} initial={} tiles={:?} no-packets",
+             plan.rail_id, plan.state, plan.state_index, compiled.len(), plan.initial_destination,
+             compiled.iter().map(|entry| entry.tile_mask).collect::<Vec<_>>());
+    Ok(Some(CompiledNavigationSelectionPlan { rail_id: plan.rail_id.clone(), state_index: plan.state_index, destinations: compiled, selected_index }))
+}
+
+fn compiler_release_motion_tracks(scene: &Scene, event_tile_masks: &[EventTileMasks]) -> Result<Vec<CompiledReleaseTrack>> {
+    anyhow::ensure!(scene.animation_tracks.len() == scene.event_map.len(),
+                    "release motion track count {} disagrees with event map {}", scene.animation_tracks.len(), scene.event_map.len());
+    let mut seen_ids = HashSet::new();
+    let mut seen_slots = HashSet::new();
+    let mut compiled = Vec::with_capacity(scene.animation_tracks.len());
+    for track in &scene.animation_tracks {
+        let event_slot = scene.event_map.iter().position(|event| event.node == track.node)
+            .with_context(|| format!("release motion {} references unknown event {}", track.id, track.node))?;
+        let event = &scene.event_map[event_slot];
+        anyhow::ensure!(track.id == format!("release-{}", event.node)
+                        && seen_ids.insert(track.id.as_str()) && seen_slots.insert(event_slot),
+                        "release motion track {} is not a unique canonical event release", track.id);
+        anyhow::ensure!(track.instance_offset == event.instance_offset
+                        && track.pos_offset == event.instance_offset
+                        && track.color_offset == event.instance_offset + 16
+                        && track.instance_offset % std::mem::size_of::<QuadInstance>() == 0
+                        && track.instance_offset / std::mem::size_of::<QuadInstance>() < scene.resource_budget.instance_capacity,
+                        "release motion {} offsets escape the fixed event instance", track.id);
+        anyhow::ensure!(track.duration_ms == 80 && track.easing == "ease-out",
+                        "release motion {} must use the canonical finite 80ms ease-out recipe", track.id);
+        anyhow::ensure!(track.pos_from == event.pressed_pos && track.pos_to == event.base_pos
+                        && track.color_from == event.pressed_color && track.color_to == event.base_color,
+                        "release motion {} endpoints disagree with compiler Event Map", track.id);
+        anyhow::ensure!(track.pos_from.iter().chain(track.pos_to.iter()).chain(track.color_from.iter()).chain(track.color_to.iter()).all(|value| value.is_finite()),
+                        "release motion {} contains a non-finite endpoint", track.id);
+        anyhow::ensure!(track.damage.kind == "rect" && track.damage.node == event.node
+                        && (track.damage.x - event.x).abs() < 0.001
+                        && (track.damage.y - event.y).abs() < 0.001
+                        && (track.damage.width - event.width).abs() < 0.001
+                        && (track.damage.height - event.height).abs() < 0.001
+                        && track.damage.instance_offset == event.instance_offset,
+                        "release motion {} damage witness disagrees with fixed event geometry", track.id);
+        let release_task = scene.frame_schedule.iter().find(|task| task.id == track.id)
+            .with_context(|| format!("release motion {} has no compiler frame task", track.id))?;
+        anyhow::ensure!(release_task.kind == "release"
+                        && release_task.writes.len() == 2
+                        && release_task.writes.iter().any(|write| write.offset == track.pos_offset && write.byte_length == 8)
+                        && release_task.writes.iter().any(|write| write.offset == track.color_offset && write.byte_length == 16),
+                        "release motion {} frame task does not own the fixed position/color fields", track.id);
+        let tile_mask = event_tile_masks.get(event_slot).map(|masks| masks.release)
+            .with_context(|| format!("release motion {} has no event tile mask", track.id))?;
+        anyhow::ensure!(tile_mask != 0, "release motion {} has empty damage tile mask", track.id);
+        compiled.push(CompiledReleaseTrack {
+            id: track.id.clone(), event_slot, instance_offset: track.instance_offset,
+            pos_offset: track.pos_offset, color_offset: track.color_offset, duration_ms: track.duration_ms,
+            pos_from: track.pos_from, pos_to: track.pos_to, color_from: track.color_from, color_to: track.color_to,
+            tile_mask,
+        });
+    }
+    println!("compiler release motion: tracks={} recipe=80ms-ease-out fixed-fields=pos+color", compiled.len());
+    Ok(compiled)
+}
+
 fn compiler_log_browser_plans(
     scene: &Scene,
     lists: &[CompiledVirtualListPlan],
@@ -5041,7 +5415,8 @@ fn compiler_action_state_slots(scene: &Scene, state_slot_ids: &[String]) -> Resu
     for (action_id, action) in &scene.actions {
         for write in &action.writes {
             assert_state_slot(state_slot_ids, write.state_index, &write.state, &format!("action {action_id} state write"))?;
-            anyhow::ensure!(write.op == "add", "action {action_id} has unsupported state operation {}", write.op);
+            anyhow::ensure!(matches!(write.op.as_str(), "add" | "set"),
+                            "action {action_id} has unsupported state operation {}", write.op);
         }
         for update in &action.gpu_updates {
             assert_state_slot(state_slot_ids, update.state_index, &update.state, &format!("action {action_id} glyph patch"))?;
@@ -6207,7 +6582,9 @@ fn main() -> Result<()> {
                 _ => {}
             },
             Event::AboutToWait => {
-                if host.blink_tick() { host.window.request_redraw(); }
+                let blink = host.blink_tick();
+                let motion = host.tick_release_motion();
+                if blink || motion { host.window.request_redraw(); }
             },
             _ => {}
         }

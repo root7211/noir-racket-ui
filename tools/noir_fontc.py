@@ -24,6 +24,9 @@ ASCII_PRINTABLE = "".join(chr(codepoint) for codepoint in range(32, 127))
 # The entire first dynamic-table body domain.  Its order is semantic: glyph IDs
 # are assigned after ascending-codepoint normalization, never at runtime.
 TABULAR_BODY_V1 = " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+# Closed Material-adjacent symbol domain for the first compiled icon asset.
+# Glyph IDs are assigned after codepoint sort, never selected through a runtime registry.
+ICON_V1 = "⌂▣◉⋮×+◆↗"
 
 
 def fail(message: str) -> None:
@@ -64,11 +67,16 @@ def load_spec(path: Path) -> dict[str, Any]:
         fail("atlas width and height must be positive integers")
     if not isinstance(atlas["padding"], int) or atlas["padding"] < 0:
         fail("atlas.padding must be a non-negative integer")
-    if raw["charset"] not in ("ASCII_PRINTABLE", "TABULAR_BODY_V1"):
-        fail("v1 supports only charset=ASCII_PRINTABLE or the closed TABULAR_BODY_V1 domain")
+    if raw["charset"] not in ("ASCII_PRINTABLE", "TABULAR_BODY_V1", "ICON_V1"):
+        fail("v1 supports ASCII_PRINTABLE, closed TABULAR_BODY_V1, or closed ICON_V1")
     extras = raw.get("extra_text", [])
     if not isinstance(extras, list) or not all(isinstance(value, str) for value in extras):
         fail("extra_text must be an array of strings")
+    include_icons = raw.get("include_icons", False)
+    if not isinstance(include_icons, bool):
+        fail("include_icons must be a boolean when present")
+    if include_icons and raw["charset"] != "ASCII_PRINTABLE":
+        fail("include_icons is supported only with ASCII_PRINTABLE; ICON_V1 is never open-ended")
     advance_policy = raw.get("advance_policy", "proportional")
     if advance_policy not in ("proportional", "fixed-tabular"):
         fail("advance_policy must be proportional or fixed-tabular")
@@ -81,7 +89,7 @@ def load_spec(path: Path) -> dict[str, Any]:
         if not isinstance(fixed_advance, (int, float)) or not float(fixed_advance) > 0.0:
             fail("TABULAR_BODY_V1 requires positive numeric fixed_advance")
     elif advance_policy != "proportional":
-        fail("ASCII_PRINTABLE must retain proportional advance_policy in fontc v1")
+        fail("ASCII_PRINTABLE and ICON_V1 must retain proportional advance_policy in fontc v1")
     return raw
 
 
@@ -105,15 +113,23 @@ def resolve_font(font_ref: str) -> Path:
 
 
 def coverage_from_spec(spec: dict[str, Any]) -> list[str]:
-    if spec["charset"] == "TABULAR_BODY_V1":
+    charset = spec["charset"]
+    if charset == "TABULAR_BODY_V1":
         characters = set(TABULAR_BODY_V1)
+    elif charset == "ICON_V1":
+        characters = set(ICON_V1)
     else:
         characters = set(ASCII_PRINTABLE)
         for text in spec.get("extra_text", []):
             characters.update(text)
+        if spec.get("include_icons", False):
+            characters.update(ICON_V1)
     codepoints = sorted(ord(character) for character in characters)
-    if any(codepoint > 0x7F for codepoint in codepoints):
-        fail("v1 fontc coverage is intentionally ASCII-only; declare a v2 CJK shaping plan first")
+    allows_icons = charset == "ICON_V1" or spec.get("include_icons", False)
+    if not allows_icons and any(codepoint > 0x7F for codepoint in codepoints):
+        fail("ASCII/TABULAR fontc coverage is intentionally ASCII-only; only the closed ICON_V1 extension permits Unicode")
+    if spec.get("include_icons", False) and any(codepoint > 0x7F and chr(codepoint) not in ICON_V1 for codepoint in codepoints):
+        fail("include_icons may add only the closed ICON_V1 symbol domain")
     return [chr(codepoint) for codepoint in codepoints]
 
 
@@ -218,9 +234,10 @@ def compile_asset(spec_path: Path, out_dir: Path) -> dict[str, Any]:
         "revision": REVISION,
         "face_id": spec["face_id"],
         "renderer_kind": "atlas-gray",
-        "coverage_policy": "tabular-body-v1" if spec["charset"] == "TABULAR_BODY_V1" else "ascii-printable",
+        "coverage_policy": ("ascii-printable+icon-v1" if spec.get("include_icons", False)
+                            else {"TABULAR_BODY_V1": "tabular-body-v1", "ICON_V1": "icon-v1"}.get(spec["charset"], "ascii-printable")),
+        "icon_domain": list(ICON_V1) if spec.get("include_icons", False) or spec["charset"] == "ICON_V1" else [],
         "advance_policy": spec.get("advance_policy", "proportional"),
-        "fixed_advance": fixed_advance,
         "font_source": str(font_path),
         "font_sha256": sha256_file(font_path),
         "atlas_sha256": sha256_file(raw_path),
@@ -240,6 +257,8 @@ def compile_asset(spec_path: Path, out_dir: Path) -> dict[str, Any]:
         "glyph_count": len(glyphs),
         "glyphs": glyphs,
     }
+    if fixed_advance is not None:
+        manifest["fixed_advance"] = fixed_advance
     payload = json.dumps(manifest, ensure_ascii=True, sort_keys=True, indent=2) + "\n"
     (out_dir / "manifest.json").write_text(payload, encoding="utf-8")
     return manifest

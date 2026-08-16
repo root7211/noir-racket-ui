@@ -1,0 +1,5 @@
+Release motion v1 真实 X11/Vulkan 视觉审阅
+
+Pressed frame：Deployment dialog 的 Deploy button 呈现 compiler Event Map 的 pressed 位置与绿色 pressed color；menu icons、dialog rounded/shadow与其他静态内容完整。
+
+Release-complete frame：同一 Deploy button 在已证明的80ms ease-out轨道结束后回到base位置与Material primary base color；Overlay actions 的预分配数字glyph更新为1。宿主日志记录了唯一release track的start与complete，运行中仅写该按钮的固定pos/color范围并重绘其固定tile。

@@ -14,6 +14,7 @@ HIGH_LEVEL_TAGS = {
     "material-filled-button",
     "material-nav-rail",
     "material-destination",
+    "material-icon",
 }
 REQUIRED_LAYOUT_IDS = {
     "material-profile-dashboard",
@@ -24,6 +25,9 @@ REQUIRED_LAYOUT_IDS = {
     "material-performance-card",
     "material-activity-card",
     "material-refresh-button",
+    "material-overview$icon",
+    "material-systems$icon",
+    "material-alerts$icon",
 }
 REQUIRED_ROUNDED_IDS = {
     "material-nav-rail",
@@ -124,21 +128,44 @@ def main() -> None:
             ):
                 fail(f"shadow source {source_id} layer {index} disagrees with fixed layout recipe")
 
-    if [entry["node"] for entry in scene["event_map"]] != ["material-refresh-button"]:
-        fail("filled Material button did not lower to the expected fixed event target")
-    if list(scene["actions"].keys()) != ["material-refresh"]:
+    if [entry["node"] for entry in scene["event_map"]] != [
+        "material-overview$target", "material-systems$target", "material-alerts$target", "material-refresh-button"
+    ]:
+        fail("Material controls did not lower to the expected fixed rail/button event targets")
+    if list(scene["actions"].keys()) != [
+        "material-refresh", "material-select-alerts", "material-select-overview", "material-select-systems"
+    ]:
         fail("Material action table changed")
-    if scene["state_slots"] != [{"id": "refresh-count", "index": 0, "initial": 0}]:
-        fail("Material fixture must retain one fixed state slot")
-    if sum(1 for entry in scene["glyph_placement_plan"] if entry["atlas_page"] == 2) < 100:
-        fail("Material chrome page-2 placement unexpectedly small")
+    if scene["state_slots"] != [
+        {"id": "material-navigation", "index": 0, "initial": 0},
+        {"id": "refresh-count", "index": 1, "initial": 0},
+    ]:
+        fail("Material fixture must retain its fixed navigation and refresh state slots")
+    page2 = [entry for entry in scene["glyph_placement_plan"] if entry["atlas_page"] == 2]
+    if len(page2) != 224:
+        fail(f"Material icon fixture must contain exactly 224 static page-2 glyphs, got {len(page2)}")
+    assets = scene["font_assets"]
+    if len(assets) != 1 or assets[0]["face_id"] != "noir-desktop-sans-18" or assets[0]["glyph_domain_count"] != 102:
+        fail("Material icon domain must be the 102-glyph page-2 desktop asset")
+    icons = {entry["node"]: entry for entry in page2 if entry["node"].endswith("$icon")}
+    expected_icons = {
+        "material-overview$icon": 99,
+        "material-systems$icon": 101,
+        "material-alerts$icon": 97,
+    }
+    if set(icons) != set(expected_icons):
+        fail(f"unexpected icon placement nodes {sorted(icons)}")
+    for node, glyph_index in expected_icons.items():
+        icon = icons[node]
+        if icon["glyph_id"] != (2 << 16) | glyph_index or icon["face_id"] != "noir-desktop-sans-18" or icon["dynamic"]:
+            fail(f"icon placement {node} is not a static page-2 glyph witness")
 
     print(json.dumps({
         "scene": str(path),
         "layout_nodes": len(layout),
         "rounded_surfaces": len(rounded["surfaces"]),
         "shadow_layers": len(shadow["layers"]),
-        "static_page2_glyphs": sum(1 for entry in scene["glyph_placement_plan"] if entry["atlas_page"] == 2),
+        "static_page2_glyphs": len(page2),
         "status": "PASS",
     }, indent=2, sort_keys=True))
 

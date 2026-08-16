@@ -1,0 +1,5 @@
+Material icon v1 真实 X11/Vulkan 视觉审阅
+
+Material navigation rail：Overview、Systems、Alerts分别呈现固定grid/status/more符号；三枚图标位于48px destination的左侧固定20px placement，active pill、标签基线、SDF圆角和shadow保持完整。
+
+Material dialog/menu：Pin build、Copy artifact、Export manifest分别呈现固定diamond/grid/export符号；三枚图标与各自40px行及标签对齐，透明pointer target未覆盖视觉图层。两组场景均由同一`noir-desktop-sans-18` page-2 R8 atlas（102 glyph、闭合ICON_V1扩展）采样；运行时没有icon name、registry或路径解析。

@@ -1,0 +1,5 @@
+Material dialog/menu v1 真实 X11/Vulkan 视觉审阅
+
+初始渲染确认：deployment scrim 覆盖固定 desktop frame；level-3 deployment dialog 位于静态 context card 之上；level-2 deployment menu 固定于右侧。dialog surface、menu surface、buttons 与menu item均采用既有SDF圆角和不可变shadow recipe。
+
+修复确认：menu item容器声明visual-anchor后，Pin build、Copy artifact、Export manifest三条静态文本分别对齐到三个40px固定行。透明事件target未覆盖item surface。对话框标题、正文、Cancel/Deploy动作按钮和固定dynamic counter均保持完整。

@@ -1,0 +1,8 @@
+navigation_selection_plan v1 真实 X11/Vulkan 视觉审阅
+
+输入帧：material-profile-navigation-before.png（初始 Overview 选中）。
+结果帧：material-profile-navigation-systems.png（点击 Systems 后）。
+
+结论：active pill 的浅紫色 surface 从 Overview 固定实例槽转移到 Systems 固定实例槽；Overview 回到深色 unselected surface。navigation rail 外框、rounded surface、shadow、标题和正文均保持完整。透明 button event witness 未覆盖父 destination surface，说明颜色切换由编译器证明的父 stack 实例完成。
+
+已与宿主日志交叉验证：material-select-systems 执行 literal state set；两处 RGBA patch 合并为 tile mask 0x0000000000000006，使用 compiler no-packets worklist。

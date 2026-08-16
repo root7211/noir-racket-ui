@@ -108,6 +108,33 @@ bash tools/verify_material_profile_v1.sh
 
 page-2比例字体的glyph placement现使用共享typographic line top并仅应用一次manifest bearing：小写x-height、ascender和descender不再被强行顶边对齐。该修复不修改atlas、glyph ID、GPU ABI或运行时写入路径；详细数学、结构oracle、真实验证与前后对照见[Font Baseline Fix v1报告](FONT_BASELINE_FIX_V1_REPORT.md)及[真实帧对照](out/material-profile-baseline-before-after.png)。
 
+## 受限Material交互组件批次 v1
+
+`navigation_selection_plan v1` 将3–7个预声明rail destination降低为唯一状态槽、literal `set` action、透明固定event target、旧/新destination的两个RGBA patch与预证明tile范围。它不引入路由器、动态tab树或运行时layout；`literal`、source offset、tile范围和desktop禁用四类篡改都会在启动期拒绝。
+
+`material-dialog`、`material-menu`、`material-menu-item`只生成固定scrim、预分配elevated surface、2–6个静态item、固定action与glyph placement。overlay示例同时验证`material-icon`的闭合八符号域：八枚Unicode symbol glyph在构建期扩展同一page-2 R8 atlas，保持原95个ASCII glyph ID稳定；运行时没有icon registry、SVG解析或资源查询。
+
+`release_motion v1` 复用既有固定event端点，将每个允许event冻结为唯一的80ms ease-out轨道。宿主在release后只在预证明的instance位置、RGBA/position范围和tile mask内插值；duration、offset、damage和track缺失篡改均在GPU创建前拒绝。
+
+```bash
+bash tools/verify_navigation_selection_plan.sh
+bash tools/verify_material_dialog_menu_v1.sh
+bash tools/verify_material_icon_assets_v1.sh
+bash tools/verify_release_motion_v1.sh
+```
+
+真实X11/Vulkan证据包括[导航Overview→Systems](out/material-profile-navigation-v1.scene.json)、[dialog/menu截图](out/material-overlay-showcase-v1.png)、[icon审阅记录](out/material_icon_visual_review.txt)与[release motion审阅记录](out/release_motion_visual_review.txt)。
+
+## 真实GPU组件性能矩阵 v1
+
+新增运行器以当前Material dashboard与overlay Scene执行compiler-selected replay matrix。它会主动拒绝`llvmpipe`、`lavapipe`和CPU Vulkan设备；因此沙箱软件光栅化环境不会被误报为真实GPU结果。协议、硬件门禁和输出解释见[真实GPU组件矩阵说明](REAL_GPU_COMPONENT_MATRIX_V1.md)。
+
+```bash
+./tools/run_real_gpu_component_matrix_v1.sh
+```
+
+运行结束后，`tools/analyze_real_gpu_component_matrix_v1.py` 会生成按fixture/workload汇总的GPU中位数、P95、CPU提交时延、固定tile/glyph/write指标与图表。它只接受同一非CPU适配器、可用timestamp query及全部compiler-selected self-consistency proof为真的会话。
+
 ## 桌面组件宏 v1
 
 Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`detail-panel`是**编译期语法压缩**，而不是运行时组件对象。宏展开后只剩已有的`column`、`stack`、`text`和`button`，并保留调用者明确给出的detail、button和label ID。因此已有state slot、font placement、event map、tile和worklist无需增加组件分支。
@@ -145,7 +172,8 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `examples/dashboard.rkt` | 成功编译的 DSL 示例。 |
 | `examples/log-browser.rkt` | 10,000条固定容量日志浏览器：four-column row、tail append、详情与长列表交互。 |
 | `examples/realtime-monitor.rkt` | 10,000条实时监控表格：数值data-register、可见性分流、状态色与比例字体chrome。 |
-| `examples/material-profile-dashboard.rkt` | Material Profile v1桌面示例：静态rail、small app bar、rounded card与fixed filled button。 |
+| `examples/material-profile-dashboard.rkt` | Material Profile桌面示例：静态rail、navigation selection、closed-domain icon、small app bar、rounded/shadow card与fixed filled button。 |
+| `examples/material-overlay-showcase.rkt` | 受限Material dialog/menu示例：固定scrim、dialog、menu、closed-domain icon、5个固定action与release motion。 |
 | `tools/verify_log_browser.sh` | 真实X11/Vulkan日志工作流与log-browser ABI篡改回归。 |
 | `tools/verify_realtime_monitor.sh` | 实时监控表格的真实X11/Vulkan、glyph-domain篡改、可见性分流与键鼠回归。 |
 | `tools/verify_desktop_component_macros.sh` | 编译期组件宏与手写primitive Scene等价性回归。 |
@@ -155,6 +183,12 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/mutate_rounded_surface_scene.py` | 生成radius、offset、geometry和disable四类精确Scene攻击样本。 |
 | `tools/verify_material_profile_v1.sh` | Material Profile v1的静态Scene oracle、宏输入拒绝、Rust构建与真实X11/Vulkan交互回归。 |
 | `tools/verify_material_profile_v1.py` | Material Profile v1的primitive-only lowering、fixed canvas、rounded/shadow metadata、action/state/glyph结构oracle。 |
+| `tools/verify_navigation_selection_plan.sh` | navigation selection v1的Racket/Rust、真实X11双destination切换与四类篡改拒绝回归。 |
+| `tools/verify_material_dialog_menu_v1.sh` | 受限dialog/menu的宏拒绝、Scene oracle、真实X11 action与glyph patch回归。 |
+| `tools/verify_material_icon_assets_v1.sh` | page-2 closed icon域的fontc确定性、非法icon拒绝、真实X11导航/menu回归。 |
+| `tools/verify_release_motion_v1.sh` | 固定80ms release motion的结构、篡改拒绝与真实X11按下/复位回归。 |
+| `tools/run_real_gpu_component_matrix_v1.sh` | 拒绝CPU Vulkan后采集Material dashboard/overlay compiler-selected GPU timestamp矩阵。 |
+| `tools/analyze_real_gpu_component_matrix_v1.py` | 审计真实GPU矩阵的适配器一致性、timestamp/self-consistency门禁并生成汇总与图表。 |
 | `tools/verify_shadow_surface_plan.sh` | shadow surface v1正向Material X11/Vulkan路径与blur/offset/geometry/disable攻击拒绝回归。 |
 | `tools/mutate_shadow_surface_scene.py` | 生成shadow recipe、source地址、扩展几何与禁用攻击Scene。 |
 | `tools/make_shadow_surface_v1_comparison.py` | 将无shadow发布帧与当前真实X11/Vulkan帧生成确定性before/after审阅板。 |

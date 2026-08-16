@@ -4,6 +4,7 @@
   "font": "DejaVu Sans",
   "pixel_size": 18,
   "charset": "ASCII_PRINTABLE",
+  "include_icons": true,
   "extra_text": [
     "SYSTEM LOG BROWSER",
     "LEVEL",

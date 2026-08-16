@@ -1,4 +1,5 @@
 {
+  "advance_policy": "proportional",
   "atlas": {
     "channels": 1,
     "height": 512,
@@ -6,11 +7,12 @@
     "padding": 2,
     "width": 512
   },
-  "atlas_sha256": "613ac89f108883cfdff0d3e422a2a265120eb4a1c6099803958a102c0fd6956c",
+  "atlas_sha256": "cefe9a2dca8a41c0079a09db642619c411ef1b25b511b9bda567d9dbf1e3766d",
+  "coverage_policy": "ascii-printable+icon-v1",
   "face_id": "noir-desktop-sans-18",
   "font_sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280",
   "font_source": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-  "glyph_count": 95,
+  "glyph_count": 102,
   "glyphs": [
     {
       "advance": 5.71875,
@@ -1246,7 +1248,108 @@
       "width": 15,
       "x": 382,
       "y": 46
+    },
+    {
+      "advance": 15.078125,
+      "bearing_x": 0,
+      "bearing_y": -6,
+      "character": "\u00d7",
+      "codepoint": 215,
+      "font_glyph_id": 153,
+      "glyph_id": 95,
+      "height": 11,
+      "width": 15,
+      "x": 401,
+      "y": 46
+    },
+    {
+      "advance": 15.078125,
+      "bearing_x": 0,
+      "bearing_y": -6,
+      "character": "\u2197",
+      "codepoint": 8599,
+      "font_glyph_id": 3106,
+      "glyph_id": 96,
+      "height": 11,
+      "width": 15,
+      "x": 420,
+      "y": 46
+    },
+    {
+      "advance": 18.0,
+      "bearing_x": 0,
+      "bearing_y": -4,
+      "character": "\u22ee",
+      "codepoint": 8942,
+      "font_glyph_id": 3449,
+      "glyph_id": 97,
+      "height": 15,
+      "width": 18,
+      "x": 439,
+      "y": 46
+    },
+    {
+      "advance": 11.421875,
+      "bearing_x": 0,
+      "bearing_y": -6,
+      "character": "\u2302",
+      "codepoint": 8962,
+      "font_glyph_id": 3469,
+      "glyph_id": 98,
+      "height": 11,
+      "width": 11,
+      "x": 461,
+      "y": 46
+    },
+    {
+      "advance": 17.0,
+      "bearing_x": 0,
+      "bearing_y": -5,
+      "character": "\u25a3",
+      "codepoint": 9635,
+      "font_glyph_id": 3707,
+      "glyph_id": 99,
+      "height": 15,
+      "width": 17,
+      "x": 476,
+      "y": 46
+    },
+    {
+      "advance": 13.84375,
+      "bearing_x": 0,
+      "bearing_y": -5,
+      "character": "\u25c6",
+      "codepoint": 9670,
+      "font_glyph_id": 3742,
+      "glyph_id": 100,
+      "height": 15,
+      "width": 14,
+      "x": 4,
+      "y": 68
+    },
+    {
+      "advance": 15.703125,
+      "bearing_x": 0,
+      "bearing_y": -5,
+      "character": "\u25c9",
+      "codepoint": 9673,
+      "font_glyph_id": 3745,
+      "glyph_id": 101,
+      "height": 15,
+      "width": 16,
+      "x": 22,
+      "y": 68
     }
+  ],
+  "icon_domain": [
+    "\u2302",
+    "\u25a3",
+    "\u25c9",
+    "\u22ee",
+    "\u00d7",
+    "+",
+    "\u25c6",
+    "\u2197"
   ],
   "metrics": {
     "ascent": 17,

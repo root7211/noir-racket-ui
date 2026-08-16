@@ -8,16 +8,20 @@
              #:atlas "assets/fontc/noir-desktop-sans-18/atlas.r8")
  (visual-preset desktop-wide)
  (material-profile material-dark)
- (state [refresh-count 0])
+ (state [refresh-count 0]
+        [material-navigation 0])
  (action material-refresh (set refresh-count (+ refresh-count 1)))
+ (action material-select-overview (set material-navigation 0))
+ (action material-select-systems (set material-navigation 1))
+ (action material-select-alerts (set material-navigation 2))
 
  (stack #:id material-profile-dashboard #:width 1216 #:height 656 #:clip #t
         #:background (theme-color background)
-   (material-nav-rail #:id material-nav-rail #:active material-overview
+   (material-nav-rail #:id material-nav-rail #:state material-navigation #:active material-overview
                       #:font-face noir-desktop-sans-18 #:x 0 #:y 0 #:width 180 #:height 656
-     (material-destination #:id material-overview #:label-id material-overview-label #:label "Overview")
-     (material-destination #:id material-systems #:label-id material-systems-label #:label "Systems")
-     (material-destination #:id material-alerts #:label-id material-alerts-label #:label "Alerts"))
+     (material-destination #:id material-overview #:label-id material-overview-label #:label "Overview" #:icon dashboard #:on material-select-overview)
+     (material-destination #:id material-systems #:label-id material-systems-label #:label "Systems" #:icon status #:on material-select-systems)
+     (material-destination #:id material-alerts #:label-id material-alerts-label #:label "Alerts" #:icon more #:on material-select-alerts))
 
    (material-app-bar #:id material-app-bar #:title-id material-app-bar-title
                      #:title "System overview" #:font-face noir-desktop-sans-18

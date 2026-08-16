@@ -55,6 +55,9 @@ scene-glyph-draw-packets
          scene-log-browser-plans
          scene-font-assets
          scene-shadow-surface-plan
+         scene-navigation-selection-plan
+         (struct-out navigation-selection-entry)
+         (struct-out navigation-selection-plan)
          (struct-out shadow-surface)
          (struct-out shadow-surface-plan)
          (struct-out virtual-list-plan)
@@ -136,6 +139,10 @@ scene-glyph-draw-packets
 ;; physical rectangles and never adds mutable instance slots to the UI Scene.
 (define shadow-surface-plan-abi-schema "noir-shadow-surface-plan-v1")
 (define shadow-surface-plan-abi-revision 1)
+;; Navigation selection is a closed Material rail transition table. It owns only
+;; preallocated destination color fields and fixed event/action/state addresses.
+(define navigation-selection-plan-abi-schema "noir-navigation-selection-plan-v1")
+(define navigation-selection-plan-abi-revision 1)
 
 (define (abi-contracts->jsexpr)
   (hash 'virtual_list_plan
@@ -170,12 +177,15 @@ scene-glyph-draw-packets
               'revision rounded-surface-plan-abi-revision)
         'shadow_surface_plan
         (hash 'schema shadow-surface-plan-abi-schema
-              'revision shadow-surface-plan-abi-revision)))
+              'revision shadow-surface-plan-abi-revision)
+        'navigation_selection_plan
+        (hash 'schema navigation-selection-plan-abi-schema
+              'revision navigation-selection-plan-abi-revision)))
 
 (struct ui-node (tag id props children source) #:transparent)
 ;; Scene 以静态树和增量执行计划共同组成。state/actions 由 `noir-app`
 ;; 的扩展语法生成；普通 `(ui ...)` 保持空状态表，仍可独立使用。
-(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan) #:transparent)
+(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan navigation-selection-plan) #:transparent)
 ;; state-slot 的 index 是所有 runtime state read/write 的唯一地址；id/initial 只保留为启动期 proof 与可审计导出。
 (struct state-slot (index id initial) #:transparent)
 ;; action-slot 与 state-slot 一样为 macro expansion 生成的 dense canonical address。
@@ -275,6 +285,10 @@ scene-glyph-draw-packets
 ;; `source-instance-offset` are reverse-proof witnesses; runtime never follows them.
 (struct shadow-surface (id source-id source-instance-offset elevation layer x y width height radius-px blur-px opacity) #:transparent)
 (struct shadow-surface-plan (surfaces) #:transparent)
+;; One entry corresponds to a source destination stack plus its transparent fixed event target.
+;; The host changes only `instance_offset + 16` (RGBA) for old/new destinations.
+(struct navigation-selection-entry (destination-id event-node action-id action-slot-index target-value instance-offset selected-color unselected-color tile-ids) #:transparent)
+(struct navigation-selection-plan (rail-id state state-index initial-destination initial-value destinations) #:transparent)
 
 (define (value->jsexpr v)
   (cond
@@ -873,6 +887,27 @@ scene-glyph-draw-packets
                      'blur_px (shadow-surface-blur-px surface)
                      'opacity (shadow-surface-opacity surface))))))
 
+(define (navigation-selection-plan->jsexpr plan)
+  (and plan
+       (hash 'abi_schema navigation-selection-plan-abi-schema
+             'abi_revision navigation-selection-plan-abi-revision
+             'rail_id (symbol->string (navigation-selection-plan-rail-id plan))
+             'state (symbol->string (navigation-selection-plan-state plan))
+             'state_index (navigation-selection-plan-state-index plan)
+             'initial_destination (symbol->string (navigation-selection-plan-initial-destination plan))
+             'initial_value (navigation-selection-plan-initial-value plan)
+             'destinations
+             (for/list ([entry (in-list (navigation-selection-plan-destinations plan))])
+               (hash 'id (symbol->string (navigation-selection-entry-destination-id entry))
+                     'event_node (symbol->string (navigation-selection-entry-event-node entry))
+                     'action (symbol->string (navigation-selection-entry-action-id entry))
+                     'action_slot_index (navigation-selection-entry-action-slot-index entry)
+                     'target_value (navigation-selection-entry-target-value entry)
+                     'instance_offset (navigation-selection-entry-instance-offset entry)
+                     'selected_color (navigation-selection-entry-selected-color entry)
+                     'unselected_color (navigation-selection-entry-unselected-color entry)
+                     'tile_ids (navigation-selection-entry-tile-ids entry))))))
+
 (define (scene->jsexpr s #:build-attestation [build-attestation #f])
   (define base
     (hash 'abi_contracts (abi-contracts->jsexpr)
@@ -914,6 +949,7 @@ scene-glyph-draw-packets
         'visual_language_plan (visual-language-plan->jsexpr (scene-visual-language-plan s))
         'rounded_surface_plan (rounded-surface-plan->jsexpr (scene-rounded-surface-plan s))
         'shadow_surface_plan (shadow-surface-plan->jsexpr (scene-shadow-surface-plan s))
+        'navigation_selection_plan (navigation-selection-plan->jsexpr (scene-navigation-selection-plan s))
         'text_field_visuals (text-field-visuals->jsexpr s)))
   (if build-attestation
       (hash-set base 'build_attestation (value->jsexpr build-attestation))
@@ -965,7 +1001,8 @@ scene-glyph-draw-packets
         'render-schedules (scene-render-schedules s)
         'focus-graph (scene-focus-graph s)
         'keyboard-map (scene-keyboard-map s)
-        'shadow-surface-plan (scene-shadow-surface-plan s)))
+        'shadow-surface-plan (scene-shadow-surface-plan s)
+        'navigation-selection-plan (scene-navigation-selection-plan s)))
 
 ;; -------------------------- Expand-time parser ---------------------------
 
@@ -996,6 +1033,10 @@ scene-glyph-draw-packets
   (struct c-scrollbar-plan (id list-id track-id thumb-id track-instance-offset thumb-instance-offset track-x track-y track-width track-height thumb-height max-viewport tile-ids packet-worklist-index physical-slot-rule) #:transparent)
   (struct c-list-navigation-spec (id list-id scrollbar-id source) #:transparent)
   (struct c-list-navigation-plan (id list-id scrollbar-id page-step max-viewport transitions tile-ids packet-worklist-index physical-slot-rule) #:transparent)
+  ;; Material rail selection is a finite action-to-color transition table. It is
+  ;; emitted only after layout, event slots and task-local tiles have become stable.
+  (struct c-navigation-selection-entry (destination-id event-node-id action-id action-slot-index target-value instance-offset selected-color unselected-color tile-ids) #:transparent)
+  (struct c-navigation-selection-plan (rail-id state state-index initial-destination initial-value destinations) #:transparent)
   ;; Application-only spec: list and detail glyph addresses are resolved after layout.
   (struct c-log-browser-spec (id list-id detail-id append-updates source) #:transparent)
   (struct c-log-browser-plan (id list-id append-batch-id append-updates detail-node-id detail-glyph-offsets detail-tile-ids row-color-offsets levels packet-worklist-index) #:transparent)
@@ -1853,7 +1894,10 @@ scene-glyph-draw-packets
        (unless (memq value '(digits ascii-upper))
          (raise-syntax-error who "#:charset must be digits or ascii-upper" x))
        value]
-      [(#:background) (or (theme-token-value who 'color x) (syntax-e x))]
+      ;; `syntax-e` on a pair yields syntax fragments, not a numeric datum list.
+      ;; Normalize literal RGBA lists now so background-palette can remain a pure
+      ;; compile-time color lowering function (notably for transparent event witnesses).
+      [(#:background) (or (theme-token-value who 'color x) (syntax->datum x))]
       [(#:align #:justify)
        (define v (syntax-e x))
        (unless (memq v '(start center end stretch space-between))
@@ -2778,31 +2822,87 @@ scene-glyph-draw-packets
       [_ (raise-syntax-error 'material-filled-button
                              "expected stable IDs, static label/action, font face and fixed geometry" stx)]))
 
+  ;; Closed icon vocabulary. The glyph strings are admitted only when the declared
+  ;; build-time face covers them; no name/hash lookup crosses the Scene boundary.
+  (define material-icon-glyphs
+    (hash 'home "⌂" 'dashboard "▣" 'copy "▣" 'status "◉" 'more "⋮"
+          'close "×" 'add "+" 'pin "◆" 'export "↗"))
+
+  (define (material-icon-glyph who name source)
+    (hash-ref material-icon-glyphs name
+              (lambda ()
+                (raise-syntax-error who
+                                    (format "unknown icon ~a; ICON_V1 permits home/dashboard/copy/status/more/close/add/pin/export" name)
+                                    source))))
+
+  (define (parse-material-icon stx seen)
+    (syntax-parse stx
+      #:datum-literals (material-icon)
+      [(material-icon #:id id:id #:name name:id #:font-face face:id #:x x #:y y
+                      (~optional (~seq #:width width) #:defaults ([width #'20]))
+                      (~optional (~seq #:height height) #:defaults ([height #'20])))
+       (define id-value (syntax-e #'id))
+       (define name-value (syntax-e #'name))
+       (define glyph (material-icon-glyph 'material-icon name-value #'name))
+       (define x-value (expect-number 'material-icon #'x))
+       (define y-value (expect-number 'material-icon #'y))
+       (define width-value (expect-positive-integer 'material-icon #'width))
+       (define height-value (expect-positive-integer 'material-icon #'height))
+       (unless (and (<= width-value 32) (<= height-value 32))
+         (raise-syntax-error 'material-icon "v1 icons are fixed 1..32px static placements" stx))
+       (define lowered
+         (datum->syntax stx
+                        `(text #:id ,id-value #:x ,x-value #:y ,y-value #:width ,width-value #:height ,height-value
+                               #:font-face ,(syntax-e #'face) #:font-scale 0.90 #:text-inset 0.0 ,glyph)
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'material-icon
+                             "expected stable id, closed ICON_V1 name, explicit font face and fixed geometry"
+                             stx)]))
+
   (define (parse-material-nav-destination form active-id face x y width index)
     (syntax-parse form
       #:datum-literals (material-destination)
-      [(material-destination #:id id:id #:label-id label-id:id #:label label)
+      [(material-destination #:id id:id #:label-id label-id:id #:label label
+                             (~optional (~seq #:icon icon:id) #:defaults ([icon #'#f])) #:on action:id)
        (define destination-id (syntax-e #'id))
+       (define action-id (syntax-e #'action))
+       (define icon-value (syntax-e #'icon))
+       (when icon-value (material-icon-glyph 'material-destination icon-value #'icon))
        (define selected? (eq? destination-id active-id))
        (define label-value (component-literal-string 'material-destination #'label))
        (define row-y (+ y 24 (* index 64)))
-       (append
+       (define target-id (component-child-id destination-id 'target))
+       (define icon-id (component-child-id destination-id 'icon))
+       (define label-x (if icon-value 42 12))
+       (define label-width (- width (if icon-value 78 48)))
+       (define icon-datum
+         (if icon-value
+             `((material-icon #:id ,icon-id #:name ,icon-value #:font-face ,face #:x 12 #:y 14 #:width 20 #:height 20))
+             '()))
+       (values
         `(stack #:id ,destination-id #:x ,(+ x 12) #:y ,row-y #:width ,(- width 24) #:height 48
-                #:visual-anchor #t)
-        (if selected? (list '#:radius '(theme-radius control)) '())
-        `(#:background ,(if selected? '(theme-color secondary-container) '(theme-color surface-container))
-          (text #:id ,(syntax-e #'label-id) #:x 12 #:y 15
-                #:width ,(- width 48) #:height 20 #:font-face ,face
-                #:font-scale 0.72 #:text-inset 0.0 ,label-value)))]
+                #:visual-anchor #t #:radius (theme-radius control)
+          #:background ,(if selected? '(theme-color secondary-container) '(theme-color surface-container))
+           ;; This transparent quad exists only as a preallocated pointer/event witness.
+           ;; Selection color is patched on the parent destination stack, never on this target.
+           (button #:id ,target-id #:x 0 #:y 0 #:width ,(- width 24) #:height 48
+                   #:background (0.0 0.0 0.0 0.0) "" #:on ,action-id)
+           ,@icon-datum
+           (text #:id ,(syntax-e #'label-id) #:x ,label-x #:y 15
+                 #:width ,label-width #:height 20 #:font-face ,face
+                 #:font-scale 0.72 #:text-inset 0.0 ,label-value))
+        (list destination-id target-id action-id index))]
       [_ (raise-syntax-error 'material-nav-rail
-                             "each child must be (material-destination #:id id #:label-id id #:label string)" form)]))
+                             "each child must name stable id/label-id, static label and fixed #:on action" form)]))
 
   (define (parse-material-nav-rail stx seen)
     (syntax-parse stx
       #:datum-literals (material-nav-rail)
-      [(material-nav-rail #:id id:id #:active active:id #:font-face face:id #:x x #:y y #:width width #:height height
+      [(material-nav-rail #:id id:id #:state state:id #:active active:id #:font-face face:id #:x x #:y y #:width width #:height height
                           destination:expr ...+)
        (define id-value (syntax-e #'id))
+       (define state-value (syntax-e #'state))
        (define active-value (syntax-e #'active))
        (define x-value (expect-number 'material-nav-rail #'x))
        (define y-value (expect-number 'material-nav-rail #'y))
@@ -2813,11 +2913,15 @@ scene-glyph-draw-packets
        (define destination-forms (syntax->list #'(destination ...)))
        (unless (<= 3 (length destination-forms) 7)
          (raise-syntax-error 'material-nav-rail "requires 3 to 7 literal material-destination children" stx))
-       (define destination-datums
+       (define destination-results
          (for/list ([form (in-list destination-forms)] [index (in-naturals)])
-           (parse-material-nav-destination form active-value (syntax-e #'face)
-                                           x-value y-value width-value index)))
-       (unless (ormap (lambda (datum) (eq? (caddr datum) active-value)) destination-datums)
+           (call-with-values
+            (lambda () (parse-material-nav-destination form active-value (syntax-e #'face)
+                                                        x-value y-value width-value index))
+            list)))
+       (define destination-datums (map first destination-results))
+       (define destination-targets (map second destination-results))
+       (unless (ormap (lambda (target) (eq? (first target) active-value)) destination-targets)
          (raise-syntax-error 'material-nav-rail "#:active must name one declared material-destination" #'active))
        (define lowered
          (datum->syntax stx
@@ -2826,9 +2930,143 @@ scene-glyph-draw-packets
                                   #:radius (theme-radius panel) #:clip #t
                            ,@destination-datums)
                         stx stx))
-       (parse-node lowered seen)]
+       (define-values (rail seen*) (parse-node lowered seen))
+       (define colors (hash-ref (current-static-theme) 'color))
+       (define selected-color (hash-ref colors 'secondary-container))
+       (define unselected-color (hash-ref colors 'surface-container))
+       (define decorated-children
+         (for/list ([child (in-list (c-node-children rail))])
+           (define target (findf (lambda (item) (eq? (first item) (c-node-id child))) destination-targets))
+           (if target
+               (struct-copy c-node child
+                            [props (hash-set (hash-set (c-node-props child) 'navigation-selected-color selected-color)
+                                             'navigation-unselected-color unselected-color)])
+               child)))
+       ;; Keep compiler-only witnesses on primitive nodes. They are consumed after
+       ;; layout/event/action slots are frozen; no generic runtime component survives.
+       (values (struct-copy c-node rail
+                            [children decorated-children]
+                            [props (hash-set (hash-set (hash-set (c-node-props rail) 'navigation-state state-value)
+                                                        'navigation-active active-value)
+                                             'navigation-targets destination-targets)])
+               seen*)]
       [_ (raise-syntax-error 'material-nav-rail
-                             "expected fixed rail geometry, active destination, font face and 3–7 destinations" stx)]))
+                             "expected fixed rail geometry, selection state, active destination, font face and 3–7 destinations" stx)]))
+
+  ;; Material dialog/menu v1 are finite visual compositions. They do not create
+  ;; runtime overlay managers, focus traps, route stacks or floating-position solves.
+  ;; A dialog is always present in its static Scene; callers choose separate fixed
+  ;; scenes for alternate states until a future bounded visibility plan is proved.
+  (define (parse-material-dialog stx seen)
+    (syntax-parse stx
+      #:datum-literals (material-dialog)
+      [(material-dialog #:id id:id #:scrim-id scrim-id:id #:title-id title-id:id #:body-id body-id:id
+                        #:confirm-id confirm-id:id #:dismiss-id dismiss-id:id
+                        #:title title #:body body #:confirm-label confirm-label #:dismiss-label dismiss-label
+                        #:font-face face:id #:confirm-on confirm-action:id #:dismiss-on dismiss-action:id
+                        #:x x #:y y #:width width #:height height)
+       (define id-value (syntax-e #'id))
+       (define x-value (expect-number 'material-dialog #'x))
+       (define y-value (expect-number 'material-dialog #'y))
+       (define width-value (expect-positive-integer 'material-dialog #'width))
+       (define height-value (expect-positive-integer 'material-dialog #'height))
+       (unless (and (>= width-value 280) (>= height-value 180))
+         (raise-syntax-error 'material-dialog "requires fixed width >= 280px and height >= 180px" stx))
+       (define title-value (component-literal-string 'material-dialog #'title))
+       (define body-value (component-literal-string 'material-dialog #'body))
+       (define confirm-value (component-literal-string 'material-dialog #'confirm-label))
+       (define dismiss-value (component-literal-string 'material-dialog #'dismiss-label))
+       ;; The compiler-owned desktop-wide root is the canvas minus its fixed margin.
+       ;; Keep the static layer/scrim inside that frame rather than escaping to 1280×720.
+       (define frame-width (- (canvas-width) (* 2.0 (canvas-margin))))
+       (define frame-height (- (canvas-height) (* 2.0 (canvas-margin))))
+       (define layer-id (component-child-id id-value 'layer))
+       (define confirm-label-id (component-child-id (syntax-e #'confirm-id) 'label))
+       (define dismiss-label-id (component-child-id (syntax-e #'dismiss-id) 'label))
+       (define lowered
+         (datum->syntax stx
+                        `(stack #:id ,layer-id #:width ,frame-width #:height ,frame-height
+                                #:background (0.0 0.0 0.0 0.0)
+                           (overlay #:id ,(syntax-e #'scrim-id) #:width ,frame-width #:height ,frame-height
+                                    #:background (0.0 0.0 0.0 0.42) #:opacity 1.0 #:z 80)
+                           (surface #:id ,id-value #:x ,x-value #:y ,y-value #:width ,width-value #:height ,height-value
+                                    #:background (theme-color surface-container-highest)
+                                    #:elevation (theme-elevation level-3) #:radius (theme-radius card) #:clip #t
+                             (text #:id ,(syntax-e #'title-id) #:x 24 #:y 24 #:width ,(- width-value 48) #:height 30
+                                   #:font-face ,(syntax-e #'face) #:font-scale 0.82 #:text-inset 0.0 ,title-value)
+                             (text #:id ,(syntax-e #'body-id) #:x 24 #:y 68 #:width ,(- width-value 48) #:height 40
+                                   #:font-face ,(syntax-e #'face) #:font-scale 0.72 #:text-inset 0.0 ,body-value)
+                             (button #:id ,(syntax-e #'dismiss-id) #:x ,(- width-value 244) #:y ,(- height-value 56)
+                                     #:width 104 #:height 40 #:radius (theme-radius control)
+                                     #:background (theme-color surface-container-high) ,dismiss-value #:on ,(syntax-e #'dismiss-action))
+                             (text #:id ,dismiss-label-id #:x ,(- width-value 228) #:y ,(- height-value 49)
+                                   #:width 72 #:height 24 #:font-face ,(syntax-e #'face) #:font-scale 0.72 #:text-inset 0.0 ,dismiss-value)
+                             (button #:id ,(syntax-e #'confirm-id) #:x ,(- width-value 128) #:y ,(- height-value 56)
+                                     #:width 104 #:height 40 #:radius (theme-radius control)
+                                     #:background (theme-color primary) ,confirm-value #:on ,(syntax-e #'confirm-action))
+                             (text #:id ,confirm-label-id #:x ,(- width-value 112) #:y ,(- height-value 49)
+                                   #:width 72 #:height 24 #:font-face ,(syntax-e #'face) #:font-scale 0.72 #:text-inset 0.0 ,confirm-value)))
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'material-dialog
+                             "expected fixed IDs, literal text/actions, font face and fixed x/y/width/height"
+                             stx)]))
+
+  (define (parse-material-menu-item form face width index)
+    (syntax-parse form
+      #:datum-literals (material-menu-item)
+      [(material-menu-item #:id id:id #:label-id label-id:id #:label label
+                           (~optional (~seq #:icon icon:id) #:defaults ([icon #'#f])) #:on action:id)
+       (define id-value (syntax-e #'id))
+       (define target-id (component-child-id id-value 'target))
+       (define icon-value (syntax-e #'icon))
+       (when icon-value (material-icon-glyph 'material-menu-item icon-value #'icon))
+       (define icon-id (component-child-id id-value 'icon))
+       (define label-value (component-literal-string 'material-menu-item #'label))
+       (define row-y (+ 8 (* index 44)))
+       (define label-x (if icon-value 40 12))
+       (define label-width (- width (if icon-value 68 40)))
+       (define icon-datum
+         (if icon-value
+             `((material-icon #:id ,icon-id #:name ,icon-value #:font-face ,face #:x 12 #:y 10 #:width 20 #:height 20))
+             '()))
+       `(stack #:id ,id-value #:x 8 #:y ,row-y #:width ,(- width 16) #:height 40
+               #:visual-anchor #t #:radius (theme-radius control) #:background (theme-color surface-container-high)
+          (button #:id ,target-id #:x 0 #:y 0 #:width ,(- width 16) #:height 40
+                  #:background (0.0 0.0 0.0 0.0) "" #:on ,(syntax-e #'action))
+          ,@icon-datum
+          (text #:id ,(syntax-e #'label-id) #:x ,label-x #:y 10 #:width ,label-width #:height 22
+                #:font-face ,face #:font-scale 0.72 #:text-inset 0.0 ,label-value))]
+      [_ (raise-syntax-error 'material-menu "each child must name stable id/label-id, static label and action" form)]))
+
+  (define (parse-material-menu stx seen)
+    (syntax-parse stx
+      #:datum-literals (material-menu)
+      [(material-menu #:id id:id #:font-face face:id #:x x #:y y #:width width #:height height item:expr ...+)
+       (define id-value (syntax-e #'id))
+       (define x-value (expect-number 'material-menu #'x))
+       (define y-value (expect-number 'material-menu #'y))
+       (define width-value (expect-positive-integer 'material-menu #'width))
+       (define height-value (expect-positive-integer 'material-menu #'height))
+       (define items (syntax->list #'(item ...)))
+       (unless (<= 2 (length items) 6)
+         (raise-syntax-error 'material-menu "requires 2 to 6 literal material-menu-item children" stx))
+       (unless (>= height-value (+ 16 (* 44 (length items))))
+         (raise-syntax-error 'material-menu "fixed height cannot contain its declared menu items" #'height))
+       (define item-datums
+         (for/list ([item-form (in-list items)] [index (in-naturals)])
+           (parse-material-menu-item item-form (syntax-e #'face) width-value index)))
+       (define lowered
+         (datum->syntax stx
+                        `(surface #:id ,id-value #:x ,x-value #:y ,y-value #:width ,width-value #:height ,height-value
+                                  #:background (theme-color surface-container-highest)
+                                  #:elevation (theme-elevation level-2) #:radius (theme-radius card) #:clip #t
+                           ,@item-datums)
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'material-menu
+                             "expected fixed x/y/width/height, font face and 2–6 literal menu items"
+                             stx)]))
 
   ;; `repeat/ui` 只接受固定的 datum table：
   ;; (repeat/ui ((id state label)
@@ -3161,7 +3399,7 @@ scene-glyph-draw-packets
 
   (define (parse-node stx seen)
     (syntax-parse stx
-#:datum-literals (row column stack grid text text-field button transaction-button multi-field-event multi-action-event virtual-list scrollbar control-button metric-card form-row settings-form app-shell surface divider status-indicator toolbar table-header status-pill detail-panel workspace-shell page-header metric-tile action-button material-app-bar material-card material-filled-button material-nav-rail material-destination repeat/ui progress overlay spacer)
+#:datum-literals (row column stack grid text text-field button transaction-button multi-field-event multi-action-event virtual-list scrollbar control-button metric-card form-row settings-form app-shell surface divider status-indicator toolbar table-header status-pill detail-panel workspace-shell page-header metric-tile action-button material-app-bar material-card material-filled-button material-nav-rail material-destination material-icon material-dialog material-menu material-menu-item repeat/ui progress overlay spacer)
         [(app-shell form ...) (parse-app-shell stx seen)]
         [(surface form ...) (parse-surface stx seen)]
         [(divider form ...) (parse-divider stx seen)]
@@ -3178,6 +3416,9 @@ scene-glyph-draw-packets
         [(material-card form ...) (parse-material-card stx seen)]
         [(material-filled-button form ...) (parse-material-filled-button stx seen)]
         [(material-nav-rail form ...) (parse-material-nav-rail stx seen)]
+        [(material-icon form ...) (parse-material-icon stx seen)]
+        [(material-dialog form ...) (parse-material-dialog stx seen)]
+        [(material-menu form ...) (parse-material-menu stx seen)]
         [(form-row form ...) (parse-form-row stx seen)]
        [(settings-form form ...) (parse-settings-form stx seen)]
        [(metric-card form ...) (parse-metric-card stx seen)]
@@ -3342,6 +3583,22 @@ scene-glyph-draw-packets
                             (dynamic-progress-state node)
                             (hash-ref (c-node-props node) 'max)
                             layout)))
+    ;; A navigation action does not change geometry, but it owns the source destination
+    ;; color field. The exact static destination rect is therefore its complete damage
+    ;; witness for Action-Aware Tile Selection; runtime never broadens this range.
+    (define navigation-targets
+      (append-map
+       (lambda (rail)
+         (if (hash-has-key? (c-node-props rail) 'navigation-targets)
+             (hash-ref (c-node-props rail) 'navigation-targets)
+             '()))
+       (walk-nodes root)))
+    (define navigation-action-ids (map third navigation-targets))
+    (unless (= (length navigation-action-ids) (length (remove-duplicates navigation-action-ids)))
+      (raise-syntax-error 'material-nav-rail "each destination must own a unique selection action" (c-node-source root)))
+    (define navigation-damage-by-action
+      (for/hash ([target (in-list navigation-targets)])
+        (values (third target) (list (hash-ref layout-by-id (first target))))))
     (for/list ([action (in-list actions)])
       (define text-updates
         (for/list ([binding (in-list text-bindings)]
@@ -3351,9 +3608,11 @@ scene-glyph-draw-packets
         (for/list ([binding (in-list instance-bindings)]
                    #:when (eq? (c-instance-binding-state binding) (c-action-state action)))
           binding))
-      ;; 进度条的 maximum rect 就是保守 Damage Plan；动作不求新布局，只标记
-      ;; 固定 slot 的旧/新宽度可能覆盖的完整区域。
-      (define damage (map c-instance-binding-layout geometry-updates))
+      ;; 进度条的 maximum rect 与rail destination的固定surface都是保守Damage Plan；
+      ;; 动作不求新布局，只标记其编译期已证明的物理范围。
+      (define damage
+        (append (map c-instance-binding-layout geometry-updates)
+                (hash-ref navigation-damage-by-action (c-action-id action) '())))
       (c-action-plan (c-action-id action) action (hash-ref action-indexes (c-action-id action)) text-updates geometry-updates damage '())))
 
   ;; Background symbols lower to a fixed palette at compile time. They only alter static
@@ -3683,15 +3942,19 @@ scene-glyph-draw-packets
       (for ([action-id (in-list action-ids)])
         (unless (hash-has-key? action-indexes action-id)
           (raise-syntax-error 'multi-action-event "multi-action event references undeclared action ID" (c-node-source node))))
+      (define base-color (c-layout-color layout))
+      ;; A transparent event witness must remain invisible through hover/pressed state.
+      ;; Material navigation patches its parent destination surface through a proved plan.
+      (define transparent-witness? (equal? base-color '(0.0 0.0 0.0 0.0)))
+      (define hover-color (if transparent-witness? base-color '(0.15 0.86 0.58 1.0)))
+      (define pressed-color (if transparent-witness? base-color '(0.045 0.52 0.30 1.0)))
       (c-event slot
                 (c-node-id node)
                 action action-index action-ids transaction-op transaction-index
                 (c-layout-x layout) (c-layout-y layout)
                (c-layout-width layout) (c-layout-height layout)
                slot (c-layout-instance-offset layout)
-               (c-layout-color layout)
-               '(0.15 0.86 0.58 1.0)
-               '(0.045 0.52 0.30 1.0)
+               base-color hover-color pressed-color
                base-pos pressed-pos)))
 
   (define (compile-animation-tracks events)
@@ -5892,6 +6155,102 @@ scene-glyph-draw-packets
   (define (list-navigation-plans->datum plans)
     `(list ,@(map list-navigation-plan->datum plans)))
 
+  (define (compile-navigation-selection-plan root layouts states actions action-indexes schedule)
+    (define rails
+      (filter (lambda (node) (hash-has-key? (c-node-props node) 'navigation-targets))
+              (walk-nodes root)))
+    (cond
+      [(null? rails) #f]
+      [(pair? (cdr rails))
+       (raise-syntax-error 'navigation-selection-plan
+                           "v1 permits exactly one Material navigation rail per Scene"
+                           (c-node-source root))]
+      [else
+       (define rail (car rails))
+       (define rail-id (c-node-id rail))
+       (define state-id (hash-ref (c-node-props rail) 'navigation-state))
+       (define active-id (hash-ref (c-node-props rail) 'navigation-active))
+       (define targets (hash-ref (c-node-props rail) 'navigation-targets))
+       (define state-by-id (for/hash ([state (in-list states)]) (values (c-state-id state) state)))
+       (define state (hash-ref state-by-id state-id
+                               (lambda () (raise-syntax-error 'material-nav-rail
+                                                                "#:state must name a declared integer state"
+                                                                (c-node-source rail)))))
+       (define state-index (hash-ref (state-index-by-id states) state-id))
+       (define initial-value (c-state-initial state))
+       (unless (and (exact-integer? initial-value) (<= 0 initial-value) (< initial-value (length targets)))
+         (raise-syntax-error 'material-nav-rail
+                             "navigation selection state initial value must index one declared destination"
+                             (c-node-source rail)))
+       (define initial-target (list-ref targets initial-value))
+       (unless (eq? (first initial-target) active-id)
+         (raise-syntax-error 'material-nav-rail
+                             "#:active must agree with the initial navigation selection state"
+                             (c-node-source rail)))
+       (define layout-by-id (for/hash ([layout (in-list layouts)]) (values (c-layout-id layout) layout)))
+       (define node-by-id (for/hash ([node (in-list (walk-nodes root))]) (values (c-node-id node) node)))
+       (define action-by-id (for/hash ([action (in-list actions)]) (values (c-action-id action) action)))
+       (define task-by-id (for/hash ([task (in-list schedule)]) (values (c-frame-task-id task) task)))
+       (define entries
+         (for/list ([target (in-list targets)])
+           (define destination-id (first target))
+           (define event-node-id (second target))
+           (define action-id (third target))
+           (define target-value (fourth target))
+           (define source-node (hash-ref node-by-id destination-id))
+           (define source-layout (hash-ref layout-by-id destination-id))
+           (define event-layout (hash-ref layout-by-id event-node-id))
+           (define action (hash-ref action-by-id action-id
+                                    (lambda () (raise-syntax-error 'material-nav-rail
+                                                                     "destination #:on must name a declared action"
+                                                                     (c-node-source rail)))))
+           (unless (and (eq? (c-action-state action) state-id)
+                        (eq? (c-action-op action) 'set)
+                        (= (c-action-value action) target-value))
+             (raise-syntax-error 'material-nav-rail
+                                 "destination action must be a literal set of the rail selection state to its declaration index"
+                                 (c-node-source rail)))
+           (unless (and (eq? (c-node-tag source-node) 'stack)
+                        (positive? (c-layout-instance-offset source-layout))
+                        (= (c-layout-width source-layout) (c-layout-width event-layout))
+                        (= (c-layout-height source-layout) (c-layout-height event-layout)))
+             (raise-syntax-error 'navigation-selection-plan
+                                 "destination geometry/instance witness is not a fixed static rail surface"
+                                 (c-node-source rail)))
+           (define release-task
+             (hash-ref task-by-id (string->symbol (format "release-~a" event-node-id))
+                       (lambda () (raise-syntax-error 'navigation-selection-plan
+                                                        "destination event lacks a fixed release task"
+                                                        (c-node-source rail)))))
+           (define selected-color (hash-ref (c-node-props source-node) 'navigation-selected-color))
+           (define unselected-color (hash-ref (c-node-props source-node) 'navigation-unselected-color))
+           (c-navigation-selection-entry destination-id event-node-id action-id
+                                         (hash-ref action-indexes action-id) target-value
+                                         (c-layout-instance-offset source-layout)
+                                         selected-color unselected-color
+                                         (c-frame-task-tile-ids release-task))))
+       (c-navigation-selection-plan rail-id state-id state-index active-id initial-value entries)]))
+
+  (define (navigation-selection-plan->datum plan)
+    (if (not plan)
+        '#f
+        `(navigation-selection-plan ',(c-navigation-selection-plan-rail-id plan)
+                                    ',(c-navigation-selection-plan-state plan)
+                                    ,(c-navigation-selection-plan-state-index plan)
+                                    ',(c-navigation-selection-plan-initial-destination plan)
+                                    ,(c-navigation-selection-plan-initial-value plan)
+                                    (list ,@(for/list ([entry (in-list (c-navigation-selection-plan-destinations plan))])
+                                              `(navigation-selection-entry
+                                                ',(c-navigation-selection-entry-destination-id entry)
+                                                ',(c-navigation-selection-entry-event-node-id entry)
+                                                ',(c-navigation-selection-entry-action-id entry)
+                                                ,(c-navigation-selection-entry-action-slot-index entry)
+                                                ,(c-navigation-selection-entry-target-value entry)
+                                                ,(c-navigation-selection-entry-instance-offset entry)
+                                                ',(c-navigation-selection-entry-selected-color entry)
+                                                ',(c-navigation-selection-entry-unselected-color entry)
+                                                ',(c-navigation-selection-entry-tile-ids entry)))))))
+
   (define (virtual-list-plan->datum plan)
     `(virtual-list-plan ',(c-virtual-list-plan-id plan)
                         ,(c-virtual-list-plan-capacity plan)
@@ -6348,6 +6707,7 @@ scene-glyph-draw-packets
     ;; 的 syntax context，展开产物中的 ui-node/hash/action-plan 会变成未绑定标识符。
     (datum->syntax #'ui-node datum source source)))
 
+
 ;; ------------------------------ User macros ------------------------------
 
 (define-syntax (ui stx)
@@ -6407,8 +6767,9 @@ scene-glyph-draw-packets
                     [DYNAMIC-FONT-CELL-PLAN (datum-stx stx '#f)]
                     [VISUAL-LANGUAGE (datum-stx stx '(visual-language-plan 'bench 640.0 360.0 16.0))]
                     [ROUNDED-SURFACES (datum-stx stx (rounded-surface-plan->datum rounded-surfaces))]
-                    [SHADOW-SURFACES (datum-stx stx (shadow-surface-plan->datum shadow-surfaces))])
-       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES))]
+                    [SHADOW-SURFACES (datum-stx stx (shadow-surface-plan->datum shadow-surfaces))]
+                    [NAVIGATION-SELECTION (datum-stx stx '#f)])
+       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION))]
     [(_ root:expr extra:expr ...)
      (raise-syntax-error 'ui "expects exactly one root layout node" stx)]))
 
@@ -6546,6 +6907,8 @@ scene-glyph-draw-packets
      (define coalesced-batches (annotate-multi-action-fusion-admission profile-selected-batches events annotated-schedule root-node))
      (define row-activation-plans
        (compile-row-activation-plans root-node plans action-indexes annotated-schedule coalesced-batches))
+     (define navigation-selection-plan
+       (compile-navigation-selection-plan root-node layouts states actions action-indexes annotated-schedule))
      (with-syntax ([ROOT (datum-stx stx (node->datum root-node))]
                    [STATIC (datum-stx stx (- total dynamic))]
                    [DYNAMIC (datum-stx stx dynamic)]
@@ -6583,7 +6946,8 @@ scene-glyph-draw-packets
                      [DYNAMIC-FONT-CELL-PLAN (datum-stx stx dynamic-font-cell-plan-datum)]
                      [VISUAL-LANGUAGE (datum-stx stx visual-language-datum)]
                      [ROUNDED-SURFACES (datum-stx stx (rounded-surface-plan->datum rounded-surfaces))]
-                     [SHADOW-SURFACES (datum-stx stx (shadow-surface-plan->datum shadow-surfaces))])
+                     [SHADOW-SURFACES (datum-stx stx (shadow-surface-plan->datum shadow-surfaces))]
+                     [NAVIGATION-SELECTION (datum-stx stx (navigation-selection-plan->datum navigation-selection-plan))])
        #'(begin
-           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES))
+           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION))
            (provide app-scene)))]))
