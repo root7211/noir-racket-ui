@@ -7,6 +7,7 @@
          (only-in "../examples/component-dashboard.rkt" [app-scene component-app-scene])
          (only-in "../examples/log-browser.rkt" [app-scene log-browser-app-scene])
          (only-in "../examples/realtime-monitor.rkt" [app-scene realtime-monitor-app-scene])
+         (only-in "../examples/material-profile-dashboard.rkt" [app-scene material-profile-app-scene])
          (only-in "../examples/repeat-dashboard.rkt" [app-scene repeat-app-scene])
          (only-in "../examples/focus-dashboard.rkt" [app-scene focus-app-scene])
          (only-in "../examples/command-dashboard.rkt" [app-scene command-app-scene])
@@ -88,6 +89,22 @@
                          (scene-layout-plan realtime-monitor-app-scene)))
 (check-equal? (map event-binding-node (scene-event-map log-browser-app-scene)) '(append-tail))
 (check-equal? (map event-binding-node (scene-event-map realtime-monitor-app-scene)) '(refresh-telemetry))
+
+;; Material Profile v1 is a compile-time token source and syntax-only component layer.
+;; Its Scene contains only established primitives, fixed rounded slots and one precomputed action path.
+(define material-layout (scene-layout-plan material-profile-app-scene))
+(define material-component-tags '(material-app-bar material-card material-filled-button material-nav-rail material-destination))
+(check-false (ormap (lambda (entry) (memq (hash-ref entry 'tag) material-component-tags)) material-layout))
+(for ([id '(material-nav-rail material-overview material-app-bar material-summary-card
+             material-performance-card material-activity-card material-refresh-button)])
+  (check-not-false (findf (lambda (entry) (eq? (hash-ref entry 'id) id)) material-layout)))
+(check-equal? (hash-ref (hash-ref (scene->jsexpr material-profile-app-scene) 'visual_language_plan) 'preset) "desktop-wide")
+(check-equal? (map event-binding-node (scene-event-map material-profile-app-scene)) '(material-refresh-button))
+(check-equal? (map action-plan-id (scene-actions material-profile-app-scene)) '(material-refresh))
+(define material-scene-json (scene->jsexpr material-profile-app-scene))
+(define material-rounded-json (hash-ref material-scene-json 'rounded_surface_plan))
+(check-equal? (hash-ref material-rounded-json 'abi_schema) "noir-rounded-surface-plan-v1")
+(check-true (>= (length (hash-ref material-rounded-json 'surfaces)) 6))
 
 ;; Static repeater oracle: the datum table produces four distinct base card subtrees. Its
 ;; collection cardinality enters every existing static resource plan; no runtime list/key exists.

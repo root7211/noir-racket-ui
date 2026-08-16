@@ -1662,8 +1662,8 @@ scene-glyph-draw-packets
           [(elevation)
            (lambda (value)
              (define number (syntax-e value))
-             (unless (and (exact-integer? number) (<= 0 number 3))
-               (raise-syntax-error 'theme "elevation tokens must be integer literals in [0, 3]" value))
+             (unless (and (exact-integer? number) (<= 0 number 5))
+               (raise-syntax-error 'theme "elevation tokens must be integer literals in [0, 5]" value))
              number)]
           [else (raise-syntax-error 'theme "theme sections are color, space, type, radius, or elevation" section)]))
       (hash-set! parsed kind (parse-theme-pairs 'theme section parser)))
@@ -1678,6 +1678,89 @@ scene-glyph-draw-packets
           ;; Preserve backwards compatibility for existing themes while making elevation
           ;; a static, versionable semantic token for visual-language applications.
           'elevation (hash-ref parsed 'elevation (hash 'flat 0 'border 1 'raised 2 'overlay 3))))
+
+  ;; Material Profile v1 is deliberately a compile-time-only baseline, not a
+  ;; runtime theme API.  It exposes semantic M3-like tokens plus Noir aliases
+  ;; required by the primitive desktop macros, all resolved before a Scene exists.
+  (define material-profile-table
+    (hash
+     'material-dark
+     (hash
+      'id 'material-dark
+      'color
+      (hash
+       ;; Material semantic roles.
+       'primary '(0.8156862745 0.7372549020 1.0 1.0)
+       'on-primary '(0.2196078431 0.1176470588 0.4470588235 1.0)
+       'primary-container '(0.3098039216 0.2156862745 0.5450980392 1.0)
+       'on-primary-container '(0.9176470588 0.8549019608 1.0 1.0)
+       'secondary '(0.7960784314 0.7411764706 0.8666666667 1.0)
+       'on-secondary '(0.1960784314 0.1647058824 0.2549019608 1.0)
+       'secondary-container '(0.3098039216 0.2784313725 0.3843137255 1.0)
+       'on-secondary-container '(0.9098039216 0.8313725490 1.0 1.0)
+       'tertiary '(0.9372549020 0.7058823529 0.8470588235 1.0)
+       'on-tertiary '(0.2862745098 0.1098039216 0.2470588235 1.0)
+       'tertiary-container '(0.4862745098 0.3058823529 0.4431372549 1.0)
+       'on-tertiary-container '(1.0 0.8470588235 0.9411764706 1.0)
+       'error '(1.0 0.7058823529 0.7058823529 1.0)
+       'on-error '(0.4117647059 0.0 0.0 1.0)
+       'error-container '(0.5450980392 0.1019607843 0.1019607843 1.0)
+       'on-error-container '(1.0 0.8549019608 0.8470588235 1.0)
+       'background '(0.0784313725 0.0705882353 0.0941176471 1.0)
+       'on-background '(0.9019607843 0.8784313725 0.9137254902 1.0)
+       'surface '(0.0784313725 0.0705882353 0.0941176471 1.0)
+       'surface-container-low '(0.1176470588 0.1098039216 0.1333333333 1.0)
+       'surface-container '(0.1294117647 0.1215686275 0.1490196078 1.0)
+       'surface-container-high '(0.1686274510 0.1607843137 0.1882352941 1.0)
+       'surface-container-highest '(0.2117647059 0.2039215686 0.2313725490 1.0)
+       'on-surface '(0.9019607843 0.8784313725 0.9137254902 1.0)
+       'surface-variant '(0.2823529412 0.2666666667 0.3058823529 1.0)
+       'on-surface-variant '(0.7921568627 0.7686274510 0.8156862745 1.0)
+       'outline '(0.5725490196 0.5607843137 0.6000000000 1.0)
+       'outline-variant '(0.2862745098 0.2666666667 0.3058823529 1.0)
+       'inverse-surface '(0.9019607843 0.8784313725 0.9137254902 1.0)
+       'inverse-on-surface '(0.1882352941 0.1803921569 0.2078431373 1.0)
+       'inverse-primary '(0.4039215686 0.3215686275 0.6823529412 1.0)
+       ;; Noir compatibility aliases; these retain a static semantic mapping.
+       'canvas '(0.0784313725 0.0705882353 0.0941176471 1.0)
+       'canvas-quiet '(0.0784313725 0.0705882353 0.0941176471 1.0)
+       'rail '(0.1294117647 0.1215686275 0.1490196078 1.0)
+       'surface-raised '(0.1686274510 0.1607843137 0.1882352941 1.0)
+       'surface-hover '(0.2117647059 0.2039215686 0.2313725490 1.0)
+       'surface-active '(0.3176470588 0.2980392157 0.3411764706 1.0)
+       'surface-overlay '(0.1686274510 0.1607843137 0.1882352941 1.0)
+       'border-subtle '(0.2862745098 0.2666666667 0.3058823529 1.0)
+       'border-strong '(0.5725490196 0.5607843137 0.6000000000 1.0)
+       'text-primary '(0.9019607843 0.8784313725 0.9137254902 1.0)
+       'text-secondary '(0.7921568627 0.7686274510 0.8156862745 1.0)
+       'text-muted '(0.5725490196 0.5607843137 0.6000000000 1.0)
+       'text-inverse '(0.2196078431 0.1176470588 0.4470588235 1.0)
+       'accent '(0.8156862745 0.7372549020 1.0 1.0)
+       'accent-muted '(0.3098039216 0.2156862745 0.5450980392 1.0)
+       'success '(0.4784313725 0.8392156863 0.6588235294 1.0)
+       'warning '(1.0 0.7176470588 0.3019607843 1.0)
+       'danger '(1.0 0.7058823529 0.7058823529 1.0)
+       'info '(0.5843137255 0.7686274510 1.0 1.0)
+       'panel '(0.1294117647 0.1215686275 0.1490196078 1.0)
+       'header '(0.1294117647 0.1215686275 0.1490196078 1.0)
+       'text '(0.9019607843 0.8784313725 0.9137254902 1.0)
+       'muted '(0.5725490196 0.5607843137 0.6000000000 1.0))
+      'space (hash 'hairline 1 'xxs 2 'xs 4 'sm 8 'md 12 'control 12 'card 16 'lg 24 'xl 32 'xxl 40 'page 32 'section 48)
+      'type (hash 'meta 11 'caption 12 'body 14 'label 14 'control 14 'section 22 'title 28 'display 36)
+      'radius (hash 'compact 4 'control 20 'field 4 'card 12 'panel 12 'overlay 28 'full 999)
+      'elevation (hash 'flat 0 'border 1 'raised 1 'overlay 3 'level-0 0 'level-1 1 'level-2 2 'level-3 3 'level-4 4 'level-5 5))))
+
+  (define (parse-material-profile-form form)
+    (syntax-parse form
+      #:datum-literals (material-profile)
+      [(material-profile profile:id)
+       (define id (syntax-e #'profile))
+       (hash-ref material-profile-table id
+                 (lambda ()
+                   (raise-syntax-error 'material-profile
+                                       "expected the frozen profile material-dark" #'profile)))]
+      [_ (raise-syntax-error 'material-profile
+                             "expected (material-profile material-dark)" form)]))
 
   (define (theme-token-value who kind x)
     (define call (syntax->list x))
@@ -2251,8 +2334,8 @@ scene-glyph-draw-packets
        (define elevation-value
          (or (theme-token-value 'surface 'elevation #'elevation)
              (let ([value (syntax-e #'elevation)])
-               (unless (and (exact-integer? value) (<= 0 value 3))
-                 (raise-syntax-error 'surface "#:elevation expects 0..3 or (theme-elevation token)" #'elevation))
+               (unless (and (exact-integer? value) (<= 0 value 5))
+                 (raise-syntax-error 'surface "#:elevation expects 0..5 or (theme-elevation token)" #'elevation))
                value)))
        (when (and (> elevation-value 0) (not height-value))
          (raise-syntax-error 'surface "border/raised/overlay surface needs a fixed #:height" stx))
@@ -2280,7 +2363,7 @@ scene-glyph-draw-packets
                         stx stx))
        (parse-node lowered seen)]
        [_ (raise-syntax-error 'surface
-                             "expected (surface #:id id [#:x n] [#:y n] [#:width n] [#:height n] [#:background color] [#:elevation 0..3] [#:radius n] [#:clip bool] child ...+)"
+                             "expected (surface #:id id [#:x n] [#:y n] [#:width n] [#:height n] [#:background color] [#:elevation 0..5] [#:radius n] [#:clip bool] child ...+)"
                              stx)]))
 
   (define (parse-divider stx seen)
@@ -2569,6 +2652,142 @@ scene-glyph-draw-packets
           stx stx))
        (parse-node lowered seen)]
       [_ (raise-syntax-error 'action-button "expected stable IDs, static label, action and fixed geometry" stx)]))
+
+  ;; Material Profile v1 components are syntax compression over the existing
+  ;; primitive grammar. They intentionally omit ripple, free reflow, icon lookup,
+  ;; runtime theme switching, and arbitrary motion.
+  (define (parse-material-app-bar stx seen)
+    (syntax-parse stx
+      #:datum-literals (material-app-bar)
+      [(material-app-bar #:id id:id #:title-id title-id:id #:title title #:font-face face:id
+                         #:x x #:y y #:width width
+                         (~optional (~seq #:height height) #:defaults ([height #'64]))
+                         (~optional (~seq #:background background) #:defaults ([background #'(theme-color surface-container)])))
+       (define id-value (syntax-e #'id))
+       (define x-value (expect-number 'material-app-bar #'x))
+       (define y-value (expect-number 'material-app-bar #'y))
+       (define width-value (expect-positive-integer 'material-app-bar #'width))
+       (define height-value (expect-positive-integer 'material-app-bar #'height))
+       (define title-value (component-literal-string 'material-app-bar #'title))
+       (define lowered
+         (datum->syntax stx
+                        `(surface #:id ,id-value #:x ,x-value #:y ,y-value
+                                  #:width ,width-value #:height ,height-value
+                                  #:background ,(syntax->datum #'background)
+                                  #:elevation (theme-elevation level-0) #:clip #t
+                           (text #:id ,(syntax-e #'title-id) #:x 24 #:y 17
+                                 #:width ,(- width-value 48) #:height 30 #:font-face ,(syntax-e #'face)
+                                 #:font-scale 0.82 #:text-inset 0.0 ,title-value)
+                           (overlay #:id ,(component-child-id id-value 'separator)
+                                    #:x 0 #:y ,(- height-value 1) #:width ,width-value #:height 1
+                                    #:background (theme-color outline-variant) #:opacity 1.0 #:z 8))
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'material-app-bar
+                             "expected a fixed title, font face and x/y/width geometry" stx)]))
+
+  (define (parse-material-card stx seen)
+    (syntax-parse stx
+      #:datum-literals (material-card)
+      [(material-card #:id id:id #:x x #:y y #:width width #:height height
+                      (~optional (~seq #:background background) #:defaults ([background #'(theme-color surface-container-low)]))
+                      (~optional (~seq #:elevation elevation) #:defaults ([elevation #'(theme-elevation level-1)]))
+                      child:expr ...+)
+       (define id-value (syntax-e #'id))
+       (define x-value (expect-number 'material-card #'x))
+       (define y-value (expect-number 'material-card #'y))
+       (define width-value (expect-positive-integer 'material-card #'width))
+       (define height-value (expect-positive-integer 'material-card #'height))
+       (define lowered
+         (datum->syntax stx
+                        `(surface #:id ,id-value #:x ,x-value #:y ,y-value #:width ,width-value #:height ,height-value
+                                  #:background ,(syntax->datum #'background)
+                                  #:elevation ,(syntax->datum #'elevation) #:radius (theme-radius card) #:clip #t
+                           ,@(map syntax->datum (syntax->list #'(child ...))))
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'material-card
+                             "expected fixed x/y/width/height geometry and one or more primitive children" stx)]))
+
+  (define (parse-material-filled-button stx seen)
+    (syntax-parse stx
+      #:datum-literals (material-filled-button)
+      [(material-filled-button #:id id:id #:button-id button-id:id #:label-id label-id:id
+                               #:label label #:font-face face:id #:on action:id #:x x #:y y
+                               (~optional (~seq #:width width) #:defaults ([width #'120]))
+                               (~optional (~seq #:height height) #:defaults ([height #'40])))
+       (define id-value (syntax-e #'id))
+       (define x-value (expect-number 'material-filled-button #'x))
+       (define y-value (expect-number 'material-filled-button #'y))
+       (define width-value (expect-positive-integer 'material-filled-button #'width))
+       (define height-value (expect-positive-integer 'material-filled-button #'height))
+       (define label-value (component-literal-string 'material-filled-button #'label))
+       (define lowered
+         (datum->syntax stx
+                        `(stack #:id ,id-value #:x ,x-value #:y ,y-value #:width ,width-value #:height ,height-value
+                                #:background (theme-color primary)
+                           (button #:id ,(syntax-e #'button-id) #:x ,x-value #:y ,y-value
+                                   #:width ,width-value #:height ,height-value #:radius (theme-radius control)
+                                   #:background (theme-color primary) ,label-value #:on ,(syntax-e #'action))
+                           (text #:id ,(syntax-e #'label-id) #:x ,(+ x-value 16) #:y ,(+ y-value 7)
+                                 #:width ,(- width-value 32) #:height ,(- height-value 14)
+                                 #:font-face ,(syntax-e #'face) #:font-scale 0.72 #:text-inset 0.0 ,label-value))
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'material-filled-button
+                             "expected stable IDs, static label/action, font face and fixed geometry" stx)]))
+
+  (define (parse-material-nav-destination form active-id face x y width index)
+    (syntax-parse form
+      #:datum-literals (material-destination)
+      [(material-destination #:id id:id #:label-id label-id:id #:label label)
+       (define destination-id (syntax-e #'id))
+       (define selected? (eq? destination-id active-id))
+       (define label-value (component-literal-string 'material-destination #'label))
+       (define row-y (+ y 24 (* index 64)))
+       (append
+        `(stack #:id ,destination-id #:x ,(+ x 12) #:y ,row-y #:width ,(- width 24) #:height 48
+                #:visual-anchor #t)
+        (if selected? (list '#:radius '(theme-radius control)) '())
+        `(#:background ,(if selected? '(theme-color secondary-container) '(theme-color surface-container))
+          (text #:id ,(syntax-e #'label-id) #:x 12 #:y 15
+                #:width ,(- width 48) #:height 20 #:font-face ,face
+                #:font-scale 0.72 #:text-inset 0.0 ,label-value)))]
+      [_ (raise-syntax-error 'material-nav-rail
+                             "each child must be (material-destination #:id id #:label-id id #:label string)" form)]))
+
+  (define (parse-material-nav-rail stx seen)
+    (syntax-parse stx
+      #:datum-literals (material-nav-rail)
+      [(material-nav-rail #:id id:id #:active active:id #:font-face face:id #:x x #:y y #:width width #:height height
+                          destination:expr ...+)
+       (define id-value (syntax-e #'id))
+       (define active-value (syntax-e #'active))
+       (define x-value (expect-number 'material-nav-rail #'x))
+       (define y-value (expect-number 'material-nav-rail #'y))
+       (define width-value (expect-positive-integer 'material-nav-rail #'width))
+       (define height-value (expect-positive-integer 'material-nav-rail #'height))
+       (unless (>= width-value 72)
+         (raise-syntax-error 'material-nav-rail "#:width must be at least 72px" #'width))
+       (define destination-forms (syntax->list #'(destination ...)))
+       (unless (<= 3 (length destination-forms) 7)
+         (raise-syntax-error 'material-nav-rail "requires 3 to 7 literal material-destination children" stx))
+       (define destination-datums
+         (for/list ([form (in-list destination-forms)] [index (in-naturals)])
+           (parse-material-nav-destination form active-value (syntax-e #'face)
+                                           x-value y-value width-value index)))
+       (unless (ormap (lambda (datum) (eq? (caddr datum) active-value)) destination-datums)
+         (raise-syntax-error 'material-nav-rail "#:active must name one declared material-destination" #'active))
+       (define lowered
+         (datum->syntax stx
+                        `(surface #:id ,id-value #:x ,x-value #:y ,y-value #:width ,width-value #:height ,height-value
+                                  #:background (theme-color surface-container) #:elevation (theme-elevation level-0)
+                                  #:radius (theme-radius panel) #:clip #t
+                           ,@destination-datums)
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'material-nav-rail
+                             "expected fixed rail geometry, active destination, font face and 3–7 destinations" stx)]))
 
   ;; `repeat/ui` 只接受固定的 datum table：
   ;; (repeat/ui ((id state label)
@@ -2901,7 +3120,7 @@ scene-glyph-draw-packets
 
   (define (parse-node stx seen)
     (syntax-parse stx
-#:datum-literals (row column stack grid text text-field button transaction-button multi-field-event multi-action-event virtual-list scrollbar control-button metric-card form-row settings-form app-shell surface divider status-indicator toolbar table-header status-pill detail-panel workspace-shell page-header metric-tile action-button repeat/ui progress overlay spacer)
+#:datum-literals (row column stack grid text text-field button transaction-button multi-field-event multi-action-event virtual-list scrollbar control-button metric-card form-row settings-form app-shell surface divider status-indicator toolbar table-header status-pill detail-panel workspace-shell page-header metric-tile action-button material-app-bar material-card material-filled-button material-nav-rail material-destination repeat/ui progress overlay spacer)
         [(app-shell form ...) (parse-app-shell stx seen)]
         [(surface form ...) (parse-surface stx seen)]
         [(divider form ...) (parse-divider stx seen)]
@@ -2914,6 +3133,10 @@ scene-glyph-draw-packets
         [(page-header form ...) (parse-page-header stx seen)]
         [(metric-tile form ...) (parse-metric-tile stx seen)]
         [(action-button form ...) (parse-action-button-v2 stx seen)]
+        [(material-app-bar form ...) (parse-material-app-bar stx seen)]
+        [(material-card form ...) (parse-material-card stx seen)]
+        [(material-filled-button form ...) (parse-material-filled-button stx seen)]
+        [(material-nav-rail form ...) (parse-material-nav-rail stx seen)]
         [(form-row form ...) (parse-form-row stx seen)]
        [(settings-form form ...) (parse-settings-form stx seen)]
        [(metric-card form ...) (parse-metric-card stx seen)]
@@ -2934,7 +3157,7 @@ scene-glyph-draw-packets
       [(overlay form ...) (parse-overlay stx (syntax->list #'(form ...)) seen)]
       [(spacer form ...) (parse-spacer stx (syntax->list #'(form ...)) seen)]
       [_ (raise-syntax-error 'ui
-                             "expected row, column, stack, grid, text, text-field, button, transaction-button, multi-field-event, multi-action-event, virtual-list, scrollbar, control-button, metric-card, form-row, settings-form, app-shell, surface, divider, status-indicator, toolbar, table-header, status-pill, detail-panel, workspace-shell, page-header, metric-tile, action-button, repeat/ui (as a layout child), progress, overlay, or spacer"
+                             "expected an established primitive, desktop component, or Material Profile v1 component as a layout child"
                              stx)]))
 
   (define (dynamic-node? n)
@@ -6066,10 +6289,11 @@ scene-glyph-draw-packets
      (define font-asset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'font-asset)) forms))
      (define dynamic-font-cell-asset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'dynamic-font-cell-asset)) forms))
      (define theme-forms (filter (lambda (form) (eq? (form-head-symbol form) 'theme)) forms))
+     (define material-profile-forms (filter (lambda (form) (eq? (form-head-symbol form) 'material-profile)) forms))
      (define visual-preset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'visual-preset)) forms))
      (define layout-forms
        (filter (lambda (form)
-                 (not (memq (form-head-symbol form) '(state action commit-group command-table list-navigation log-browser font-asset dynamic-font-cell-asset theme visual-preset))))
+                 (not (memq (form-head-symbol form) '(state action commit-group command-table list-navigation log-browser font-asset dynamic-font-cell-asset theme material-profile visual-preset))))
                forms))
      (unless (= (length state-forms) 1)
        (raise-syntax-error 'noir-app "expects exactly one (state ...) form" stx))
@@ -6077,9 +6301,17 @@ scene-glyph-draw-packets
        (raise-syntax-error 'noir-app "expects exactly one root layout form" stx))
      (unless (<= (length theme-forms) 1)
        (raise-syntax-error 'noir-app "accepts at most one (theme ...) declaration" stx))
+     (unless (<= (length material-profile-forms) 1)
+       (raise-syntax-error 'noir-app "accepts at most one (material-profile ...) declaration" stx))
+     (when (and (pair? theme-forms) (pair? material-profile-forms))
+       (raise-syntax-error 'noir-app "(theme ...) and (material-profile ...) are mutually exclusive compile-time token sources" stx))
      (unless (<= (length visual-preset-forms) 1)
        (raise-syntax-error 'noir-app "accepts at most one (visual-preset ...) declaration" stx))
-     (define static-theme (and (pair? theme-forms) (parse-theme-form (car theme-forms))))
+     (define static-theme
+       (cond
+         [(pair? theme-forms) (parse-theme-form (car theme-forms))]
+         [(pair? material-profile-forms) (parse-material-profile-form (car material-profile-forms))]
+         [else #f]))
      (define static-visual-preset
        (if (pair? visual-preset-forms)
            (parse-visual-preset-form (car visual-preset-forms))

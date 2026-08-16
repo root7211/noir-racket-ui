@@ -82,6 +82,18 @@ bash tools/verify_rounded_surface_plan.sh
 
 该回归执行Racket测试、Rust 1.87/wgpu 30 release build、双应用Scene/视觉结构oracle、真实X11/Vulkan圆角帧、四类篡改拒绝，以及日志浏览器和实时监控表格的原有键鼠交互回归。设计契约与边界见[`rounded_surface_plan v1 ABI`](ROUNDED_SURFACE_PLAN_ABI_V1.md)，正式验收记录见[交付报告](ROUNDED_SURFACE_PLAN_V1_REPORT.md)；同一Scene geometry下的真实v2/v3对照为[日志浏览器](out/log-browser-rounded-v2-v3-comparison.png)与[实时监控表格](out/realtime-monitor-rounded-v2-v3-comparison.png)。
 
+## Material Profile v1
+
+Noir 现在提供受限的 `(material-profile material-dark)`：它把Material Design 3的语义颜色、surface阶梯、shape、space/type、0–5 elevation token以及small app bar、card、filled button、navigation rail编译为已有的固定primitive Scene。profile仅在Racket宏展开期存在；Scene、Rust host与WGSL都不会持有或查询运行时Material theme对象。Material高层组件全部内联为`stack`、`surface`、`button`、`text`与`overlay`，因此不增加组件树、theme lookup、自由reflow或GPU ABI。
+
+[`examples/material-profile-dashboard.rkt`](examples/material-profile-dashboard.rkt) 是完整桌面示例：1280×720固定Scene、3个静态rail destination、active pill、small app bar、三张rounded card和一个filled button。真实X11/Vulkan点击按钮只会触发预先确定的`material-refresh` action、一个state slot写入及3个glyph ID patch。
+
+```bash
+bash tools/verify_material_profile_v1.sh
+```
+
+该入口覆盖Racket全量回归、primitive-only Scene oracle、未声明active destination/错误destination数量/theme-profile混用三类宏展开拒绝、Rust 1.87/wgpu 30 build、真实X11/Vulkan渲染与按钮交互。规范、token映射、性能边界和官方资料见[Material Profile v1](MATERIAL_PROFILE_V1.md)及[交付报告](MATERIAL_PROFILE_V1_REPORT.md)；真实输出见[Material Profile截图](out/material-profile-dashboard-v1.png)。
+
 ## 桌面组件宏 v1
 
 Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`detail-panel`是**编译期语法压缩**，而不是运行时组件对象。宏展开后只剩已有的`column`、`stack`、`text`和`button`，并保留调用者明确给出的detail、button和label ID。因此已有state slot、font placement、event map、tile和worklist无需增加组件分支。
@@ -119,6 +131,7 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `examples/dashboard.rkt` | 成功编译的 DSL 示例。 |
 | `examples/log-browser.rkt` | 10,000条固定容量日志浏览器：four-column row、tail append、详情与长列表交互。 |
 | `examples/realtime-monitor.rkt` | 10,000条实时监控表格：数值data-register、可见性分流、状态色与比例字体chrome。 |
+| `examples/material-profile-dashboard.rkt` | Material Profile v1桌面示例：静态rail、small app bar、rounded card与fixed filled button。 |
 | `tools/verify_log_browser.sh` | 真实X11/Vulkan日志工作流与log-browser ABI篡改回归。 |
 | `tools/verify_realtime_monitor.sh` | 实时监控表格的真实X11/Vulkan、glyph-domain篡改、可见性分流与键鼠回归。 |
 | `tools/verify_desktop_component_macros.sh` | 编译期组件宏与手写primitive Scene等价性回归。 |
@@ -126,6 +139,8 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/verify_visual_language_v2.py` | visual v2固定几何、primitive-only lowering、page分布与冻结列表ABI的Scene结构oracle。 |
 | `tools/verify_rounded_surface_plan.sh` | rounded surface v1的Racket/Rust、双应用X11/Vulkan、四类篡改拒绝与交互全链回归。 |
 | `tools/mutate_rounded_surface_scene.py` | 生成radius、offset、geometry和disable四类精确Scene攻击样本。 |
+| `tools/verify_material_profile_v1.sh` | Material Profile v1的静态Scene oracle、宏输入拒绝、Rust构建与真实X11/Vulkan交互回归。 |
+| `tools/verify_material_profile_v1.py` | Material Profile v1的primitive-only lowering、fixed canvas、rounded metadata、action/state/glyph结构oracle。 |
 | `tools/make_visual_language_v2_comparison.py` | 从同分辨率真实帧确定性生成视觉v1/v2前后对照图。 |
 | `tools/make_rounded_surface_v3_comparison.py` | 从同分辨率真实帧确定性生成rounded surface v2/v3前后对照图。 |
 | `tools/verify_tabular_body_font.sh` | 受限tabular正文face的确定性、闭域、固定advance与语料覆盖回归。 |
