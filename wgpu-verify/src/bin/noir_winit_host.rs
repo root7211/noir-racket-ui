@@ -42,6 +42,8 @@ const FONT_ASSET_PLAN_ABI_SCHEMA: &str = "noir-font-asset-plan-v1";
 const FONT_ASSET_PLAN_ABI_REVISION: u32 = 1;
 const FONT_PLACEMENT_PLAN_ABI_SCHEMA: &str = "noir-font-placement-plan-v1";
 const FONT_PLACEMENT_PLAN_ABI_REVISION: u32 = 1;
+const DYNAMIC_FONT_CELL_PLAN_ABI_SCHEMA: &str = "noir-dynamic-font-cell-plan-v1";
+const DYNAMIC_FONT_CELL_PLAN_ABI_REVISION: u32 = 1;
 const VISUAL_LANGUAGE_PLAN_ABI_SCHEMA: &str = "noir-visual-language-plan-v1";
 const VISUAL_LANGUAGE_PLAN_ABI_REVISION: u32 = 1;
 
@@ -79,6 +81,8 @@ struct Scene {
     // Not serde-defaulted: every Scene must explicitly declare whether it has zero
     // assets or a proved set; missing field is never allowed to masquerade as v1.
     font_assets: Vec<FontAssetPlan>,
+    #[serde(deserialize_with = "deserialize_dynamic_font_cell_plan_option")]
+    dynamic_font_cell_plan: Option<DynamicFontCellPlan>,
     // Mandatory compiler-owned canvas contract. Host never infers visual scale from layouts.
     visual_language_plan: VisualLanguagePlan,
 }
@@ -94,6 +98,7 @@ struct AbiContracts {
     log_browser_plan: AbiContract,
     font_asset_plan: AbiContract,
     font_placement_plan: AbiContract,
+    dynamic_font_cell_plan: AbiContract,
     visual_language_plan: AbiContract,
 }
 
@@ -141,6 +146,51 @@ struct FontAssetPlan {
 }
 
 #[derive(Debug, Deserialize)]
+struct DynamicFontCellPlan {
+    abi_schema: String,
+    abi_revision: u32,
+    face_id: String,
+    manifest_path: String,
+    atlas_path: String,
+    font_sha256: String,
+    atlas_sha256: String,
+    atlas_width: u32,
+    atlas_height: u32,
+    atlas_channels: u32,
+    atlas_page: u32,
+    coverage_policy: String,
+    advance_policy: String,
+    fixed_advance: f32,
+    glyph_domain_first: u32,
+    glyph_domain_count: u32,
+    tables: Vec<DynamicFontCellTable>,
+}
+#[derive(Debug, Deserialize)]
+struct DynamicFontCellTable {
+    table_id: String,
+    list_id: String,
+    register_width: usize,
+    physical_slots: usize,
+    placement_slots: Vec<usize>,
+    glyph_word_offsets: Vec<usize>,
+    cell_uv: Vec<[f32; 4]>,
+    cell_advance: Vec<f32>,
+    tile_ids: Vec<usize>,
+    packet_worklist_index: usize,
+}
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum DynamicFontCellPlanWire { Plan(DynamicFontCellPlan), Disabled(bool) }
+fn deserialize_dynamic_font_cell_plan_option<'de, D>(deserializer: D) -> std::result::Result<Option<DynamicFontCellPlan>, D::Error>
+where D: Deserializer<'de> {
+    match DynamicFontCellPlanWire::deserialize(deserializer)? {
+        DynamicFontCellPlanWire::Plan(plan) => Ok(Some(plan)),
+        DynamicFontCellPlanWire::Disabled(false) => Ok(None),
+        DynamicFontCellPlanWire::Disabled(true) => Err(serde::de::Error::custom("dynamic_font_cell_plan may be an object or false, never true")),
+    }
+}
+
+#[derive(Debug, Deserialize)]
 struct FontManifest {
     schema: String,
     revision: u32,
@@ -149,6 +199,9 @@ struct FontManifest {
     font_sha256: String,
     atlas_sha256: String,
     glyph_count: u32,
+    #[serde(default)] coverage_policy: String,
+    #[serde(default)] advance_policy: String,
+    #[serde(default)] fixed_advance: f32,
     atlas: FontManifestAtlas,
     metrics: FontManifestMetrics,
     glyphs: Vec<FontManifestGlyph>,
@@ -160,6 +213,8 @@ struct FontManifestMetrics { pixel_size: u32, line_height: u32 }
 #[derive(Clone, Debug, Deserialize)]
 struct FontManifestGlyph {
     glyph_id: u32,
+    #[serde(default)] codepoint: u32,
+    #[serde(default)] character: String,
     x: u32,
     y: u32,
     width: u32,
@@ -173,6 +228,16 @@ struct VerifiedFontAsset {
     manifest_path: PathBuf,
     atlas_path: PathBuf,
     glyphs: Vec<FontManifestGlyph>,
+}
+struct VerifiedDynamicFontCellAsset {
+    atlas_bytes: Vec<u8>,
+    manifest_path: PathBuf,
+    atlas_path: PathBuf,
+    glyphs: Vec<FontManifestGlyph>,
+}
+struct RegisteredDynamicFontAtlas {
+    view: wgpu::TextureView,
+    _texture: wgpu::Texture,
 }
 struct RegisteredFontAtlas {
     face_id: String,
@@ -220,6 +285,8 @@ struct DataRegisterTable {
     seed: String,
     #[serde(rename = "atlas-page")]
     atlas_page: u32,
+    #[serde(rename = "font-face")]
+    font_face: Option<String>,
 }
 #[derive(Clone, Debug)]
 struct CompiledDataRegisterTable {
@@ -241,10 +308,25 @@ fn legacy_register_glyph_id(ch: char) -> Result<u32> {
     }
 }
 
-fn compact_register_glyphs(value: &str, register_width: usize) -> Result<Vec<u32>> {
+fn tabular_body_glyph_id(ch: char) -> Result<u32> {
+    let index = match ch {
+        ' ' => 0,
+        '0'..='9' => 1 + (ch as u32 - '0' as u32),
+        'A'..='Z' => 11 + (ch as u32 - 'A' as u32),
+        _ => anyhow::bail!("page-3 tabular register only admits TABULAR_BODY_V1: space, digits, uppercase letters"),
+    };
+    Ok((3u32 << 16) | index)
+}
+
+fn compact_register_glyphs(value: &str, register_width: usize, atlas_page: u32) -> Result<Vec<u32>> {
     anyhow::ensure!(value.len() <= register_width, "compact data register exceeds fixed width");
-    let mut glyphs = value.chars().map(legacy_register_glyph_id).collect::<Result<Vec<_>>>()?;
-    glyphs.resize(register_width, 1u32 << 16);
+    let encoder: fn(char) -> Result<u32> = match atlas_page {
+        1 => legacy_register_glyph_id,
+        3 => tabular_body_glyph_id,
+        _ => anyhow::bail!("compact data register uses unsupported fixed atlas page {atlas_page}"),
+    };
+    let mut glyphs = value.chars().map(encoder).collect::<Result<Vec<_>>>()?;
+    glyphs.resize(register_width, if atlas_page == 3 { 3u32 << 16 } else { 1u32 << 16 });
     Ok(glyphs)
 }
 
@@ -1394,6 +1476,7 @@ struct Host {
     // Registered v1 fontc atlases. They deliberately remain separate from legacy
     // atlas pages 0/1 until a later glyph-placement ABI activates page 2.
     _font_atlases: Vec<RegisteredFontAtlas>,
+    _dynamic_font_cell_atlas: Option<RegisteredDynamicFontAtlas>,
     // The event loop owns a FIFO of compiler-fixed renderer requests.  This replaces
     // separate dirty-tile/worklist/strategy hand-off state, so redraw receives all
     // scheduling operands explicitly.
@@ -1458,6 +1541,7 @@ impl Host {
         surface.configure(&device, &config);
 
         let verified_font_assets = compiler_font_assets(&scene, &scene_dir)?;
+        let verified_dynamic_font_cells = compiler_dynamic_font_cells(&scene, &scene_dir)?;
         compiler_font_placements(&scene, &verified_font_assets)?;
         let virtual_lists = compiler_virtual_list_plans(&scene)?;
         let list_interactions = compiler_list_interaction_plans(&scene, &virtual_lists)?;
@@ -1547,7 +1631,8 @@ impl Host {
         let clear_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("noir-tile-clear-quad"), contents: bytemuck::bytes_of(&clear), usage: wgpu::BufferUsages::VERTEX });
 
         let font_atlases = make_registered_font_atlases(&device, &queue, &verified_font_assets)?;
-        let (glyph_bind_group, text_pipeline) = make_text_resources(&device, &queue, format, &glyph_buffer, &font_atlases)?;
+        let dynamic_font_cell_atlas = make_dynamic_font_cell_atlas(&device, &queue, verified_dynamic_font_cells.as_ref())?;
+        let (glyph_bind_group, text_pipeline) = make_text_resources(&device, &queue, format, &glyph_buffer, &font_atlases, dynamic_font_cell_atlas.as_ref(), verified_dynamic_font_cells.as_ref())?;
         let static_pipeline = make_static_pipeline(&device, format);
         let gpu_timer = if timestamp_supported { Some(make_gpu_timestamp_timer(&device, queue.get_timestamp_period())) } else { None };
         println!("compiler subgroup packets: {} width-32 packet(s), vertex-subgroup-supported={subgroup_vertex_supported}; packet draw fallback is always ABI-equivalent", subgroup_packets.len());
@@ -1557,7 +1642,7 @@ impl Host {
         let initial_instances = instances.clone();
         let initial_glyph_bytes = glyph_bytes.clone();
         let virtual_list_count = virtual_lists.len();
-        let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, canvas_width: visual_canvas.width, canvas_height: visual_canvas.height, canvas_margin: visual_canvas.margin, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group, cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, log_browser_plans, log_levels, _font_atlases: font_atlases, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
+        let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, canvas_width: visual_canvas.width, canvas_height: visual_canvas.height, canvas_margin: visual_canvas.margin, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group, cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
         host.sync_focus_visuals();
         host.execute_scene_data_update_batches()?;
         host.redraw_canvas_full();
@@ -2408,14 +2493,14 @@ impl Host {
     fn patch_compact_data_register(&mut self, list_id: &str, logical_index: usize, value: &str) -> Result<()> {
         let list_index = self.virtual_lists.iter().position(|plan| plan.id == list_id)
             .with_context(|| format!("unknown compact virtual list {list_id}"))?;
-        let (register_width, logical_capacity, glyph_slots, current, visible_rows, physical_slots) = {
+        let (register_width, atlas_page, logical_capacity, glyph_slots, current, visible_rows, physical_slots) = {
             let plan = &self.virtual_lists[list_index];
             let table = plan.data_register_table.as_ref().context("data register patch requires compact data-register-table")?;
-            (table.register_width, plan.logical_capacity, plan.row_glyph_slots.clone(), plan.current_viewport_slot, plan.visible_rows, plan.physical_slots)
+            (table.register_width, table.atlas_page, plan.logical_capacity, plan.row_glyph_slots.clone(), plan.current_viewport_slot, plan.visible_rows, plan.physical_slots)
         };
         anyhow::ensure!(logical_index < logical_capacity,
                         "data-register patch logical index exceeds fixed capacity");
-        let glyphs = compact_register_glyphs(value, register_width)?;
+        let glyphs = compact_register_glyphs(value, register_width, atlas_page)?;
         {
             let table = self.virtual_lists[list_index].data_register_table.as_mut().expect("admitted compact table");
             let start = logical_index * register_width;
@@ -2434,10 +2519,10 @@ impl Host {
     fn apply_compact_data_update_batch(&mut self, list_id: &str, updates: &[(usize, String)]) -> Result<()> {
         let list_index = self.virtual_lists.iter().position(|plan| plan.id == list_id)
             .with_context(|| format!("unknown compact virtual list {list_id}"))?;
-        let (register_width, logical_capacity, glyph_slots, current, visible_rows, physical_slots) = {
+        let (register_width, atlas_page, logical_capacity, glyph_slots, current, visible_rows, physical_slots) = {
             let plan = &self.virtual_lists[list_index];
             let table = plan.data_register_table.as_ref().context("data-update-batch requires compact data-register-table")?;
-            (table.register_width, plan.logical_capacity, plan.row_glyph_slots.clone(), plan.current_viewport_slot, plan.visible_rows, plan.physical_slots)
+            (table.register_width, table.atlas_page, plan.logical_capacity, plan.row_glyph_slots.clone(), plan.current_viewport_slot, plan.visible_rows, plan.physical_slots)
         };
         let mut seen = std::collections::HashSet::new();
         let mut visible_rows_to_patch = Vec::new();
@@ -2445,7 +2530,7 @@ impl Host {
         for (logical_index, value) in updates {
             anyhow::ensure!(seen.insert(*logical_index) && *logical_index < logical_capacity,
                             "data-update-batch violates fixed logical index proof");
-            let glyphs = compact_register_glyphs(value, register_width)?;
+            let glyphs = compact_register_glyphs(value, register_width, atlas_page)?;
             let table = self.virtual_lists[list_index].data_register_table.as_mut().expect("admitted compact table");
             let start = logical_index * register_width;
             table.glyph_ids[start..start + register_width].copy_from_slice(&glyphs);
@@ -3607,6 +3692,8 @@ fn make_text_resources(
     format: wgpu::TextureFormat,
     glyph_buffer: &wgpu::Buffer,
     font_atlases: &[RegisteredFontAtlas],
+    dynamic_atlas: Option<&RegisteredDynamicFontAtlas>,
+    dynamic_asset: Option<&VerifiedDynamicFontCellAsset>,
 ) -> Result<(wgpu::BindGroup, wgpu::RenderPipeline)> {
     let legacy_atlas = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("noir-legacy-glyph-atlas-pages"),
@@ -3655,6 +3742,31 @@ fn make_text_resources(
         label: Some("noir-fontc-page2-linear-sampler"), mag_filter: wgpu::FilterMode::Linear, min_filter: wgpu::FilterMode::Linear, ..Default::default()
     });
 
+    let tabular_uvs = dynamic_asset.map(|asset| {
+        asset.glyphs.iter().map(|glyph| [
+            glyph.x as f32 / 256.0, glyph.y as f32 / 256.0,
+            glyph.width as f32 / 256.0, glyph.height as f32 / 256.0,
+        ]).collect::<Vec<_>>()
+    }).unwrap_or_else(|| vec![[0.0; 4]; 37]);
+    anyhow::ensure!(tabular_uvs.len() == 37, "page-3 tabular UV table must be dense 37 entries");
+    let tabular_uv_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("noir-dynamic-font-cell-page3-uv-table"), contents: bytemuck::cast_slice(&tabular_uvs),
+        usage: wgpu::BufferUsages::STORAGE,
+    });
+    let fallback_tabular_texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("noir-dynamic-font-cell-page3-transparent-fallback"), size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+        mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, view_formats: &[],
+    });
+    queue.write_texture(wgpu::TexelCopyTextureInfo { texture: &fallback_tabular_texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                        &[0], wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(1), rows_per_image: Some(1) },
+                        wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 });
+    let fallback_tabular_view = fallback_tabular_texture.create_view(&Default::default());
+    let tabular_view = dynamic_atlas.map(|atlas| &atlas.view).unwrap_or(&fallback_tabular_view);
+    let tabular_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("noir-dynamic-font-cell-page3-linear-sampler"), mag_filter: wgpu::FilterMode::Linear, min_filter: wgpu::FilterMode::Linear, ..Default::default()
+    });
+
     let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("noir-glyph-placement-bgl"),
         entries: &[
@@ -3663,6 +3775,9 @@ fn make_text_resources(
             wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), count: None },
             wgpu::BindGroupLayoutEntry { binding: 3, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Texture { multisampled: false, view_dimension: wgpu::TextureViewDimension::D2, sample_type: wgpu::TextureSampleType::Float { filterable: true } }, count: None },
             wgpu::BindGroupLayoutEntry { binding: 4, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), count: None },
+            wgpu::BindGroupLayoutEntry { binding: 5, visibility: wgpu::ShaderStages::VERTEX, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 6, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Texture { multisampled: false, view_dimension: wgpu::TextureViewDimension::D2, sample_type: wgpu::TextureSampleType::Float { filterable: true } }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 7, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), count: None },
         ],
     });
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -3673,6 +3788,9 @@ fn make_text_resources(
             wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&legacy_sampler) },
             wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(font_view) },
             wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::Sampler(&font_sampler) },
+            wgpu::BindGroupEntry { binding: 5, resource: tabular_uv_buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 6, resource: wgpu::BindingResource::TextureView(tabular_view) },
+            wgpu::BindGroupEntry { binding: 7, resource: wgpu::BindingResource::Sampler(&tabular_sampler) },
         ],
     });
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -3798,6 +3916,95 @@ fn compiler_font_assets(scene: &Scene, scene_dir: &Path) -> Result<Vec<VerifiedF
     Ok(verified)
 }
 
+fn compiler_dynamic_font_cells(scene: &Scene, scene_dir: &Path) -> Result<Option<VerifiedDynamicFontCellAsset>> {
+    let Some(plan) = &scene.dynamic_font_cell_plan else { return Ok(None); };
+    anyhow::ensure!(plan.abi_schema == DYNAMIC_FONT_CELL_PLAN_ABI_SCHEMA && plan.abi_revision == DYNAMIC_FONT_CELL_PLAN_ABI_REVISION,
+                    "unsupported dynamic_font_cell_plan payload {}@{}", plan.abi_schema, plan.abi_revision);
+    anyhow::ensure!(plan.face_id == "noir-table-body-mono-16" && plan.atlas_page == 3
+                    && plan.coverage_policy == "tabular-body-v1" && plan.advance_policy == "fixed-tabular"
+                    && plan.fixed_advance == 10.0 && plan.glyph_domain_first == 0 && plan.glyph_domain_count == 37,
+                    "dynamic_font_cell_plan uses unsupported face/page/coverage/advance policy");
+    anyhow::ensure!(plan.atlas_width == 256 && plan.atlas_height == 256 && plan.atlas_channels == 1
+                    && plan.font_sha256.len() == 64 && plan.atlas_sha256.len() == 64,
+                    "dynamic_font_cell_plan has invalid fixed R8 geometry or hash length");
+    let manifest_path = safe_font_asset_path(scene_dir, &plan.manifest_path)?;
+    let atlas_path = safe_font_asset_path(scene_dir, &plan.atlas_path)?;
+    let manifest_bytes = fs::read(&manifest_path).with_context(|| format!("read dynamic font manifest {}", manifest_path.display()))?;
+    let manifest: FontManifest = serde_json::from_slice(&manifest_bytes)
+        .with_context(|| format!("parse dynamic font manifest {}", manifest_path.display()))?;
+    anyhow::ensure!(manifest.schema == "noir-font-asset-manifest-v1" && manifest.revision == 1
+                    && manifest.face_id == plan.face_id && manifest.renderer_kind == "atlas-gray"
+                    && manifest.font_sha256 == plan.font_sha256 && manifest.atlas_sha256 == plan.atlas_sha256
+                    && manifest.coverage_policy == plan.coverage_policy && manifest.advance_policy == plan.advance_policy
+                    && manifest.fixed_advance == plan.fixed_advance,
+                    "dynamic_font_cell_plan Scene/manifest identity or policy mismatch");
+    anyhow::ensure!(manifest.atlas.width == plan.atlas_width && manifest.atlas.height == plan.atlas_height
+                    && manifest.atlas.channels == 1 && manifest.atlas.mode == "r8"
+                    && manifest.glyph_count == 37 && manifest.glyphs.len() == 37
+                    && manifest.glyphs.iter().enumerate().all(|(index, glyph)| glyph.glyph_id == index as u32)
+                    && manifest.glyphs.iter().all(|glyph| glyph.advance == 10.0 && glyph.width > 0 && glyph.height > 0
+                        && glyph.x.checked_add(glyph.width).is_some_and(|right| right <= 256)
+                        && glyph.y.checked_add(glyph.height).is_some_and(|bottom| bottom <= 256)),
+                    "dynamic_font_cell_plan manifest does not prove dense fixed-tabular glyph metrics");
+    let expected = " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    anyhow::ensure!(manifest.glyphs.iter().map(|glyph| glyph.character.as_str()).collect::<String>() == expected
+                    && manifest.glyphs.iter().map(|glyph| glyph.codepoint).collect::<Vec<_>>()
+                       == expected.chars().map(|ch| ch as u32).collect::<Vec<_>>(),
+                    "dynamic_font_cell_plan manifest glyph character domain is not TABULAR_BODY_V1");
+    let atlas_bytes = fs::read(&atlas_path).with_context(|| format!("read dynamic font atlas {}", atlas_path.display()))?;
+    anyhow::ensure!(atlas_bytes.len() == 256 * 256 && sha256_hex(&atlas_bytes) == plan.atlas_sha256,
+                    "dynamic_font_cell_plan R8 atlas length or SHA-256 mismatch");
+    let mut admitted_tables = HashSet::new();
+    for table in &plan.tables {
+        anyhow::ensure!(admitted_tables.insert(table.table_id.as_str()) && table.register_width > 0 && table.physical_slots > 0
+                        && table.placement_slots.len() == table.register_width * table.physical_slots
+                        && table.glyph_word_offsets.len() == table.placement_slots.len()
+                        && table.cell_uv.len() == table.placement_slots.len() && table.cell_advance.len() == table.placement_slots.len()
+                        && table.packet_worklist_index == 2 && !table.tile_ids.is_empty(),
+                        "dynamic font cell table {} violates fixed cell cardinality/authority", table.table_id);
+        let list = scene.virtual_list_plans.iter().find(|list| list.id == table.list_id)
+            .with_context(|| format!("dynamic font cell table {} references unknown list {}", table.table_id, table.list_id))?;
+        let register = list.data_register_table.as_ref()
+            .with_context(|| format!("dynamic font cell table {} list lacks data-register-table", table.table_id))?;
+        anyhow::ensure!(register.id == table.table_id && register.register_width == table.register_width
+                        && list.physical_slots == table.physical_slots && register.atlas_page == 3
+                        && register.font_face.as_deref() == Some(plan.face_id.as_str()),
+                        "dynamic font cell table {} disagrees with virtual-list page-3 register declaration", table.table_id);
+        anyhow::ensure!(table.tile_ids == list.visible_row_tile_ids,
+                        "dynamic font cell table {} tile authority disagrees with frozen virtual-list", table.table_id);
+        for index in 0..table.placement_slots.len() {
+            let slot = table.placement_slots[index];
+            let placement = scene.glyph_placement_plan.get(slot)
+                .with_context(|| format!("dynamic font cell table {} placement slot {} out of range", table.table_id, slot))?;
+            anyhow::ensure!(placement.atlas_page == 3 && placement.dynamic && placement.face_id.as_deref() == Some(plan.face_id.as_str())
+                            && placement.glyph_word_offset == table.glyph_word_offsets[index]
+                            && placement.glyph_id >> 16 == 3 && (placement.glyph_id & 0xffff) < 37
+                            && (placement.advance - 10.0).abs() <= 1e-6
+                            && placement.atlas_uv.iter().zip(table.cell_uv[index].iter()).all(|(left, right)| (*left - *right).abs() <= 1e-6)
+                            && (table.cell_advance[index] - 10.0).abs() <= 1e-6,
+                            "dynamic font cell table {} placement {} escapes page-3 fixed-cell proof", table.table_id, slot);
+        }
+    }
+    anyhow::ensure!(!plan.tables.is_empty(), "dynamic_font_cell_plan has no admitted table authority");
+    println!("compiler dynamic font cells: face={} page=3 glyphs=37 tables={} fixed_advance=10 atlas={}x{} manifest={} atlas={}",
+             plan.face_id, plan.tables.len(), plan.atlas_width, plan.atlas_height, manifest_path.display(), atlas_path.display());
+    Ok(Some(VerifiedDynamicFontCellAsset { atlas_bytes, manifest_path, atlas_path, glyphs: manifest.glyphs }))
+}
+
+fn make_dynamic_font_cell_atlas(device: &wgpu::Device, queue: &wgpu::Queue, asset: Option<&VerifiedDynamicFontCellAsset>) -> Result<Option<RegisteredDynamicFontAtlas>> {
+    let Some(asset) = asset else { return Ok(None); };
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("noir-dynamic-font-cell-page3-r8"), size: wgpu::Extent3d { width: 256, height: 256, depth_or_array_layers: 1 },
+        mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, view_formats: &[],
+    });
+    queue.write_texture(wgpu::TexelCopyTextureInfo { texture: &texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                        &asset.atlas_bytes, wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(256), rows_per_image: Some(256) },
+                        wgpu::Extent3d { width: 256, height: 256, depth_or_array_layers: 1 });
+    println!("dynamic-font-cell-atlas-upload: page=3 bytes={} glyphs={} manifest={} atlas={}", asset.atlas_bytes.len(), asset.glyphs.len(), asset.manifest_path.display(), asset.atlas_path.display());
+    Ok(Some(RegisteredDynamicFontAtlas { view: texture.create_view(&Default::default()), _texture: texture }))
+}
+
 fn compiler_font_placements(scene: &Scene, assets: &[VerifiedFontAsset]) -> Result<()> {
     let assets_by_face = assets.iter().map(|asset| (asset.plan.face_id.as_str(), asset)).collect::<HashMap<_, _>>();
     let mut active = 0usize;
@@ -3835,6 +4042,14 @@ fn compiler_font_placements(scene: &Scene, assets: &[VerifiedFontAsset]) -> Resu
                 anyhow::ensure!((placement.advance - glyph.advance).abs() <= 1e-5,
                                 "page-2 glyph placement {} advance does not match face {} manifest glyph {}", placement.node, face_id, glyph_index);
                 active += 1;
+            }
+            3 => {
+                let plan = scene.dynamic_font_cell_plan.as_ref()
+                    .context("page-3 glyph placement exists without dynamic_font_cell_plan")?;
+                anyhow::ensure!(placement.dynamic && placement.face_id.as_deref() == Some(plan.face_id.as_str())
+                                && placement.glyph_id >> 16 == 3 && (placement.glyph_id & 0xffff) < 37
+                                && (placement.advance - 10.0).abs() <= 1e-6,
+                                "page-3 glyph placement {} violates dynamic fixed-cell pre-proof", placement.node);
             }
             page => anyhow::bail!("glyph placement {} uses unsupported atlas page {}", placement.node, page),
         }
@@ -3909,12 +4124,17 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
                     "unsupported font_placement_plan ABI {}@{}; expected {}@{}",
                     scene.abi_contracts.font_placement_plan.schema, scene.abi_contracts.font_placement_plan.revision,
                     FONT_PLACEMENT_PLAN_ABI_SCHEMA, FONT_PLACEMENT_PLAN_ABI_REVISION);
+    anyhow::ensure!(scene.abi_contracts.dynamic_font_cell_plan.schema == DYNAMIC_FONT_CELL_PLAN_ABI_SCHEMA
+                    && scene.abi_contracts.dynamic_font_cell_plan.revision == DYNAMIC_FONT_CELL_PLAN_ABI_REVISION,
+                    "unsupported dynamic_font_cell_plan ABI {}@{}; expected {}@{}",
+                    scene.abi_contracts.dynamic_font_cell_plan.schema, scene.abi_contracts.dynamic_font_cell_plan.revision,
+                    DYNAMIC_FONT_CELL_PLAN_ABI_SCHEMA, DYNAMIC_FONT_CELL_PLAN_ABI_REVISION);
     anyhow::ensure!(scene.abi_contracts.visual_language_plan.schema == VISUAL_LANGUAGE_PLAN_ABI_SCHEMA
                     && scene.abi_contracts.visual_language_plan.revision == VISUAL_LANGUAGE_PLAN_ABI_REVISION,
                     "unsupported visual_language_plan ABI {}@{}; expected {}@{}",
                     scene.abi_contracts.visual_language_plan.schema, scene.abi_contracts.visual_language_plan.revision,
                     VISUAL_LANGUAGE_PLAN_ABI_SCHEMA, VISUAL_LANGUAGE_PLAN_ABI_REVISION);
-    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} visual-language={}@{} frozen",
+    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} frozen",
              scene.abi_contracts.virtual_list_plan.schema, scene.abi_contracts.virtual_list_plan.revision,
              scene.abi_contracts.row_activation_plan.schema, scene.abi_contracts.row_activation_plan.revision,
              scene.abi_contracts.scrollbar_plan.schema, scene.abi_contracts.scrollbar_plan.revision,
@@ -3922,6 +4142,7 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
              scene.abi_contracts.log_browser_plan.schema, scene.abi_contracts.log_browser_plan.revision,
              scene.abi_contracts.font_asset_plan.schema, scene.abi_contracts.font_asset_plan.revision,
              scene.abi_contracts.font_placement_plan.schema, scene.abi_contracts.font_placement_plan.revision,
+             scene.abi_contracts.dynamic_font_cell_plan.schema, scene.abi_contracts.dynamic_font_cell_plan.revision,
              scene.abi_contracts.visual_language_plan.schema, scene.abi_contracts.visual_language_plan.revision);
     Ok(())
 }
@@ -3977,11 +4198,13 @@ fn compiler_virtual_list_plans(scene: &Scene) -> Result<Vec<CompiledVirtualListP
         anyhow::ensure!(physical_slots == plan.capacity && physical_slots >= plan.visible_rows && logical_capacity >= physical_slots,
                         "virtual list {} has invalid logical/physical capacity proof", plan.id);
         let compiled_data_register_table = if let Some(table) = &plan.data_register_table {
-            anyhow::ensure!(plan.recycling && table.capacity == logical_capacity && table.register_width > 0 && table.atlas_page == 1,
-                            "compact data-register-table for {} has invalid capacity/atlas proof", plan.id);
+            anyhow::ensure!(plan.recycling && table.capacity == logical_capacity && table.register_width > 0
+                            && matches!(table.atlas_page, 1 | 3)
+                            && (table.atlas_page == 1 || table.font_face.as_deref() == Some("noir-table-body-mono-16")),
+                            "compact data-register-table for {} has invalid capacity/atlas/face proof", plan.id);
             anyhow::ensure!(plan.logical_data_ids.is_empty() && plan.logical_labels.is_empty() && plan.scroll_transitions.is_empty(),
                             "compact data-register-table {} must not serialize logical labels or per-viewport transitions", table.id);
-            let seed_glyphs = compact_register_glyphs(&table.seed, table.register_width)
+            let seed_glyphs = compact_register_glyphs(&table.seed, table.register_width, table.atlas_page)
                 .with_context(|| format!("compact data-register-table {} has invalid legacy glyph seed", table.id))?;
             let mut glyph_ids = Vec::with_capacity(table.capacity * table.register_width);
             for _ in 0..table.capacity { glyph_ids.extend_from_slice(&seed_glyphs); }
@@ -4131,7 +4354,7 @@ fn compiler_virtual_list_plans(scene: &Scene) -> Result<Vec<CompiledVirtualListP
                 for update in &batch.updates {
                     anyhow::ensure!(indices.insert(update.index) && update.index < logical_capacity,
                                     "data-update-batch {} violates fixed logical index proof", batch.id);
-                    compact_register_glyphs(&update.value, table.register_width)
+                    compact_register_glyphs(&update.value, table.register_width, table.atlas_page)
                         .with_context(|| format!("data-update-batch {} violates fixed legacy glyph domain/width proof", batch.id))?;
                 }
             }
@@ -4335,7 +4558,7 @@ fn compiler_log_browser_plans(
         for update in &artifact.append_updates {
             anyhow::ensure!(update.index < list.logical_capacity,
                             "log browser {} append update escapes fixed logical capacity", artifact.id);
-            compact_register_glyphs(&update.value, table.register_width)
+            compact_register_glyphs(&update.value, table.register_width, table.atlas_page)
                 .with_context(|| format!("log browser {} append update escapes fixed legacy glyph domain/width", artifact.id))?;
         }
         let detail_placements = scene.glyph_placement_plan.iter()
@@ -5359,6 +5582,10 @@ fn placement_instances(scene:&Scene)->Result<Vec<GlyphPlacementInstance>>{
         .filter(|plan| plan.data_register_table.is_some())
         .flat_map(|plan| plan.row_glyph_slots.iter().flatten().copied())
         .collect::<HashSet<_>>();
+    let dynamic_font_cell_slots = scene.dynamic_font_cell_plan.as_ref().map(|plan| {
+        plan.tables.iter().flat_map(|table| table.placement_slots.iter().copied()).collect::<HashSet<_>>()
+    }).unwrap_or_default();
+    let dynamic_font_face = scene.dynamic_font_cell_plan.as_ref().map(|plan| plan.face_id.as_str());
     let mut instances=Vec::with_capacity(scene.glyph_placement_plan.len());
     for(entry_slot,entry)in scene.glyph_placement_plan.iter().enumerate(){
         anyhow::ensure!(entry.slot==entry_slot, "placement {} ({}) has non-dense slot {}", entry.node, entry.glyph_index, entry.slot);
@@ -5370,10 +5597,14 @@ fn placement_instances(scene:&Scene)->Result<Vec<GlyphPlacementInstance>>{
             if let Some(state_index) = entry.state_index {
                 anyhow::ensure!(state_index < scene.state_slots.len(), "dynamic glyph placement {} state_index is outside State Slot table", entry.node);
             } else {
-                anyhow::ensure!(compact_register_slots.contains(&entry.slot)
-                                && entry.atlas_page == 1
-                                && entry.face_id.is_none(),
-                                "state-free dynamic placement {} is not an admitted compact data-register legacy glyph", entry.node);
+                let legacy_allowed = compact_register_slots.contains(&entry.slot)
+                    && entry.atlas_page == 1 && entry.face_id.is_none();
+                let page3_allowed = dynamic_font_cell_slots.contains(&entry.slot)
+                    && entry.atlas_page == 3 && entry.face_id.as_deref() == dynamic_font_face
+                    && entry.glyph_id >> 16 == 3 && (entry.glyph_id & 0xffff) < 37
+                    && (entry.advance - 10.0).abs() <= 1e-6;
+                anyhow::ensure!(legacy_allowed || page3_allowed,
+                                "state-free dynamic placement {} is not an admitted compact data-register legacy or dynamic page-3 cell", entry.node);
             }
         } else {
             anyhow::ensure!(entry.state_index.is_none(), "static glyph placement {} must not carry State Slot index", entry.node);

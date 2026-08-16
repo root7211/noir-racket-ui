@@ -1,0 +1,160 @@
+{
+  "schema": "noir-wgpu-replay-matrix-v2",
+  "renderer": "full-redraw / packet-aware / action-aware / coalesced / compiler-selected",
+  "profile_id": "noir-static-cost-v1",
+  "adapter_name": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "backend": "Vulkan",
+  "timestamp_query_supported": true,
+  "timestamp_period_ns": 1.0,
+  "warmup_iterations": 5,
+  "sample_iterations": 25,
+  "rows": [
+    {
+      "workload_id": "coalesced-activate-refresh-telemetry",
+      "mode": "full-redraw",
+      "warmup_iterations": 5,
+      "sample_iterations": 25,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 4,
+      "submitted_glyph_instance_count": 244,
+      "expected_write_bytes": 140,
+      "gpu_elapsed_ns": {
+        "sample_count": 25,
+        "min_ns": 2937610.0,
+        "median_ns": 3076452.0,
+        "p95_ns": 3667385.0,
+        "max_ns": 3668677.0,
+        "mean_ns": 3176071.4
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 25,
+        "min_ns": 159916.0,
+        "median_ns": 177022.0,
+        "p95_ns": 194272.0,
+        "max_ns": 3183486.0,
+        "mean_ns": 297272.8
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-telemetry",
+      "mode": "packet-aware",
+      "warmup_iterations": 5,
+      "sample_iterations": 25,
+      "submitted_tile_count": 3,
+      "submitted_glyph_draw_count": 5,
+      "submitted_glyph_instance_count": 54,
+      "expected_write_bytes": 140,
+      "gpu_elapsed_ns": {
+        "sample_count": 25,
+        "min_ns": 966222.0,
+        "median_ns": 1102425.0,
+        "p95_ns": 1248717.0,
+        "max_ns": 1268850.0,
+        "mean_ns": 1092784.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 25,
+        "min_ns": 167137.0,
+        "median_ns": 194582.0,
+        "p95_ns": 297793.0,
+        "max_ns": 1120836.0,
+        "mean_ns": 241720.6
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-telemetry",
+      "mode": "action-aware",
+      "warmup_iterations": 5,
+      "sample_iterations": 25,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 29,
+      "expected_write_bytes": 116,
+      "gpu_elapsed_ns": {
+        "sample_count": 25,
+        "min_ns": 529404.0,
+        "median_ns": 601962.0,
+        "p95_ns": 691597.0,
+        "max_ns": 704664.0,
+        "mean_ns": 604133.32
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 25,
+        "min_ns": 104113.0,
+        "median_ns": 118888.0,
+        "p95_ns": 197585.0,
+        "max_ns": 954846.0,
+        "mean_ns": 160561.0
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-telemetry",
+      "mode": "coalesced",
+      "warmup_iterations": 5,
+      "sample_iterations": 25,
+      "submitted_tile_count": 2,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 48,
+      "expected_write_bytes": 140,
+      "gpu_elapsed_ns": {
+        "sample_count": 25,
+        "min_ns": 846170.0,
+        "median_ns": 898295.0,
+        "p95_ns": 1050905.0,
+        "max_ns": 1145603.0,
+        "mean_ns": 926636.72
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 25,
+        "min_ns": 134470.0,
+        "median_ns": 150731.0,
+        "p95_ns": 303737.0,
+        "max_ns": 1000813.0,
+        "mean_ns": 195357.96
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-refresh-telemetry",
+      "mode": "compiler-selected",
+      "warmup_iterations": 5,
+      "sample_iterations": 25,
+      "submitted_tile_count": 2,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 48,
+      "expected_write_bytes": 140,
+      "gpu_elapsed_ns": {
+        "sample_count": 25,
+        "min_ns": 844312.0,
+        "median_ns": 974649.0,
+        "p95_ns": 1121288.0,
+        "max_ns": 1172036.0,
+        "mean_ns": 975504.04
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 25,
+        "min_ns": 133622.0,
+        "median_ns": 157431.0,
+        "p95_ns": 229944.0,
+        "max_ns": 1051899.0,
+        "mean_ns": 196101.68
+      },
+      "compiler_selected": {
+        "compiler_strategy_id": "coalesced",
+        "proof_profile_id": "noir-static-cost-v1",
+        "proof_winner": "coalesced",
+        "actual_executor": "coalesced",
+        "expected_tile_mask_hex": "0x0000000000000003",
+        "observed_tile_mask_hex": "0x0000000000000003",
+        "expected_tile_count": 2,
+        "observed_tile_count": 2,
+        "expected_glyph_draw_count": 2,
+        "observed_glyph_draw_count": 2,
+        "expected_glyph_instance_count": 48,
+        "observed_glyph_instance_count": 48,
+        "expected_winner_write_bytes": 140,
+        "observed_winner_write_bytes": 140,
+        "self_consistent": true
+      }
+    }
+  ]
+}

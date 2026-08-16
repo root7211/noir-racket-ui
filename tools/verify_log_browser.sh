@@ -100,6 +100,6 @@ grep -F 'coalesced-batch execute: coalesced-activate-append-tail' "$LOG"
 grep -F 'packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty' "$LOG"
 # The visible tail keeps three rows in the four-slot ring and emits fixed compact subranges.
 grep -F 'compact-register scroll: list=system-log table=system-log-data capacity=10000 target=9997 row-tiles=[1, 2, 3] physical-slots=4' "$LOG"
-grep -F 'glyph-direct-draw tile=0 packet=2 page=0 placements=[143..172) lanes=29 reason=no-vertex-subgroup-compatible-direct' "$LOG"
+grep -F 'glyph-direct-draw tile=0 packet=2 page=0 placements=[171..200) lanes=29 reason=no-vertex-subgroup-compatible-direct' "$LOG"
 
 echo "log browser regression: PASS"

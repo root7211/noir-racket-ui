@@ -90,8 +90,8 @@ sleep 3
 
 grep -F 'compiler log browser: id=telemetry-dashboard list=telemetry-grid' "$LOG"
 grep -F 'compiler font placement proof: active-page2-glyphs=71 registered-font-assets=1 mode=static-proportional-v1' "$LOG"
-grep -F 'data-update-batch: list=telemetry-grid updates=3 visible=2 arena-only=1 gpu-glyph-writes=68 render-request=true' "$LOG"
-grep -F 'data-update-batch: list=telemetry-grid updates=2 visible=1 arena-only=1 gpu-glyph-writes=34 render-request=true' "$LOG"
+grep -F 'data-update-batch: list=telemetry-grid updates=3 visible=2 arena-only=1 gpu-glyph-writes=72 render-request=true' "$LOG"
+grep -F 'data-update-batch: list=telemetry-grid updates=2 visible=1 arena-only=1 gpu-glyph-writes=36 render-request=true' "$LOG"
 grep -F 'log-browser append: id=telemetry-dashboard batch=telemetry-dashboard-append records=3 tail=9997..9999 source=compiler-artifact' "$LOG"
 grep -F 'list-navigation-plan: id=monitor-navigation key=End list=telemetry-grid from=0 to=9997' "$LOG"
 grep -F 'list-selection: list=telemetry-grid logical=9998 physical=2' "$LOG"

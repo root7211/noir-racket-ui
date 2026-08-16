@@ -45,15 +45,18 @@ NOIR_ENTRY_MODULE=examples/realtime-monitor.rkt PLTCOLLECTS="$PWD:" \
 
 该回归同时证明：非法字符Scene篡改会被启动期glyph-domain proof拒绝；可见数据更新只写固定glyph地址；纯不可见记录只进入预分配arena，产生零glyph GPU写入和零render request。GPU replay策略图、原始时间戳数据及边界说明见[实时监控表格报告](REALTIME_MONITOR_TABLE_V1_REPORT.md)。
 
-## Tabular Body Font Asset v1
+## Dynamic Tabular Body Font v1（page 3）
 
-[`noir-table-body-mono-16`](assets/fontc/noir-table-body-mono-16/) 是为动态表格正文准备的第一阶段字体资产。它使用DejaVu Sans Mono 16px、256×256 R8 atlas、37个封闭glyph（空格、`0–9`与`A–Z`）和固定10px advance；fontc manifest保留每个glyph的source advance，但运行时布局未来只能消费固定advance。此资产当前**尚未注册或采样到page 3**，因此不会改变已冻结的列表热路径。
+[`noir-table-body-mono-16`](assets/fontc/noir-table-body-mono-16/) 使用DejaVu Sans Mono 16px、256×256 R8 atlas、37个封闭glyph（空格、`0–9`与`A–Z`）和固定10px advance。它已通过独立的`dynamic_font_cell_plan v1`接入**page 3**：日志浏览器与实时监控表格的固定data-register正文cell可在运行时只写一个已证明的glyph ID word。
+
+face、page、UV、固定advance、quad、cell地址、tile、packet/worklist与bind group均在启动期或宏展开期固定；page 3不支持小写、标点、Unicode、比例动态run、输入编辑或任意详情文本。静态标题/列头继续使用page 2比例字体，legacy路径仍用于未声明tabular face的列表。
 
 ```bash
 ./tools/verify_tabular_body_font.sh
+./tools/verify_dynamic_font_cell_plan.sh
 ```
 
-该入口会二次确定性构建并比较atlas、manifest、preview和PNG，验证日志/监控正文语料覆盖，并拒绝通过`extra_text`扩大动态字符domain。完整规格与后续`dynamic_font_cell_plan v1`边界见[Tabular Body Font Asset v1](TABULAR_BODY_FONT_ASSET_V1.md)。
+第二个入口执行Racket导出、Rust 1.87 release、双应用真实X11/Vulkan page-3采样、face/UV/glyph-word-offset篡改拒绝、列表交互与可见性分流回归。完整ABI与交付记录见[Tabular Body Font Asset v1](TABULAR_BODY_FONT_ASSET_V1.md)、[Dynamic Font Cell Plan ABI v1](DYNAMIC_FONT_CELL_PLAN_ABI_V1.md)和[交付报告](DYNAMIC_FONT_CELL_PLAN_V1_REPORT.md)。
 
 ## 编译期桌面视觉语言 v1
 
@@ -109,6 +112,7 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/verify_desktop_component_macros.sh` | 编译期组件宏与手写primitive Scene等价性回归。 |
 | `tools/verify_visual_language.sh` | desktop-wide视觉canvas、Scene篡改拒绝与三套真实X11/Vulkan回归。 |
 | `tools/verify_tabular_body_font.sh` | 受限tabular正文face的确定性、闭域、固定advance与语料覆盖回归。 |
+| `tools/verify_dynamic_font_cell_plan.sh` | page-3动态cell的Racket/Rust/X11正向路径、face/UV/word-offset拒绝与两应用交互回归。 |
 | `tools/audit_visual_canvas.py` | 对visual_language_plan将NDC反算为像素rect并审计layout containment。 |
 | `tests/run.rkt` | Scene 预算、更新计划和 JSON 导出的断言。 |
 | `tests/duplicate-id.rkt` | 失败样例；演示带源位置的宏诊断。 |

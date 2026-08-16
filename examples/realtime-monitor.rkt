@@ -6,6 +6,8 @@
 (noir-app
  (font-asset #:manifest "assets/fontc/noir-desktop-sans-18/manifest.json"
              #:atlas "assets/fontc/noir-desktop-sans-18/atlas.r8")
+ (dynamic-font-cell-asset #:manifest "assets/fontc/noir-table-body-mono-16/manifest.json"
+                          #:atlas "assets/fontc/noir-table-body-mono-16/atlas.r8")
  (visual-preset desktop-wide)
  (theme noir-monitor
    (color canvas "#0A1119" canvas-quiet "#0E1823"
@@ -38,7 +40,7 @@
                    #:visible-rows 3
                    #:row-height 28
                    #:max-chars 36
-       (data-register-table #:id telemetry-registers #:seed "NOMINAL ALPHA LOW MID LOW FAST LOW"
+       (data-register-table #:id telemetry-registers #:font-face noir-table-body-mono-16 #:seed "NOMINAL ALPHA LOW MID LOW FAST LOW"
          ;; Two visible records exercise GPU glyph writes; one far record proves arena-only refresh.
          (data-update-batch #:id bootstrap-telemetry
            ((0 "WARN ALPHA 042 731 018 012 005")

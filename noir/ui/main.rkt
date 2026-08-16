@@ -118,6 +118,10 @@ scene-glyph-draw-packets
 ;; placement contract activates its atlas only for compiler-proved static page-2 runs.
 (define font-placement-plan-abi-schema "noir-font-placement-plan-v1")
 (define font-placement-plan-abi-revision 1)
+;; Dynamic table-body cells use a separate page-3 contract. It never relaxes
+;; static page-2 placement semantics or legacy page 0/1 registration.
+(define dynamic-font-cell-plan-abi-schema "noir-dynamic-font-cell-plan-v1")
+(define dynamic-font-cell-plan-abi-revision 1)
 ;; Visual language v1 fixes the compile-time canvas used by layout/NDC/tile lowering.
 (define visual-language-plan-abi-schema "noir-visual-language-plan-v1")
 (define visual-language-plan-abi-revision 1)
@@ -144,6 +148,9 @@ scene-glyph-draw-packets
         'font_placement_plan
         (hash 'schema font-placement-plan-abi-schema
               'revision font-placement-plan-abi-revision)
+        'dynamic_font_cell_plan
+        (hash 'schema dynamic-font-cell-plan-abi-schema
+              'revision dynamic-font-cell-plan-abi-revision)
         'visual_language_plan
         (hash 'schema visual-language-plan-abi-schema
               'revision visual-language-plan-abi-revision)))
@@ -151,7 +158,7 @@ scene-glyph-draw-packets
 (struct ui-node (tag id props children source) #:transparent)
 ;; Scene 以静态树和增量执行计划共同组成。state/actions 由 `noir-app`
 ;; 的扩展语法生成；普通 `(ui ...)` 保持空状态表，仍可独立使用。
-(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets visual-language-plan) #:transparent)
+(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan) #:transparent)
 ;; state-slot 的 index 是所有 runtime state read/write 的唯一地址；id/initial 只保留为启动期 proof 与可审计导出。
 (struct state-slot (index id initial) #:transparent)
 ;; action-slot 与 state-slot 一样为 macro expansion 生成的 dense canonical address。
@@ -237,6 +244,9 @@ scene-glyph-draw-packets
 ;; A v1 asset is uploaded and startup-proved but registered inactive until a later
 ;; placement plan explicitly targets atlas page 2 with fontc UV/metrics.
 (struct font-asset-plan (face-id manifest-path atlas-path font-sha256 atlas-sha256 atlas-width atlas-height atlas-channels pixel-size line-height glyph-domain-first glyph-domain-count atlas-page activation) #:transparent)
+;; Independent page-3 resource and fixed cell write authority. `tables` contains
+;; plain compiler-emitted hashes: no runtime font registry or lookup is exposed.
+(struct dynamic-font-cell-plan (face-id manifest-path atlas-path font-sha256 atlas-sha256 atlas-width atlas-height atlas-channels coverage-policy advance-policy fixed-advance glyph-domain-first glyph-domain-count tables) #:transparent)
 ;; Window dimensions are fixed compiler-owned geometry; host may configure but cannot infer them.
 (struct visual-language-plan (preset width height margin) #:transparent)
 
@@ -774,6 +784,26 @@ scene-glyph-draw-packets
                       'viewport_only #t
                       'row_tile_rule "logical-mod-physical-slots")))
 
+(define (dynamic-font-cell-plan->jsexpr plan)
+  (and plan
+       (hash 'abi_schema dynamic-font-cell-plan-abi-schema
+             'abi_revision dynamic-font-cell-plan-abi-revision
+             'face_id (dynamic-font-cell-plan-face-id plan)
+             'manifest_path (dynamic-font-cell-plan-manifest-path plan)
+             'atlas_path (dynamic-font-cell-plan-atlas-path plan)
+             'font_sha256 (dynamic-font-cell-plan-font-sha256 plan)
+             'atlas_sha256 (dynamic-font-cell-plan-atlas-sha256 plan)
+             'atlas_width (dynamic-font-cell-plan-atlas-width plan)
+             'atlas_height (dynamic-font-cell-plan-atlas-height plan)
+             'atlas_channels (dynamic-font-cell-plan-atlas-channels plan)
+             'atlas_page 3
+             'coverage_policy (dynamic-font-cell-plan-coverage-policy plan)
+             'advance_policy (dynamic-font-cell-plan-advance-policy plan)
+             'fixed_advance (dynamic-font-cell-plan-fixed-advance plan)
+             'glyph_domain_first (dynamic-font-cell-plan-glyph-domain-first plan)
+             'glyph_domain_count (dynamic-font-cell-plan-glyph-domain-count plan)
+             'tables (value->jsexpr (dynamic-font-cell-plan-tables plan)))))
+
 (define (visual-language-plan->jsexpr plan)
   (hash 'abi_schema visual-language-plan-abi-schema
         'abi_revision visual-language-plan-abi-revision
@@ -819,6 +849,7 @@ scene-glyph-draw-packets
         'list_navigation_plans (map list-navigation-plan->jsexpr (scene-list-navigation-plans s))
         'log_browser_plans (map log-browser-plan->jsexpr (scene-log-browser-plans s))
         'font_assets (map font-asset-plan->jsexpr (scene-font-assets s))
+        'dynamic_font_cell_plan (dynamic-font-cell-plan->jsexpr (scene-dynamic-font-cell-plan s))
         'visual_language_plan (visual-language-plan->jsexpr (scene-visual-language-plan s))
         'text_field_visuals (text-field-visuals->jsexpr s)))
   (if build-attestation
@@ -907,7 +938,10 @@ scene-glyph-draw-packets
   (struct c-font-asset-spec (manifest-path atlas-path source) #:transparent)
   (struct c-font-glyph (glyph-id codepoint character x y width height advance bearing-x bearing-y) #:transparent)
 (struct c-font-asset-plan (face-id manifest-path atlas-path font-sha256 atlas-sha256 atlas-width atlas-height atlas-channels pixel-size line-height glyph-domain-first glyph-domain-count atlas-page activation glyphs) #:transparent)
-  (struct c-action-plan (id action action-index text-updates instance-updates damage tile-ids) #:transparent)
+   ;; Kept separate from c-font-asset-plan: page 3 is dynamic fixed-cell data, not
+   ;; an activation mode of the static page-2 font placement ABI.
+   (struct c-dynamic-font-cell-asset (face-id manifest-path atlas-path font-sha256 atlas-sha256 atlas-width atlas-height atlas-channels coverage-policy advance-policy fixed-advance glyphs source) #:transparent)
+   (struct c-action-plan (id action action-index text-updates instance-updates damage tile-ids) #:transparent)
   ;; Layout Plan 是后端可直接消费的静态几何契约。instance-offset 以
   ;; QuadInstance 的 44-byte packed layout 为单位，和 Rust vertex layout 对齐。
   (struct c-layout (id tag x y width height color glyph-offset glyph-count atlas-page glyph-ids glyph-advances instance-offset vertex-count) #:transparent)
@@ -1542,8 +1576,11 @@ scene-glyph-draw-packets
 ;; The font-face index exists only during macro expansion. Runtime Scene data contains
 ;; already-resolved UV/advance/face evidence rather than a mutable font registry.
 (define current-static-font-assets (make-parameter '()))
-(define (with-static-font-assets assets thunk)
-  (parameterize ([current-static-font-assets assets]) (thunk)))
+  (define current-static-dynamic-font-cell-asset (make-parameter #f))
+  (define (with-static-font-assets assets thunk)
+    (parameterize ([current-static-font-assets assets]) (thunk)))
+  (define (with-static-dynamic-font-cell-asset asset thunk)
+    (parameterize ([current-static-dynamic-font-cell-asset asset]) (thunk)))
 
   (define (parse-theme-hex who stx)
     (define text (syntax-e stx))
@@ -2359,8 +2396,10 @@ scene-glyph-draw-packets
       ;; Compact register form with a compiler-fixed data update batch.
       [(virtual-list #:id id:id #:logical-capacity logical-capacity #:physical-slots physical-slots
                      #:visible-rows visible #:row-height row-height #:max-chars max-chars
-                     (data-register-table #:id table-id:id #:seed seed-label
-                       (data-update-batch #:id batch-id:id ((update-index update-value) ...+)))
+(data-register-table #:id table-id:id
+                        (~optional (~seq #:font-face font-face:id) #:defaults ([font-face #'#f]))
+                        #:seed seed-label
+                        (data-update-batch #:id batch-id:id ((update-index update-value) ...+)))
                      (~optional (on-activate activate-action:id) #:defaults ([activate-action #'#f]))
                      (row-template ((row-id:id row-label) ...+)))
        (define id-value (syntax-e #'id))
@@ -2371,8 +2410,13 @@ scene-glyph-draw-packets
        (define max-chars-value (expect-positive-integer 'virtual-list #'max-chars))
        (unless (<= visible-value physical-slots-value logical-capacity-value)
          (raise-syntax-error 'virtual-list "requires visible-rows <= physical-slots <= logical-capacity" stx))
-       (define seed-value (component-literal-string 'data-register-table #'seed-label))
-       (define update-indices (map syntax-e (syntax->list #'(update-index ...))))
+               (define seed-value (component-literal-string 'data-register-table #'seed-label))
+        (define table-face (and (syntax-e #'font-face) (symbol->string (syntax-e #'font-face))))
+        (when table-face
+          (define asset (current-static-dynamic-font-cell-asset))
+          (unless (and asset (string=? table-face (c-dynamic-font-cell-asset-face-id asset)))
+            (raise-syntax-error 'data-register-table "#:font-face must name the declared dynamic-font-cell-asset" #'font-face)))
+        (define update-indices (map syntax-e (syntax->list #'(update-index ...))))
        (unless (andmap exact-nonnegative-integer? update-indices)
          (raise-syntax-error 'data-update-batch "every update index must be a non-negative integer literal" stx))
        (unless (= (length update-indices) (length (remove-duplicates update-indices)))
@@ -2389,22 +2433,31 @@ scene-glyph-draw-packets
        (unless (= (length row-ids) physical-slots-value)
          (raise-syntax-error 'virtual-list "row-template must provide exactly #:physical-slots physical rows" stx))
        (define-values (outer-id ignored seen*) (register-id 'virtual-list stx (hash '#:id id-value) seen))
-       (define row-forms (for/list ([row-id (in-list row-ids)] [label (in-list row-labels)]) `(row #:id ,row-id #:height ,row-height-value (text #:id ,(component-child-id row-id 'label) ,label))))
+       (define row-forms
+         (for/list ([row-id (in-list row-ids)] [label (in-list row-labels)])
+           (define fixed-label (if table-face
+                                   (string-append label (make-string (- max-chars-value (string-length label)) #\space))
+                                   label))
+           `(row #:id ,row-id #:height ,row-height-value
+                 (text #:id ,(component-child-id row-id 'label) ,fixed-label))))
        (define-values (rows seen**) (parse-children (map (lambda (form) (datum->syntax stx form stx stx)) row-forms) seen*))
        (define props (hash 'capacity physical-slots-value 'logical-capacity logical-capacity-value 'physical-slots physical-slots-value
                            'recycling? #t 'logical-data-ids '() 'logical-labels '() 'visible-rows visible-value
                            'row-height row-height-value 'max-chars max-chars-value 'viewport-height (* visible-value row-height-value)
                            'row-ids row-ids '#:clip #t
-                           'data-register-table (hash 'id (syntax-e #'table-id) 'capacity logical-capacity-value 'register-width max-chars-value 'seed seed-value 'atlas-page ascii-atlas-page)
-                           'data-update-batches (list (hash 'id (syntax-e #'batch-id) 'table (syntax-e #'table-id)
+                           'data-register-table (hash 'id (syntax-e #'table-id) 'capacity logical-capacity-value 'register-width max-chars-value 'seed seed-value
+                                                       'atlas-page (if table-face 3 ascii-atlas-page) 'font-face table-face)
+                            'data-update-batches (list (hash 'id (syntax-e #'batch-id) 'table (syntax-e #'table-id)
                                                            'updates (for/list ([index (in-list update-indices)] [value (in-list update-values)]) (hash 'index index 'value value))))
                            'on-activate (syntax-e #'activate-action)))
        (values (c-node 'virtual-list outer-id props rows stx) seen**)]
       ;; Compact register form: no logical labels or per-viewport transition table is expanded.
       [(virtual-list #:id id:id #:logical-capacity logical-capacity #:physical-slots physical-slots
                      #:visible-rows visible #:row-height row-height #:max-chars max-chars
-                     (data-register-table #:id table-id:id #:seed seed-label)
-                     (row-template ((row-id:id row-label) ...+)))
+(data-register-table #:id table-id:id
+                        (~optional (~seq #:font-face font-face:id) #:defaults ([font-face #'#f]))
+                        #:seed seed-label)
+                      (row-template ((row-id:id row-label) ...+)))
        (define id-value (syntax-e #'id))
        (define logical-capacity-value (expect-positive-integer 'virtual-list #'logical-capacity))
        (define physical-slots-value (expect-positive-integer 'virtual-list #'physical-slots))
@@ -2413,8 +2466,13 @@ scene-glyph-draw-packets
        (define max-chars-value (expect-positive-integer 'virtual-list #'max-chars))
        (unless (<= visible-value physical-slots-value logical-capacity-value)
          (raise-syntax-error 'virtual-list "requires visible-rows <= physical-slots <= logical-capacity" stx))
-       (define seed-value (component-literal-string 'data-register-table #'seed-label))
-       (unless (<= (string-length seed-value) max-chars-value)
+        (define seed-value (component-literal-string 'data-register-table #'seed-label))
+        (define table-face (and (syntax-e #'font-face) (symbol->string (syntax-e #'font-face))))
+        (when table-face
+          (define asset (current-static-dynamic-font-cell-asset))
+          (unless (and asset (string=? table-face (c-dynamic-font-cell-asset-face-id asset)))
+            (raise-syntax-error 'data-register-table "#:font-face must name the declared dynamic-font-cell-asset" #'font-face)))
+        (unless (<= (string-length seed-value) max-chars-value)
          (raise-syntax-error 'virtual-list "data-register-table seed exceeds #:max-chars" #'seed-label))
        (define row-ids (map syntax-e (syntax->list #'(row-id ...))))
        (define row-labels (map (lambda (label-stx) (component-literal-string 'row-template label-stx))
@@ -2424,16 +2482,20 @@ scene-glyph-draw-packets
        (define-values (outer-id ignored seen*) (register-id 'virtual-list stx (hash '#:id id-value) seen))
        (define row-forms
          (for/list ([row-id (in-list row-ids)] [label (in-list row-labels)])
+           (define fixed-label (if table-face
+                                   (string-append label (make-string (- max-chars-value (string-length label)) #\space))
+                                   label))
            `(row #:id ,row-id #:height ,row-height-value
-                 (text #:id ,(component-child-id row-id 'label) ,label))))
+                 (text #:id ,(component-child-id row-id 'label) ,fixed-label))))
        (define-values (rows seen**) (parse-children (map (lambda (form) (datum->syntax stx form stx stx)) row-forms) seen*))
        (define props
          (hash 'capacity physical-slots-value 'logical-capacity logical-capacity-value 'physical-slots physical-slots-value
                'recycling? #t 'logical-data-ids '() 'logical-labels '() 'visible-rows visible-value
                'row-height row-height-value 'max-chars max-chars-value 'viewport-height (* visible-value row-height-value)
                'row-ids row-ids '#:clip #t
-               'data-register-table (hash 'id (syntax-e #'table-id) 'capacity logical-capacity-value
-                                          'register-width max-chars-value 'seed seed-value 'atlas-page ascii-atlas-page)))
+'data-register-table (hash 'id (syntax-e #'table-id) 'capacity logical-capacity-value
+                                           'register-width max-chars-value 'seed seed-value
+                                           'atlas-page (if table-face 3 ascii-atlas-page) 'font-face table-face)))
        (values (c-node 'virtual-list outer-id props rows stx) seen**)]
       ;; Recycling form: logical data is a fixed compile-time table while the row-template
       ;; materializes only physical GPU slots. Runtime may rotate slots but never allocates rows.
@@ -2684,6 +2746,17 @@ scene-glyph-draw-packets
   ;; Compact data-register rows own fixed glyph cells that are mutable through the
   ;; register ABI, not through a declared UI state. This marks that distinct source
   ;; of mutability without adding a runtime lookup or a synthetic state dependency.
+  (define (dynamic-font-cell-text-node-ids root face-id)
+    (for/fold ([ids (set)]) ([list-node (in-list (walk-nodes root))]
+                              #:when (and (eq? (c-node-tag list-node) 'virtual-list)
+                                          (let ([table (hash-ref (c-node-props list-node) 'data-register-table #f)])
+                                            (and table (equal? (hash-ref table 'font-face #f) face-id)))))
+      (for/fold ([row-ids ids]) ([child (in-list (c-node-children list-node))])
+        (for/fold ([next-ids row-ids]) ([descendant (in-list (walk-nodes child))])
+          (if (eq? (c-node-tag descendant) 'text)
+              (set-add next-ids (c-node-id descendant))
+              next-ids)))))
+
   (define (compact-register-text-node-ids root)
     (for/fold ([ids (set)]) ([list-node (in-list (walk-nodes root))]
                               #:when (and (eq? (c-node-tag list-node) 'virtual-list)
@@ -3346,6 +3419,16 @@ scene-glyph-draw-packets
     (define font-assets-by-face
       (for/hash ([asset (in-list (current-static-font-assets))])
         (values (c-font-asset-plan-face-id asset) asset)))
+    (define dynamic-cell-asset (current-static-dynamic-font-cell-asset))
+    (define dynamic-cell-node-ids
+      (if dynamic-cell-asset
+          (dynamic-font-cell-text-node-ids root (c-dynamic-font-cell-asset-face-id dynamic-cell-asset))
+          (set)))
+    (define dynamic-cell-glyph-by-codepoint
+      (if dynamic-cell-asset
+          (for/hash ([glyph (in-list (c-dynamic-font-cell-asset-glyphs dynamic-cell-asset))])
+            (values (c-font-glyph-codepoint glyph) glyph))
+          (hash)))
     (define (fontc-glyph binding glyph-id)
       (define face-id (c-binding-face-id binding))
       (and face-id
@@ -3378,16 +3461,31 @@ scene-glyph-draw-packets
          (define layout (hash-ref layout-by-id node-id))
          (define composite (hash-ref composite-by-id node-id))
          (define state-id (c-binding-state binding))
+         (define dynamic-tabular?
+           (and dynamic-cell-asset (c-binding-mutable? binding)
+                (not state-id) (set-member? dynamic-cell-node-ids node-id)))
          (define glyph-ids
-           (if state-id
-               (if (eq? (hash-ref (c-node-props node) 'charset 'digits) 'ascii-upper)
-                   (c-binding-glyph-ids binding)
-                   (shape-initial-digits 'text state-id
-                                         (hash-ref initial-state-by-id state-id)
-                                         (c-binding-glyph-count binding)
-                                         (c-node-source node)))
-               (c-binding-glyph-ids binding)))
-         (define advances (c-binding-glyph-advances binding))
+           (cond [dynamic-tabular?
+                  (for/list ([ch (in-string (hash-ref (c-node-props node) 'value))])
+                    (define glyph (hash-ref dynamic-cell-glyph-by-codepoint (char->integer ch)
+                                            (lambda ()
+                                              (raise-syntax-error 'data-register-table
+                                                                  "dynamic tabular row contains a glyph outside TABULAR_BODY_V1"
+                                                                  (c-node-source node)))))
+                    (encode-glyph 3 (c-font-glyph-glyph-id glyph)))]
+                 [state-id
+                  (if (eq? (hash-ref (c-node-props node) 'charset 'digits) 'ascii-upper)
+                      (c-binding-glyph-ids binding)
+                      (shape-initial-digits 'text state-id
+                                            (hash-ref initial-state-by-id state-id)
+                                            (c-binding-glyph-count binding)
+                                            (c-node-source node)))]
+                 [else (c-binding-glyph-ids binding)]))
+         (define advances (if dynamic-tabular? (make-list (length glyph-ids) 10.0)
+                              (c-binding-glyph-advances binding)))
+         (define effective-atlas-page (if dynamic-tabular? 3 (c-binding-atlas-page binding)))
+         (define effective-face-id (if dynamic-tabular? (c-dynamic-font-cell-asset-face-id dynamic-cell-asset)
+                                      (c-binding-face-id binding)))
          (unless (= (length glyph-ids) (length advances))
            (raise-syntax-error 'text "glyph IDs and advance plan have different lengths" (c-node-source node)))
          (define total-advance (apply + advances))
@@ -3405,8 +3503,8 @@ scene-glyph-draw-packets
          (define start-x (+ (first run-pos) (* (first run-size) 0.12)))
          (define batch-key
            (string->symbol
-            (format "glyph-atlas|page:~a|clip:~a|blend:alpha"
-                    (c-binding-atlas-page binding)
+                    (format "glyph-atlas|page:~a|clip:~a|blend:alpha"
+                    effective-atlas-page
                     (c-composite-clip-stack-id composite))))
          (let loop ([ids glyph-ids] [advance-list advances] [glyph-index 0]
                     [prefix 0.0] [result '()])
@@ -3441,14 +3539,23 @@ scene-glyph-draw-packets
               (define slot (quotient glyph-byte-offset glyph-instance-bytes))
               (loop (cdr ids) (cdr advance-list) (add1 glyph-index) (+ prefix advance)
                     (cons (c-glyph-placement
-                           slot node-id glyph-index glyph-id (c-binding-atlas-page binding)
+                           slot node-id glyph-index glyph-id effective-atlas-page
                            glyph-byte-offset (quotient glyph-byte-offset 4)
-                           glyph-pos glyph-size (atlas-uv binding glyph-id) advance
+                           glyph-pos glyph-size
+                           (if dynamic-tabular?
+                               (let* ([glyph-index (bitwise-and glyph-id #xffff)]
+                                      [glyph (list-ref (c-dynamic-font-cell-asset-glyphs dynamic-cell-asset) glyph-index)])
+                                 (list (/ (exact->inexact (c-font-glyph-x glyph)) (c-dynamic-font-cell-asset-atlas-width dynamic-cell-asset))
+                                       (/ (exact->inexact (c-font-glyph-y glyph)) (c-dynamic-font-cell-asset-atlas-height dynamic-cell-asset))
+                                       (/ (exact->inexact (c-font-glyph-width glyph)) (c-dynamic-font-cell-asset-atlas-width dynamic-cell-asset))
+                                       (/ (exact->inexact (c-font-glyph-height glyph)) (c-dynamic-font-cell-asset-atlas-height dynamic-cell-asset))))
+                               (atlas-uv binding glyph-id))
+                           advance
                             (c-binding-mutable? binding) state-id (and state-id (hash-ref state-indexes state-id))
                            (c-composite-clip-stack-id composite)
                            (c-composite-clip-rect composite)
                            (c-composite-z-layer composite)
-                           batch-key (c-binding-face-id binding))
+                           batch-key effective-face-id)
                           result))])))
        bindings))
     (define (packet-compatible? left right)
@@ -4830,6 +4937,134 @@ scene-glyph-draw-packets
                          (manifest-ref 'font-asset metrics "line_height" (c-font-asset-spec-source spec))
                          0 glyph-count 2 "registered-inactive" compiled-glyphs)))
 
+  (define (parse-dynamic-font-cell-asset-forms forms)
+    (for/list ([form (in-list forms)])
+      (syntax-parse form
+        #:datum-literals (dynamic-font-cell-asset)
+        [(dynamic-font-cell-asset #:manifest manifest:string #:atlas atlas:string)
+         (c-font-asset-spec (syntax-e #'manifest) (syntax-e #'atlas) form)]
+        [_ (raise-syntax-error 'dynamic-font-cell-asset
+                               "expected (dynamic-font-cell-asset #:manifest relative-path #:atlas relative-path)"
+                               form)])))
+
+  (define (compile-dynamic-font-cell-asset specs)
+    (unless (= (length specs) 1)
+      (raise-syntax-error 'dynamic-font-cell-asset "expects exactly one page-3 dynamic font asset declaration" #f))
+    (define spec (car specs))
+    (define source (c-font-asset-spec-source spec))
+    (define manifest-source (font-asset-source-path source (c-font-asset-spec-manifest-path spec)))
+    (define atlas-source (font-asset-source-path source (c-font-asset-spec-atlas-path spec)))
+    (unless (file-exists? manifest-source)
+      (raise-syntax-error 'dynamic-font-cell-asset "manifest path does not exist at macro expansion" source))
+    (unless (file-exists? atlas-source)
+      (raise-syntax-error 'dynamic-font-cell-asset "atlas path does not exist at macro expansion" source))
+    (define manifest (call-with-input-file manifest-source read-json))
+    (define (ref key) (manifest-ref 'dynamic-font-cell-asset manifest key source))
+    (unless (and (equal? (ref "schema") "noir-font-asset-manifest-v1") (= (ref "revision") 1)
+                 (equal? (ref "renderer_kind") "atlas-gray")
+                 (equal? (ref "coverage_policy") "tabular-body-v1")
+                 (equal? (ref "advance_policy") "fixed-tabular")
+                 (= (ref "fixed_advance") 10.0))
+      (raise-syntax-error 'dynamic-font-cell-asset
+                          "manifest must be tabular-body-v1 atlas-gray with fixed-tabular 10.0px advance"
+                          source))
+    (define face-id (ref "face_id"))
+    (unless (equal? face-id "noir-table-body-mono-16")
+      (raise-syntax-error 'dynamic-font-cell-asset "v1 requires face_id noir-table-body-mono-16" source))
+    (define atlas (ref "atlas"))
+    (define width (manifest-ref 'dynamic-font-cell-asset atlas "width" source))
+    (define height (manifest-ref 'dynamic-font-cell-asset atlas "height" source))
+    (define channels (manifest-ref 'dynamic-font-cell-asset atlas "channels" source))
+    (unless (and (= width 256) (= height 256) (= channels 1) (= (file-size atlas-source) (* width height)))
+      (raise-syntax-error 'dynamic-font-cell-asset "tabular-body R8 atlas geometry or length is invalid" source))
+    (define glyphs (ref "glyphs"))
+    (define glyph-count (ref "glyph_count"))
+    (define expected-characters " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    (unless (and (= glyph-count 37) (list? glyphs) (= (length glyphs) glyph-count)
+                 (equal? (map (lambda (glyph) (manifest-ref 'dynamic-font-cell-asset glyph "glyph_id" source)) glyphs) (range 37))
+                 (equal? (apply string-append (map (lambda (glyph) (manifest-ref 'dynamic-font-cell-asset glyph "character" source)) glyphs)) expected-characters))
+      (raise-syntax-error 'dynamic-font-cell-asset "manifest must expose exactly the 37 dense TABULAR_BODY_V1 glyphs" source))
+    (define compiled-glyphs
+      (for/list ([glyph (in-list glyphs)])
+        (define glyph-id (manifest-ref 'dynamic-font-cell-asset glyph "glyph_id" source))
+        (define codepoint (manifest-ref 'dynamic-font-cell-asset glyph "codepoint" source))
+        (define character (manifest-ref 'dynamic-font-cell-asset glyph "character" source))
+        (define x (manifest-ref 'dynamic-font-cell-asset glyph "x" source))
+        (define y (manifest-ref 'dynamic-font-cell-asset glyph "y" source))
+        (define glyph-width (manifest-ref 'dynamic-font-cell-asset glyph "width" source))
+        (define glyph-height (manifest-ref 'dynamic-font-cell-asset glyph "height" source))
+        (define advance (manifest-ref 'dynamic-font-cell-asset glyph "advance" source))
+        (define bearing-x (manifest-ref 'dynamic-font-cell-asset glyph "bearing_x" source))
+        (define bearing-y (manifest-ref 'dynamic-font-cell-asset glyph "bearing_y" source))
+        (unless (and (= advance 10.0) (hash-has-key? glyph 'source_advance)
+                     (exact-nonnegative-integer? x) (exact-nonnegative-integer? y)
+                     (exact-positive-integer? glyph-width) (exact-positive-integer? glyph-height)
+                     (<= (+ x glyph-width) width) (<= (+ y glyph-height) height))
+          (raise-syntax-error 'dynamic-font-cell-asset "tabular-body glyph UV/advance violates fixed-cell proof" source))
+        (c-font-glyph glyph-id codepoint character x y glyph-width glyph-height advance bearing-x bearing-y)))
+    (define font-sha (ref "font_sha256"))
+    (define atlas-sha (ref "atlas_sha256"))
+    (unless (and (regexp-match? #px"^[0-9a-f]{64}$" font-sha)
+                 (regexp-match? #px"^[0-9a-f]{64}$" atlas-sha))
+      (raise-syntax-error 'dynamic-font-cell-asset "tabular-body font/atlas SHA-256 fields must be lowercase digests" source))
+    (c-dynamic-font-cell-asset face-id (c-font-asset-spec-manifest-path spec) (c-font-asset-spec-atlas-path spec)
+                               font-sha atlas-sha width height channels "tabular-body-v1" "fixed-tabular" 10.0 compiled-glyphs source))
+
+  (define (dynamic-font-cell-plan->datum asset virtual-list-plans placements)
+    (if (not asset)
+        '#f
+        (let* ([placement-by-slot (for/hash ([placement (in-list placements)])
+                                    (values (c-glyph-placement-slot placement) placement))]
+               [tables
+                (for/list ([list-plan (in-list virtual-list-plans)]
+                           #:when (let ([table (c-virtual-list-plan-data-register-table list-plan)])
+                                    (and table (equal? (hash-ref table 'font-face #f)
+                                                       (c-dynamic-font-cell-asset-face-id asset)))))
+                  (define table (c-virtual-list-plan-data-register-table list-plan))
+                  (define slots (sort (append-map values (c-virtual-list-plan-row-glyph-slots list-plan)) <))
+                  (define placements-for-table
+                    (for/list ([slot (in-list slots)])
+                      (hash-ref placement-by-slot slot
+                                (lambda () (raise-syntax-error 'dynamic-font-cell-asset
+                                                               "virtual-list row slot lacks a glyph placement"
+                                                               (c-dynamic-font-cell-asset-source asset))))))
+                  (unless (and (= (length slots) (* (hash-ref table 'register-width)
+                                                    (c-virtual-list-plan-physical-slots list-plan)))
+                               (for/and ([placement (in-list placements-for-table)])
+                                 (and (= (c-glyph-placement-atlas-page placement) 3)
+                                      (c-glyph-placement-dynamic? placement)
+                                      (equal? (c-glyph-placement-face-id placement)
+                                              (c-dynamic-font-cell-asset-face-id asset))
+                                      (= (c-glyph-placement-advance placement) 10.0))))
+                    (raise-syntax-error 'dynamic-font-cell-asset
+                                        "page-3 placements disagree with fixed data-register cell proof"
+                                        (c-dynamic-font-cell-asset-source asset)))
+                  (hash 'table_id (symbol->string (hash-ref table 'id))
+                        'list_id (symbol->string (c-virtual-list-plan-id list-plan))
+                        'register_width (hash-ref table 'register-width)
+                        'physical_slots (c-virtual-list-plan-physical-slots list-plan)
+                        'placement_slots slots
+                        'glyph_word_offsets (map c-glyph-placement-glyph-word-offset placements-for-table)
+                        'cell_uv (map c-glyph-placement-atlas-uv placements-for-table)
+                        'cell_advance (map c-glyph-placement-advance placements-for-table)
+                        'tile_ids (c-virtual-list-plan-visible-tile-ids list-plan)
+                        'packet_worklist_index 2))])
+          (unless (pair? tables)
+            (raise-syntax-error 'dynamic-font-cell-asset "declared page-3 asset is not referenced by any compact data-register-table" (c-dynamic-font-cell-asset-source asset)))
+          `(dynamic-font-cell-plan
+            ,(c-dynamic-font-cell-asset-face-id asset)
+            ,(c-dynamic-font-cell-asset-manifest-path asset)
+            ,(c-dynamic-font-cell-asset-atlas-path asset)
+            ,(c-dynamic-font-cell-asset-font-sha256 asset)
+            ,(c-dynamic-font-cell-asset-atlas-sha256 asset)
+            ,(c-dynamic-font-cell-asset-atlas-width asset)
+            ,(c-dynamic-font-cell-asset-atlas-height asset)
+            ,(c-dynamic-font-cell-asset-atlas-channels asset)
+            ,(c-dynamic-font-cell-asset-coverage-policy asset)
+            ,(c-dynamic-font-cell-asset-advance-policy asset)
+            ,(c-dynamic-font-cell-asset-fixed-advance asset)
+            0 37 ',tables))))
+
   (define (font-asset-plan->datum plan)
     `(font-asset-plan ,(c-font-asset-plan-face-id plan)
                       ,(c-font-asset-plan-manifest-path plan)
@@ -5506,8 +5741,9 @@ scene-glyph-draw-packets
                    [LIST-NAVIGATIONS (datum-stx stx (list-navigation-plans->datum list-navigation-plans))]
                     [LOG-BROWSERS (datum-stx stx ''())]
                     [FONT-ASSETS (datum-stx stx ''())]
+                    [DYNAMIC-FONT-CELL-PLAN (datum-stx stx '#f)]
                     [VISUAL-LANGUAGE (datum-stx stx '(visual-language-plan 'bench 640.0 360.0 16.0))])
-       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS VISUAL-LANGUAGE))]
+       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE))]
     [(_ root:expr extra:expr ...)
      (raise-syntax-error 'ui "expects exactly one root layout node" stx)]))
 
@@ -5522,11 +5758,12 @@ scene-glyph-draw-packets
      (define list-navigation-forms (filter (lambda (form) (eq? (form-head-symbol form) 'list-navigation)) forms))
      (define log-browser-forms (filter (lambda (form) (eq? (form-head-symbol form) 'log-browser)) forms))
      (define font-asset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'font-asset)) forms))
+     (define dynamic-font-cell-asset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'dynamic-font-cell-asset)) forms))
      (define theme-forms (filter (lambda (form) (eq? (form-head-symbol form) 'theme)) forms))
      (define visual-preset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'visual-preset)) forms))
      (define layout-forms
        (filter (lambda (form)
-                 (not (memq (form-head-symbol form) '(state action commit-group command-table list-navigation log-browser font-asset theme visual-preset))))
+                 (not (memq (form-head-symbol form) '(state action commit-group command-table list-navigation log-browser font-asset dynamic-font-cell-asset theme visual-preset))))
                forms))
      (unless (= (length state-forms) 1)
        (raise-syntax-error 'noir-app "expects exactly one (state ...) form" stx))
@@ -5555,11 +5792,16 @@ scene-glyph-draw-packets
      (define log-browser-specs (parse-log-browser-forms log-browser-forms))
      (define font-asset-specs (parse-font-asset-forms font-asset-forms))
      (define font-assets (compile-font-asset-plans font-asset-specs))
+     (define dynamic-font-cell-asset
+       (and (pair? dynamic-font-cell-asset-forms)
+            (compile-dynamic-font-cell-asset
+             (parse-dynamic-font-cell-asset-forms dynamic-font-cell-asset-forms))))
      (define action-indexes (action-index-by-id actions))
      (define transaction-indexes (transaction-index-by-id transactions))
      (define-values (root-node _)
        (parameterize ([current-static-theme static-theme]
                       [current-static-font-assets font-assets]
+                      [current-static-dynamic-font-cell-asset dynamic-font-cell-asset]
                       [current-static-visual-preset static-visual-preset])
          (parse-node (car layout-forms) (set))))
      (define-values (total dynamic budget updates)
@@ -5570,7 +5812,9 @@ scene-glyph-draw-packets
      (define-values (glyph-placements glyph-packets)
        (parameterize ([current-static-visual-preset static-visual-preset])
          (with-static-font-assets font-assets
-           (lambda () (compile-glyph-placement-plan root-node states layouts state-indexes)))))
+           (lambda ()
+             (with-static-dynamic-font-cell-asset dynamic-font-cell-asset
+               (lambda () (compile-glyph-placement-plan root-node states layouts state-indexes)))))))
      (define subgroup-packets (compile-subgroup-packet-plan glyph-packets))
      (define packet-activity-contract (compile-packet-activity-contract subgroup-packets))
      (define base-packet-worklists (compile-packet-worklists subgroup-packets))
@@ -5591,6 +5835,8 @@ scene-glyph-draw-packets
      (define virtual-list-plans
        (parameterize ([current-static-visual-preset static-visual-preset])
          (compile-virtual-list-plans root-node layouts glyph-placements)))
+     (define dynamic-font-cell-plan-datum
+       (dynamic-font-cell-plan->datum dynamic-font-cell-asset virtual-list-plans glyph-placements))
      (define scrollbar-plans (compile-scrollbar-plans root-node layouts virtual-list-plans render-schedules))
      (define list-navigation-plans (compile-list-navigation-plans list-navigation-specs virtual-list-plans scrollbar-plans))
      (define log-browser-plans (compile-log-browser-plans log-browser-specs root-node layouts glyph-placements virtual-list-plans render-schedules))
@@ -5654,7 +5900,8 @@ scene-glyph-draw-packets
                    [LIST-NAVIGATIONS (datum-stx stx (list-navigation-plans->datum list-navigation-plans))]
                     [LOG-BROWSERS (datum-stx stx (log-browser-plans->datum log-browser-plans))]
                     [FONT-ASSETS (datum-stx stx (font-asset-plans->datum font-assets))]
-                    [VISUAL-LANGUAGE (datum-stx stx visual-language-datum)])
+                     [DYNAMIC-FONT-CELL-PLAN (datum-stx stx dynamic-font-cell-plan-datum)]
+                     [VISUAL-LANGUAGE (datum-stx stx visual-language-datum)])
        #'(begin
-           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS VISUAL-LANGUAGE))
+           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE))
            (provide app-scene)))]))

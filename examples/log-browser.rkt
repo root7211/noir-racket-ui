@@ -6,6 +6,8 @@
 (noir-app
  (font-asset #:manifest "assets/fontc/noir-desktop-sans-18/manifest.json"
              #:atlas "assets/fontc/noir-desktop-sans-18/atlas.r8")
+ (dynamic-font-cell-asset #:manifest "assets/fontc/noir-table-body-mono-16/manifest.json"
+                          #:atlas "assets/fontc/noir-table-body-mono-16/atlas.r8")
  (visual-preset desktop-wide)
  (theme noir-desktop
    (color canvas "#0B0F16" canvas-quiet "#101620"
@@ -40,7 +42,7 @@
                    #:visible-rows 3
                    #:row-height 28
                    #:max-chars 32
-       (data-register-table #:id system-log-data #:seed "INFO  TIME  CORE  STARTUP"
+       (data-register-table #:id system-log-data #:font-face noir-table-body-mono-16 #:seed "INFO  TIME  CORE  STARTUP"
          (data-update-batch #:id bootstrap-system-log
            ((0 "INFO  TIME  CORE  STARTUP"))))
        (on-activate open-log-detail)
