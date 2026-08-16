@@ -52,6 +52,8 @@ const SHADOW_SURFACE_PLAN_ABI_SCHEMA: &str = "noir-shadow-surface-plan-v1";
 const SHADOW_SURFACE_PLAN_ABI_REVISION: u32 = 1;
 const NAVIGATION_SELECTION_PLAN_ABI_SCHEMA: &str = "noir-navigation-selection-plan-v1";
 const NAVIGATION_SELECTION_PLAN_ABI_REVISION: u32 = 1;
+const OVERLAY_STATE_PLAN_ABI_SCHEMA: &str = "noir-overlay-state-plan-v1";
+const OVERLAY_STATE_PLAN_ABI_REVISION: u32 = 1;
 
 #[derive(Debug, Deserialize)]
 struct Scene {
@@ -100,6 +102,11 @@ struct Scene {
     shadow_surface_plan: Option<ShadowSurfacePlan>,
     #[serde(deserialize_with = "deserialize_navigation_selection_plan_option")]
     navigation_selection_plan: Option<NavigationSelectionPlan>,
+    #[serde(deserialize_with = "deserialize_overlay_state_plan_option")]
+    overlay_state_plan: Option<OverlayStatePlan>,
+    // Explicit compiler marker: ordinary static overlay primitives remain compatible;
+    // only a lowered material-overlay-state may require the v1 transition plan.
+    overlay_state_required: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -118,6 +125,7 @@ struct AbiContracts {
     rounded_surface_plan: AbiContract,
     shadow_surface_plan: AbiContract,
     navigation_selection_plan: AbiContract,
+    overlay_state_plan: AbiContract,
 }
 
 #[derive(Debug, Deserialize)]
@@ -232,6 +240,39 @@ where D: Deserializer<'de> {
         NavigationSelectionPlanWire::Plan(plan) => Ok(Some(plan)),
         NavigationSelectionPlanWire::Disabled(false) => Ok(None),
         NavigationSelectionPlanWire::Disabled(true) => Err(serde::de::Error::custom("navigation_selection_plan may be an object or false, never true")),
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct OverlayStateEntry {
+    id: String,
+    state: String,
+    state_index: usize,
+    initial_visible: i64,
+    open_action: String,
+    close_actions: Vec<String>,
+    event_slots: Vec<usize>,
+    instance_offsets: Vec<usize>,
+    glyph_slots: Vec<usize>,
+    tile_ids: Vec<usize>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct OverlayStatePlan {
+    abi_schema: String,
+    abi_revision: u32,
+    entries: Vec<OverlayStateEntry>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum OverlayStatePlanWire { Plan(OverlayStatePlan), Disabled(bool) }
+fn deserialize_overlay_state_plan_option<'de, D>(deserializer: D) -> std::result::Result<Option<OverlayStatePlan>, D::Error>
+where D: Deserializer<'de> {
+    match OverlayStatePlanWire::deserialize(deserializer)? {
+        OverlayStatePlanWire::Plan(plan) => Ok(Some(plan)),
+        OverlayStatePlanWire::Disabled(false) => Ok(None),
+        OverlayStatePlanWire::Disabled(true) => Err(serde::de::Error::custom("overlay_state_plan may be an object or false, never true")),
     }
 }
 
@@ -589,6 +630,23 @@ struct CompiledNavigationSelectionPlan {
     destinations: Vec<CompiledNavigationSelectionDestination>,
     selected_index: usize,
 }
+
+#[derive(Clone, Debug)]
+struct CompiledOverlayStateEntry {
+    id: String,
+    state_index: usize,
+    open_action: String,
+    close_actions: Vec<String>,
+    event_slots: Vec<usize>,
+    instance_offsets: Vec<usize>,
+    instance_alphas: Vec<f32>,
+    glyph_slots: Vec<usize>,
+    shadow_indices: Vec<usize>,
+    tile_mask: u64,
+}
+
+#[derive(Clone, Debug)]
+struct CompiledOverlayStatePlan { entries: Vec<CompiledOverlayStateEntry> }
 
 #[derive(Clone, Debug, Deserialize)]
 struct LogAppendUpdate { index: usize, value: String }
@@ -1294,7 +1352,8 @@ struct GlyphPlacementInstance {
     glyph_word_offset: u32,
     atlas_page: u32,
     dynamic: u32,
-    _padding: u32,
+    // ABI offset 44: formerly padding, now compiler-proved visibility alpha.
+    alpha: f32,
 }
 
 struct GpuTimestampTimer {
@@ -1634,6 +1693,7 @@ struct Host {
     shadow_surface_bind_group: wgpu::BindGroup,
     shadow_instance_buffer: wgpu::Buffer,
     shadow_instance_count: u32,
+    shadow_instances: Vec<QuadInstance>,
     _shadow_surface_buffer: wgpu::Buffer,
     text_pipeline: wgpu::RenderPipeline,
     glyph_bind_group: wgpu::BindGroup,
@@ -1677,6 +1737,7 @@ struct Host {
     active_scrollbar: Option<usize>,
     list_navigation_plans: Vec<CompiledListNavigationPlan>,
     navigation_selection_plan: Option<CompiledNavigationSelectionPlan>,
+    overlay_state_plan: Option<CompiledOverlayStatePlan>,
     log_browser_plans: Vec<CompiledLogBrowserPlan>,
     log_levels: Vec<Vec<LogLevel>>,
     // Registered v1 fontc atlases. They deliberately remain separate from legacy
@@ -1713,7 +1774,7 @@ impl Host {
         // Must complete before adapter/device/window rendering side effects. The returned
         // table has exactly one immutable metadata slot per frozen QuadInstance.
         let rounded_surface_metadata = compiler_rounded_surface_plan(&scene)?;
-        let (shadow_instances, shadow_surface_metadata) = compiler_shadow_surface_plan(&scene)?;
+        let (mut shadow_instances, shadow_surface_metadata) = compiler_shadow_surface_plan(&scene)?;
         let source_fingerprint_fnv1a64 = scene.build_attestation.as_ref()
             .filter(|attestation| attestation.schema == "noir-build-attestation-v1")
             .map(|attestation| attestation.source_fingerprint_fnv1a64.clone())
@@ -1824,7 +1885,22 @@ impl Host {
         let static_runs = scene.layout_plan.iter().filter(|entry| !entry.glyph_ids.is_empty()).count();
         println!("compiler text resources: {static_runs} static shaped run(s), {} dynamic text-run action(s)", scene.actions.values().map(|action| action.gpu_updates.len()).sum::<usize>());
         let glyph_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("noir-placement-glyph-id-storage"), contents: &glyph_bytes, usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST });
-        let placements = placement_instances(&scene)?;
+        let mut placements = placement_instances(&scene)?;
+        let overlay_state_plan = compiler_overlay_state_plan(&scene, &state_slot_ids, &action_slot_ids, &action_tile_masks, &packet_worklists, &instances, &placements)?;
+        if let Some(plan) = &overlay_state_plan {
+            for entry in &plan.entries {
+                if state_slot_values[entry.state_index] == 0 {
+                    for &offset in &entry.instance_offsets {
+                        instances[offset / std::mem::size_of::<QuadInstance>()].color[3] = 0.0;
+                        queue.write_buffer(&instance_buffer, (offset + 28) as u64, bytemuck::bytes_of(&0.0f32));
+                    }
+                    for &slot in &entry.glyph_slots { placements[slot].alpha = 0.0; }
+                    for &shadow_index in &entry.shadow_indices { shadow_instances[shadow_index].color[3] = 0.0; }
+                }
+            }
+            println!("compiler overlay state initial endpoint: entries={} hidden={}", plan.entries.len(),
+                     plan.entries.iter().filter(|entry| state_slot_values[entry.state_index] == 0).count());
+        }
         let (tile_glyph_range_count, tile_glyph_instance_count) = validate_tile_glyph_ranges(&scene)?;
         println!("compiler glyph placement resources: {} placement instance(s), {} page-aware packet(s), ABI={} bytes", placements.len(), scene.glyph_draw_packets.len(), GLYPH_PLACEMENT_BYTES);
         println!("compiler tile glyph culling: {} scissor tile(s), {} submitted subrange(s), {} glyph instance(s)", scene.render_schedules.iter().map(|schedule| schedule.tiles.len()).sum::<usize>(), tile_glyph_range_count, tile_glyph_instance_count);
@@ -1846,7 +1922,7 @@ impl Host {
         let shadow_instance_count = shadow_instances.len() as u32;
         let shadow_instance_upload = if shadow_instances.is_empty() { vec![QuadInstance::zeroed()] } else { shadow_instances };
         let shadow_instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("noir-immutable-shadow-instance-buffer"), contents: bytemuck::cast_slice(&shadow_instance_upload), usage: wgpu::BufferUsages::VERTEX,
+            label: Some("noir-immutable-shadow-instance-buffer"), contents: bytemuck::cast_slice(&shadow_instance_upload), usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
         let (shadow_surface_layout, shadow_surface_buffer, shadow_surface_bind_group) =
             make_shadow_surface_resources(&device, &shadow_surface_metadata);
@@ -1864,8 +1940,8 @@ impl Host {
         let initial_instances = instances.clone();
         let initial_glyph_bytes = glyph_bytes.clone();
         let virtual_list_count = virtual_lists.len();
-        let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, canvas_width: visual_canvas.width, canvas_height: visual_canvas.height, canvas_margin: visual_canvas.margin, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, rounded_surface_bind_group, _rounded_surface_buffer: rounded_surface_buffer, shadow_pipeline, shadow_surface_bind_group, shadow_instance_buffer, shadow_instance_count, _shadow_surface_buffer: shadow_surface_buffer, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group,
- cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, release_tracks, active_release_tracks: Vec::new(), virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, navigation_selection_plan, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
+        let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, canvas_width: visual_canvas.width, canvas_height: visual_canvas.height, canvas_margin: visual_canvas.margin, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, rounded_surface_bind_group, _rounded_surface_buffer: rounded_surface_buffer, shadow_pipeline, shadow_surface_bind_group, shadow_instance_buffer, shadow_instance_count, shadow_instances: shadow_instance_upload, _shadow_surface_buffer: shadow_surface_buffer, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group,
+ cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, release_tracks, active_release_tracks: Vec::new(), virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, navigation_selection_plan, overlay_state_plan, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
         host.sync_focus_visuals();
         host.execute_scene_data_update_batches()?;
         host.redraw_canvas_full();
@@ -1892,8 +1968,26 @@ impl Host {
         }
     }
 
+    fn overlay_event_enabled(&self, event_slot: usize) -> bool {
+        let Some(plan) = self.overlay_state_plan.as_ref() else { return true; };
+        let action = self.scene.event_map.get(event_slot).and_then(|event| event._action.as_deref());
+        for entry in &plan.entries {
+            if entry.event_slots.contains(&event_slot) {
+                let visible = self.state_slot_values.get(entry.state_index).copied() == Some(1);
+                return match action {
+                    Some(action) if action == entry.open_action => !visible,
+                    Some(action) if entry.close_actions.iter().any(|candidate| candidate == action) => visible,
+                    _ => false,
+                };
+            }
+        }
+        true
+    }
+
     fn hit_test(&self, point: [f32; 2]) -> Option<usize> {
-        self.scene.event_map.iter().enumerate().filter(|(_, e)| point[0] >= e.x && point[0] < e.x + e.width && point[1] >= e.y && point[1] < e.y + e.height).max_by_key(|(_, e)| e.slot).map(|(i,_)| i)
+        self.scene.event_map.iter().enumerate()
+            .filter(|(index, e)| self.overlay_event_enabled(*index) && point[0] >= e.x && point[0] < e.x + e.width && point[1] >= e.y && point[1] < e.y + e.height)
+            .max_by_key(|(_, e)| e.slot).map(|(i,_)| i)
     }
     fn patch_color(&mut self, index: usize, color: [f32;4]) { let e=&self.scene.event_map[index]; self.instances[e.instance_offset/44].color=color; self.queue.write_buffer(&self.instance_buffer, e.instance_offset as u64 + 16, bytemuck::cast_slice(&color)); }
     fn patch_pos(&mut self, index: usize, pos: [f32;2]) { let e=&self.scene.event_map[index]; self.instances[e.instance_offset/44].pos=pos; self.queue.write_buffer(&self.instance_buffer, e.instance_offset as u64, bytemuck::cast_slice(&pos)); }
@@ -1925,6 +2019,12 @@ impl Host {
 
     fn mark_dirty_tiles(&mut self, mask: u64, source: &str) {
         self.enqueue_render(RenderRequest::no_packets(mask), source);
+    }
+
+    fn patch_placement_alpha(&mut self, slot: usize, value: f32) {
+        self.placements[slot].alpha = value;
+        let offset = (slot * GLYPH_PLACEMENT_BYTES + 44) as u64;
+        self.queue.write_buffer(&self.placement_buffer, offset, bytemuck::bytes_of(&value));
     }
 
     fn patch_instance_f32(&mut self, offset: u64, value: f32) {
@@ -2295,10 +2395,12 @@ impl Host {
                     let batch_id = self.event_batch_ids[index].activate.clone();
                     self.dispatch_compiler_batch(&batch_id);
                     self.execute_pointer_transaction(index, transaction_index, &operation);
+                    self.apply_overlay_state(index);
                 } else {
                     let batch_id = self.event_batch_ids[index].activate.clone();
                     self.dispatch_compiler_batch(&batch_id);
                     self.apply_navigation_selection(index);
+                    self.apply_overlay_state(index);
                 }
             } else {
                 // 取消点击仍必须恢复 button。该路径没有 action，直接执行 compiler release task。
@@ -2306,6 +2408,49 @@ impl Host {
                 self.execute_release_task(&release_id);
             }
         }
+    }
+
+    fn apply_overlay_state(&mut self, event_slot: usize) -> bool {
+        let Some(plan) = self.overlay_state_plan.clone() else { return false; };
+        let action = match self.scene.event_map.get(event_slot).and_then(|event| event._action.as_deref()) {
+            Some(action) => action.to_string(),
+            None => return false,
+        };
+        let Some(entry) = plan.entries.iter().find(|entry| entry.event_slots.contains(&event_slot)
+            && (entry.open_action == action || entry.close_actions.iter().any(|candidate| candidate == &action))) else { return false; };
+        let visible = entry.open_action == action;
+        if self.state_slot_values.get(entry.state_index).copied() != Some(i64::from(visible)) {
+            eprintln!("overlay-state rejected: {} state slot {} did not receive {}", entry.id, entry.state_index, i64::from(visible));
+            return false;
+        }
+        for (&offset, &base_alpha) in entry.instance_offsets.iter().zip(entry.instance_alphas.iter()) {
+            self.patch_instance_f32((offset + 28) as u64, if visible { base_alpha } else { 0.0 });
+        }
+        for &slot in &entry.glyph_slots { self.patch_placement_alpha(slot, if visible { 1.0 } else { 0.0 }); }
+        for &shadow_index in &entry.shadow_indices {
+            let alpha = if visible { self.shadow_instances[shadow_index].color[3].max(0.0) } else { 0.0 };
+            // Original recipe alpha is restored from the immutable compiler source plan.
+            let base_alpha = self.scene.shadow_surface_plan.as_ref().expect("overlay shadow plan admitted").layers[shadow_index].opacity;
+            let value = if visible { base_alpha } else { alpha };
+            self.shadow_instances[shadow_index].color[3] = value;
+            self.queue.write_buffer(&self.shadow_instance_buffer, (shadow_index * std::mem::size_of::<QuadInstance>() + 28) as u64, bytemuck::bytes_of(&value));
+        }
+        self.enqueue_render(RenderRequest::no_packets(entry.tile_mask), "overlay-state");
+        println!("overlay-state: id={} action={} visible={} quad-alpha-patches={} glyph-alpha-patches={} tile-mask=0x{:016x} worklist=no-packets",
+                 entry.id, action, visible, entry.instance_offsets.len(), entry.glyph_slots.len(), entry.tile_mask);
+        true
+    }
+
+    fn dismiss_active_overlay_with_escape(&mut self) -> bool {
+        let Some(plan) = self.overlay_state_plan.clone() else { return false; };
+        let Some(entry) = plan.entries.iter().find(|entry| self.state_slot_values.get(entry.state_index).copied() == Some(1)) else { return false; };
+        let Some(&event_slot) = entry.event_slots.iter().find(|&&slot| {
+            self.scene.event_map.get(slot).and_then(|event| event._action.as_deref())
+                .map(|action| entry.close_actions.iter().any(|candidate| candidate == action)).unwrap_or(false)
+        }) else { return false; };
+        let batch_id = self.event_batch_ids[event_slot].activate.clone();
+        self.dispatch_compiler_batch(&batch_id);
+        self.apply_overlay_state(event_slot)
     }
 
     fn apply_navigation_selection(&mut self, event_slot: usize) -> bool {
@@ -4211,6 +4356,7 @@ fn glyph_placement_layout<'a>()->wgpu::VertexBufferLayout<'a>{wgpu::VertexBuffer
     wgpu::VertexAttribute{format:wgpu::VertexFormat::Uint32,offset:32,shader_location:4},
     wgpu::VertexAttribute{format:wgpu::VertexFormat::Uint32,offset:36,shader_location:5},
     wgpu::VertexAttribute{format:wgpu::VertexFormat::Uint32,offset:40,shader_location:6},
+    wgpu::VertexAttribute{format:wgpu::VertexFormat::Float32,offset:44,shader_location:7},
 ]}}
 
 fn rects_intersect(left: [f32;4], right: [f32;4]) -> bool {
@@ -5165,6 +5311,90 @@ fn compiler_navigation_selection_plan(
              plan.rail_id, plan.state, plan.state_index, compiled.len(), plan.initial_destination,
              compiled.iter().map(|entry| entry.tile_mask).collect::<Vec<_>>());
     Ok(Some(CompiledNavigationSelectionPlan { rail_id: plan.rail_id.clone(), state_index: plan.state_index, destinations: compiled, selected_index }))
+}
+
+fn compiler_overlay_state_plan(
+    scene: &Scene,
+    state_slot_ids: &[String],
+    action_slot_ids: &[String],
+    action_tile_masks: &HashMap<String, u64>,
+    packet_worklists: &[CompiledPacketWorklist],
+    instances: &[QuadInstance],
+    placements: &[GlyphPlacementInstance],
+) -> Result<Option<CompiledOverlayStatePlan>> {
+    let Some(plan) = &scene.overlay_state_plan else {
+        anyhow::ensure!(!scene.overlay_state_required,
+                        "desktop-wide Scene marked overlay_state_required may not disable overlay_state_plan v1");
+        println!("compiler overlay state: disabled entries=0");
+        return Ok(None);
+    };
+    anyhow::ensure!(plan.abi_schema == OVERLAY_STATE_PLAN_ABI_SCHEMA && plan.abi_revision == OVERLAY_STATE_PLAN_ABI_REVISION,
+                    "overlay state has unsupported ABI {}@{}", plan.abi_schema, plan.abi_revision);
+    anyhow::ensure!(!plan.entries.is_empty(), "overlay state plan may not be empty");
+    anyhow::ensure!(packet_worklists.get(RenderRequest::NO_PACKETS).map(|entry| entry.packet_indices.is_empty()).unwrap_or(false),
+                    "overlay state requires compiler no-packets worklist");
+    let mut seen_ids = HashSet::new();
+    let mut compiled = Vec::with_capacity(plan.entries.len());
+    for entry in &plan.entries {
+        anyhow::ensure!(seen_ids.insert(entry.id.as_str()) && entry.initial_visible <= 1 && entry.initial_visible >= 0,
+                        "overlay state {} has duplicate id or nonbinary initial visibility", entry.id);
+        anyhow::ensure!(entry.state_index < state_slot_ids.len() && state_slot_ids[entry.state_index] == entry.state,
+                        "overlay state {} has invalid state slot", entry.id);
+        let state = scene.state_slots.get(entry.state_index)
+            .with_context(|| format!("overlay state {} is absent", entry.id))?;
+        anyhow::ensure!(state.initial == entry.initial_visible && state.id == entry.state,
+                        "overlay state {} initial value disagrees with State Slot table", entry.id);
+        anyhow::ensure!(!entry.close_actions.is_empty() && entry.close_actions.len() == entry.close_actions.iter().collect::<HashSet<_>>().len(),
+                        "overlay state {} close action set must be nonempty and unique", entry.id);
+        let mut transition_actions = vec![entry.open_action.clone()];
+        transition_actions.extend(entry.close_actions.iter().cloned());
+        for action_id in &transition_actions {
+            let action_index = action_slot_ids.iter().position(|id| id == action_id)
+                .with_context(|| format!("overlay state {} action {} lacks Action Slot", entry.id, action_id))?;
+            let action = scene.actions.get(action_id)
+                .with_context(|| format!("overlay state {} action {} is absent", entry.id, action_id))?;
+            let expected = if action_id == &entry.open_action { 1 } else { 0 };
+            anyhow::ensure!(action.action_index == action_index && action.writes.len() == 1
+                            && action.writes[0].state == entry.state && action.writes[0].state_index == entry.state_index
+                            && action.writes[0].op == "set" && action.writes[0].value == expected
+                            && action.gpu_updates.is_empty() && action.instance_updates.is_empty(),
+                            "overlay state {} action {} is not a closed literal visibility transition", entry.id, action_id);
+        }
+        anyhow::ensure!(entry.event_slots.len() >= transition_actions.len()
+                        && entry.event_slots.windows(2).all(|pair| pair[0] < pair[1]),
+                        "overlay state {} event slots must be fixed ascending addresses", entry.id);
+        for &slot in &entry.event_slots {
+            let event = scene.event_map.get(slot)
+                .with_context(|| format!("overlay state {} event slot {} is absent", entry.id, slot))?;
+            let action = event._action.as_ref().with_context(|| format!("overlay state {} event slot {} has no action", entry.id, slot))?;
+            anyhow::ensure!(transition_actions.iter().any(|id| id == action),
+                            "overlay state {} event slot {} has foreign action {}", entry.id, slot, action);
+        }
+        anyhow::ensure!(entry.instance_offsets.windows(2).all(|pair| pair[0] < pair[1])
+                        && entry.instance_offsets.iter().all(|offset| offset % std::mem::size_of::<QuadInstance>() == 0 && offset / std::mem::size_of::<QuadInstance>() < instances.len()),
+                        "overlay state {} has invalid quad alpha offsets", entry.id);
+        anyhow::ensure!(entry.glyph_slots.windows(2).all(|pair| pair[0] < pair[1])
+                        && entry.glyph_slots.iter().all(|slot| *slot < placements.len()),
+                        "overlay state {} has invalid glyph alpha slots", entry.id);
+        let shadow_plan = scene.shadow_surface_plan.as_ref().context("overlay state requires shadow surface plan")?;
+        let shadow_indices = shadow_plan.layers.iter().enumerate()
+            .filter_map(|(index, layer)| entry.instance_offsets.contains(&layer.source_instance_offset).then_some(index))
+            .collect::<Vec<_>>();
+        anyhow::ensure!(!shadow_indices.is_empty() && shadow_indices.windows(2).all(|pair| pair[0] < pair[1]),
+                        "overlay state {} has no stable elevated shadow layers", entry.id);
+        let tile_mask = tile_mask(&entry.tile_ids, scene.render_schedules[0].tiles.len(), &format!("overlay state {}", entry.id))?;
+        anyhow::ensure!(tile_mask != 0 && transition_actions.iter().all(|action| action_tile_masks.get(action).copied() == Some(tile_mask)),
+                        "overlay state {} action tile scope disagrees with fixed overlay tiles", entry.id);
+        let instance_alphas = entry.instance_offsets.iter().map(|offset| instances[offset / std::mem::size_of::<QuadInstance>()].color[3]).collect();
+        compiled.push(CompiledOverlayStateEntry {
+            id: entry.id.clone(), state_index: entry.state_index, open_action: entry.open_action.clone(), close_actions: entry.close_actions.clone(),
+            event_slots: entry.event_slots.clone(), instance_offsets: entry.instance_offsets.clone(), instance_alphas,
+            glyph_slots: entry.glyph_slots.clone(), shadow_indices, tile_mask,
+        });
+    }
+    println!("compiler overlay state: v1 entries={} fixed-alpha-lanes={} no-packets", compiled.len(),
+             compiled.iter().map(|entry| entry.instance_offsets.len() + entry.glyph_slots.len()).sum::<usize>());
+    Ok(Some(CompiledOverlayStatePlan { entries: compiled }))
 }
 
 fn compiler_release_motion_tracks(scene: &Scene, event_tile_masks: &[EventTileMasks]) -> Result<Vec<CompiledReleaseTrack>> {
@@ -6307,7 +6537,7 @@ fn placement_instances(scene:&Scene)->Result<Vec<GlyphPlacementInstance>>{
             anyhow::ensure!(entry.state_index.is_none(), "static glyph placement {} must not carry State Slot index", entry.node);
         }
         let glyph_word_offset=if entry.dynamic {entry.glyph_word_offset as u32}else{STATIC_GLYPH_WORD_OFFSET};
-        instances.push(GlyphPlacementInstance{pos:entry.ndc_pos,size:entry.ndc_size,atlas_uv:entry.atlas_uv,glyph_word_offset,atlas_page:entry.atlas_page,dynamic:u32::from(entry.dynamic),_padding:0});
+        instances.push(GlyphPlacementInstance{pos:entry.ndc_pos,size:entry.ndc_size,atlas_uv:entry.atlas_uv,glyph_word_offset,atlas_page:entry.atlas_page,dynamic:u32::from(entry.dynamic),alpha:1.0});
     }
     let mut expected=0u32;
     for packet in &scene.glyph_draw_packets{
@@ -6574,7 +6804,9 @@ fn main() -> Result<()> {
                         if !host.activate_selected_list_row() { host.keyboard_command(KeyboardCommandKey::Enter); }
                         host.window.request_redraw();
                     } else if matches!(event.logical_key, Key::Named(NamedKey::Escape)) {
-                        host.keyboard_command(KeyboardCommandKey::Escape);
+                        if !host.dismiss_active_overlay_with_escape() {
+                            host.keyboard_command(KeyboardCommandKey::Escape);
+                        }
                         host.window.request_redraw();
                     }
                 }

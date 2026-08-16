@@ -29,6 +29,7 @@ fn vs_main(
   @location(4) glyph_word_offset: u32,
   @location(5) compiler_atlas_page: u32,
   @location(6) dynamic: u32,
+  @location(7) alpha: f32,
 ) -> VsOut {
   var atlas_uv = compiler_atlas_uv;
   var atlas_page = compiler_atlas_page;
@@ -55,7 +56,7 @@ fn vs_main(
   out.position = vec4<f32>(pos + corner * size, 0.0, 1.0);
   // Placement positions are NDC lower-left quads while texture uploads use a top-row origin.
   out.uv = atlas_uv.xy + vec2<f32>(corner.x, 1.0 - corner.y) * atlas_uv.zw;
-  out.color = vec4<f32>(0.90, 0.95, 1.0, 1.0);
+  out.color = vec4<f32>(0.90, 0.95, 1.0, alpha);
   out.atlas_page = i32(atlas_page);
   return out;
 }

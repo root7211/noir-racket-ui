@@ -143,6 +143,10 @@ scene-glyph-draw-packets
 ;; preallocated destination color fields and fixed event/action/state addresses.
 (define navigation-selection-plan-abi-schema "noir-navigation-selection-plan-v1")
 (define navigation-selection-plan-abi-revision 1)
+;; Overlay state is a closed visibility transition table. It owns only fixed alpha
+;; fields, glyph placement alpha lanes and fixed local tile masks.
+(define overlay-state-plan-abi-schema "noir-overlay-state-plan-v1")
+(define overlay-state-plan-abi-revision 1)
 
 (define (abi-contracts->jsexpr)
   (hash 'virtual_list_plan
@@ -180,12 +184,15 @@ scene-glyph-draw-packets
               'revision shadow-surface-plan-abi-revision)
         'navigation_selection_plan
         (hash 'schema navigation-selection-plan-abi-schema
-              'revision navigation-selection-plan-abi-revision)))
+              'revision navigation-selection-plan-abi-revision)
+        'overlay_state_plan
+        (hash 'schema overlay-state-plan-abi-schema
+              'revision overlay-state-plan-abi-revision)))
 
 (struct ui-node (tag id props children source) #:transparent)
 ;; Scene 以静态树和增量执行计划共同组成。state/actions 由 `noir-app`
 ;; 的扩展语法生成；普通 `(ui ...)` 保持空状态表，仍可独立使用。
-(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan navigation-selection-plan) #:transparent)
+(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan navigation-selection-plan overlay-state-plan overlay-state-required?) #:transparent)
 ;; state-slot 的 index 是所有 runtime state read/write 的唯一地址；id/initial 只保留为启动期 proof 与可审计导出。
 (struct state-slot (index id initial) #:transparent)
 ;; action-slot 与 state-slot 一样为 macro expansion 生成的 dense canonical address。
@@ -289,6 +296,9 @@ scene-glyph-draw-packets
 ;; The host changes only `instance_offset + 16` (RGBA) for old/new destinations.
 (struct navigation-selection-entry (destination-id event-node action-id action-slot-index target-value instance-offset selected-color unselected-color tile-ids) #:transparent)
 (struct navigation-selection-plan (rail-id state state-index initial-destination initial-value destinations) #:transparent)
+;; Overlay entries are finite 0/1 visibility machines. `glyph-slots` address the
+;; final 4-byte alpha lane of the stable 48-byte GlyphPlacementInstance ABI.
+(struct overlay-state-entry (id state state-index initial-visible open-action close-actions event-slots instance-offsets glyph-slots tile-ids) #:transparent)
 
 (define (value->jsexpr v)
   (cond
@@ -887,6 +897,23 @@ scene-glyph-draw-packets
                      'blur_px (shadow-surface-blur-px surface)
                      'opacity (shadow-surface-opacity surface))))))
 
+(define (overlay-state-plan->jsexpr entries)
+  (and entries
+       (hash 'abi_schema overlay-state-plan-abi-schema
+             'abi_revision overlay-state-plan-abi-revision
+             'entries
+             (for/list ([entry (in-list entries)])
+               (hash 'id (symbol->string (overlay-state-entry-id entry))
+                     'state (symbol->string (overlay-state-entry-state entry))
+                     'state_index (overlay-state-entry-state-index entry)
+                     'initial_visible (overlay-state-entry-initial-visible entry)
+                     'open_action (symbol->string (overlay-state-entry-open-action entry))
+                     'close_actions (map symbol->string (overlay-state-entry-close-actions entry))
+                     'event_slots (overlay-state-entry-event-slots entry)
+                     'instance_offsets (overlay-state-entry-instance-offsets entry)
+                     'glyph_slots (overlay-state-entry-glyph-slots entry)
+                     'tile_ids (overlay-state-entry-tile-ids entry))))))
+
 (define (navigation-selection-plan->jsexpr plan)
   (and plan
        (hash 'abi_schema navigation-selection-plan-abi-schema
@@ -950,6 +977,8 @@ scene-glyph-draw-packets
         'rounded_surface_plan (rounded-surface-plan->jsexpr (scene-rounded-surface-plan s))
         'shadow_surface_plan (shadow-surface-plan->jsexpr (scene-shadow-surface-plan s))
         'navigation_selection_plan (navigation-selection-plan->jsexpr (scene-navigation-selection-plan s))
+        'overlay_state_plan (overlay-state-plan->jsexpr (scene-overlay-state-plan s))
+        'overlay_state_required (scene-overlay-state-required? s)
         'text_field_visuals (text-field-visuals->jsexpr s)))
   (if build-attestation
       (hash-set base 'build_attestation (value->jsexpr build-attestation))
@@ -1002,7 +1031,8 @@ scene-glyph-draw-packets
         'focus-graph (scene-focus-graph s)
         'keyboard-map (scene-keyboard-map s)
         'shadow-surface-plan (scene-shadow-surface-plan s)
-        'navigation-selection-plan (scene-navigation-selection-plan s)))
+        'navigation-selection-plan (scene-navigation-selection-plan s)
+        'overlay-state-plan (scene-overlay-state-plan s)))
 
 ;; -------------------------- Expand-time parser ---------------------------
 
@@ -1037,6 +1067,9 @@ scene-glyph-draw-packets
   ;; emitted only after layout, event slots and task-local tiles have become stable.
   (struct c-navigation-selection-entry (destination-id event-node-id action-id action-slot-index target-value instance-offset selected-color unselected-color tile-ids) #:transparent)
   (struct c-navigation-selection-plan (rail-id state state-index initial-destination initial-value destinations) #:transparent)
+  ;; Overlay v1 owns a finite 0/1 state. Every affected quad and glyph alpha field
+  ;; is pre-addressed; host execution may only choose the emitted visible endpoint.
+  (struct c-overlay-state-entry (id state state-index initial-visible open-action close-actions event-slots instance-offsets glyph-slots tile-ids) #:transparent)
   ;; Application-only spec: list and detail glyph addresses are resolved after layout.
   (struct c-log-browser-spec (id list-id detail-id append-updates source) #:transparent)
   (struct c-log-browser-plan (id list-id append-batch-id append-updates detail-node-id detail-glyph-offsets detail-tile-ids row-color-offsets levels packet-worklist-index) #:transparent)
@@ -2964,6 +2997,7 @@ scene-glyph-draw-packets
                         #:confirm-id confirm-id:id #:dismiss-id dismiss-id:id
                         #:title title #:body body #:confirm-label confirm-label #:dismiss-label dismiss-label
                         #:font-face face:id #:confirm-on confirm-action:id #:dismiss-on dismiss-action:id
+                        (~optional (~seq #:scrim-on scrim-action:id) #:defaults ([scrim-action #'#f]))
                         #:x x #:y y #:width width #:height height)
        (define id-value (syntax-e #'id))
        (define x-value (expect-number 'material-dialog #'x))
@@ -2981,6 +3015,8 @@ scene-glyph-draw-packets
        (define frame-width (- (canvas-width) (* 2.0 (canvas-margin))))
        (define frame-height (- (canvas-height) (* 2.0 (canvas-margin))))
        (define layer-id (component-child-id id-value 'layer))
+       (define scrim-hit-id (component-child-id (syntax-e #'scrim-id) 'target))
+       (define scrim-action-value (syntax-e #'scrim-action))
        (define confirm-label-id (component-child-id (syntax-e #'confirm-id) 'label))
        (define dismiss-label-id (component-child-id (syntax-e #'dismiss-id) 'label))
        (define lowered
@@ -2989,6 +3025,10 @@ scene-glyph-draw-packets
                                 #:background (0.0 0.0 0.0 0.0)
                            (overlay #:id ,(syntax-e #'scrim-id) #:width ,frame-width #:height ,frame-height
                                     #:background (0.0 0.0 0.0 0.42) #:opacity 1.0 #:z 80)
+                           ,@(if scrim-action-value
+                                 `((button #:id ,scrim-hit-id #:x 0 #:y 0 #:width ,frame-width #:height ,frame-height
+                                           #:background (0.0 0.0 0.0 0.0) "" #:on ,scrim-action-value))
+                                 '())
                            (surface #:id ,id-value #:x ,x-value #:y ,y-value #:width ,width-value #:height ,height-value
                                     #:background (theme-color surface-container-highest)
                                     #:elevation (theme-elevation level-3) #:radius (theme-radius card) #:clip #t
@@ -3038,6 +3078,40 @@ scene-glyph-draw-packets
           (text #:id ,(syntax-e #'label-id) #:x ,label-x #:y 10 #:width ,label-width #:height 22
                 #:font-face ,face #:font-scale 0.72 #:text-inset 0.0 ,label-value))]
       [_ (raise-syntax-error 'material-menu "each child must name stable id/label-id, static label and action" form)]))
+
+  ;; Overlay state v1 is a compiler-only wrapper. Its fixed child geometry is
+  ;; parsed by the existing primitive lowerer; the wrapper metadata is consumed
+  ;; after layout, glyph placement, event slots and tile IDs are frozen.
+  (define (parse-material-overlay-state stx seen)
+    (syntax-parse stx
+      #:datum-literals (material-overlay-state)
+      [(material-overlay-state #:id id:id #:state state:id #:initial initial
+                               #:open-on open-action:id #:close-on (close-action:id ...+) child:expr ...+)
+       (define id-value (syntax-e #'id))
+       (define state-value (syntax-e #'state))
+       (define initial-value (expect-integer 'material-overlay-state #'initial))
+       (unless (member initial-value '(0 1))
+         (raise-syntax-error 'material-overlay-state "#:initial must be literal 0 (closed) or 1 (open)" #'initial))
+       (define open-value (syntax-e #'open-action))
+       (define close-values (map syntax-e (syntax->list #'(close-action ...))))
+       (define child-datums (map syntax->datum (syntax->list #'(child ...))))
+       (unless (= (length close-values) (length (remove-duplicates close-values)))
+         (raise-syntax-error 'material-overlay-state "#:close-on actions must be unique" stx))
+       (define frame-width (- (canvas-width) (* 2.0 (canvas-margin))))
+       (define frame-height (- (canvas-height) (* 2.0 (canvas-margin))))
+       (define lowered
+         (datum->syntax stx
+                        `(stack #:id ,id-value #:width ,frame-width #:height ,frame-height
+                                #:background (0.0 0.0 0.0 0.0)
+                           ,@child-datums)
+                        stx stx))
+       (define-values (node seen*) (parse-node lowered seen))
+       (values (struct-copy c-node node
+                            [props (hash-set (c-node-props node) 'overlay-state
+                                             (list state-value initial-value open-value close-values))])
+               seen*)]
+      [_ (raise-syntax-error 'material-overlay-state
+                             "expected fixed id/state/initial/open-on/close-on and one or more static children" stx)]))
 
   (define (parse-material-menu stx seen)
     (syntax-parse stx
@@ -3399,7 +3473,7 @@ scene-glyph-draw-packets
 
   (define (parse-node stx seen)
     (syntax-parse stx
-#:datum-literals (row column stack grid text text-field button transaction-button multi-field-event multi-action-event virtual-list scrollbar control-button metric-card form-row settings-form app-shell surface divider status-indicator toolbar table-header status-pill detail-panel workspace-shell page-header metric-tile action-button material-app-bar material-card material-filled-button material-nav-rail material-destination material-icon material-dialog material-menu material-menu-item repeat/ui progress overlay spacer)
+#:datum-literals (row column stack grid text text-field button transaction-button multi-field-event multi-action-event virtual-list scrollbar control-button metric-card form-row settings-form app-shell surface divider status-indicator toolbar table-header status-pill detail-panel workspace-shell page-header metric-tile action-button material-app-bar material-card material-filled-button material-nav-rail material-destination material-icon material-dialog material-menu material-menu-item material-overlay-state repeat/ui progress overlay spacer)
         [(app-shell form ...) (parse-app-shell stx seen)]
         [(surface form ...) (parse-surface stx seen)]
         [(divider form ...) (parse-divider stx seen)]
@@ -3419,6 +3493,7 @@ scene-glyph-draw-packets
         [(material-icon form ...) (parse-material-icon stx seen)]
         [(material-dialog form ...) (parse-material-dialog stx seen)]
         [(material-menu form ...) (parse-material-menu stx seen)]
+        [(material-overlay-state form ...) (parse-material-overlay-state stx seen)]
         [(form-row form ...) (parse-form-row stx seen)]
        [(settings-form form ...) (parse-settings-form stx seen)]
        [(metric-card form ...) (parse-metric-card stx seen)]
@@ -5165,6 +5240,20 @@ scene-glyph-draw-packets
     (define plan-by-id
       (for/hash ([plan (in-list plans)]) (values (c-action-plan-id plan) plan)))
     (define (layout->rect layout) (layout-rect layout))
+    ;; Overlay visibility is an alpha-only state update. Its fixed subtree rects are
+    ;; appended here before tile selection so an action with no dynamic glyph binding
+    ;; never falls through to an empty damage set.
+    (define overlay-damage-by-action
+      (for/fold ([table (hash)]) ([node (in-list (walk-nodes root))]
+                                  #:when (hash-has-key? (c-node-props node) 'overlay-state))
+        (define metadata (hash-ref (c-node-props node) 'overlay-state))
+        (define action-ids (cons (third metadata) (fourth metadata)))
+        (define rects
+          (for/list ([descendant (in-list (walk-nodes node))]
+                     #:when (hash-has-key? layout-by-id (c-node-id descendant)))
+            (layout->rect (hash-ref layout-by-id (c-node-id descendant)))))
+        (for/fold ([next table]) ([action-id (in-list action-ids)])
+          (hash-update next action-id (lambda (existing) (append existing rects)) '()))))
     (define (event-for-task task)
       (findf
        (lambda (event)
@@ -5189,7 +5278,8 @@ scene-glyph-draw-packets
           (append
            (map layout->rect (c-action-plan-damage plan))
            (for/list ([binding (in-list (c-action-plan-text-updates plan))])
-             (layout->rect (hash-ref layout-by-id (c-binding-node-id binding))))))]
+             (layout->rect (hash-ref layout-by-id (c-binding-node-id binding))) )
+           (hash-ref overlay-damage-by-action (c-frame-task-id task) '())))]
         [(hover pressed release)
          (define event (or (event-for-task task)
                            (raise-syntax-error 'noir "transient task has no Event Map binding" (c-node-source root))))
@@ -6251,6 +6341,102 @@ scene-glyph-draw-packets
                                                 ',(c-navigation-selection-entry-unselected-color entry)
                                                 ',(c-navigation-selection-entry-tile-ids entry)))))))
 
+  ;; `material-overlay-state` lowers after layout/event/glyph/tile addresses are frozen.
+  ;; Its v1 machine is deliberately binary: a unique external open action sets state=1;
+  ;; every declared close action sets the same state=0. No geometry, text, focus graph
+  ;; or resource identifier can vary at runtime.
+  (define (compile-overlay-state-plan root layouts glyph-placements states actions events render-schedules action-indexes)
+    (define overlays
+      (filter (lambda (node) (hash-has-key? (c-node-props node) 'overlay-state))
+              (walk-nodes root)))
+    (if (null? overlays)
+        #f
+        (let* ([layout-by-id (for/hash ([layout (in-list layouts)]) (values (c-layout-id layout) layout))]
+               [state-by-id (for/hash ([state (in-list states)]) (values (c-state-id state) state))]
+               [action-by-id (for/hash ([action (in-list actions)]) (values (c-action-id action) action))]
+               [tiles (c-render-schedule-tiles (car render-schedules))])
+          (for/list ([overlay (in-list overlays)])
+            (define metadata (hash-ref (c-node-props overlay) 'overlay-state))
+            (define state-id (first metadata))
+            (define initial-visible (second metadata))
+            (define open-action (third metadata))
+            (define close-actions (fourth metadata))
+            (define state (hash-ref state-by-id state-id
+                                    (lambda () (raise-syntax-error 'material-overlay-state
+                                                                     "#:state must name a declared integer state"
+                                                                     (c-node-source overlay)))))
+            (unless (= (c-state-initial state) initial-visible)
+              (raise-syntax-error 'material-overlay-state "#:initial must equal the declared state initial value" (c-node-source overlay)))
+            (define (require-transition action-id expected who)
+              (define action (hash-ref action-by-id action-id
+                                       (lambda () (raise-syntax-error 'material-overlay-state
+                                                                        (format "~a action must be declared" who)
+                                                                        (c-node-source overlay)))))
+              (unless (and (eq? (c-action-state action) state-id)
+                           (eq? (c-action-op action) 'set)
+                           (= (c-action-value action) expected))
+                (raise-syntax-error 'material-overlay-state
+                                    (format "~a action must be literal (set ~a ~a)" who state-id expected)
+                                    (c-node-source overlay))))
+            (require-transition open-action 1 "#:open-on")
+            (for ([action-id (in-list close-actions)]) (require-transition action-id 0 "#:close-on"))
+            (define node-ids (list->set (map c-node-id (walk-nodes overlay))))
+            (define child-layouts
+              (filter (lambda (layout) (set-member? node-ids (c-layout-id layout))) layouts))
+            (define instance-offsets
+              (sort (remove-duplicates (map c-layout-instance-offset child-layouts)) <))
+            (define glyph-slots
+              (sort (remove-duplicates
+                     (for/list ([placement (in-list glyph-placements)]
+                                #:when (set-member? node-ids (c-glyph-placement-node-id placement)))
+                       (c-glyph-placement-slot placement)))
+                    <))
+            (define close-event-slots
+              (sort (for/list ([event (in-list events)]
+                               #:when (and (set-member? node-ids (c-event-node-id event))
+                                           (member (c-event-action event) close-actions)))
+                      (c-event-slot event))
+                    <))
+            (define open-events
+              (filter (lambda (event) (eq? (c-event-action event) open-action)) events))
+            (unless (= (length open-events) 1)
+              (raise-syntax-error 'material-overlay-state "#:open-on must be bound by exactly one fixed event target" (c-node-source overlay)))
+            (unless (and (pair? close-event-slots)
+                         (= (length close-event-slots) (length (remove-duplicates close-event-slots))))
+              (raise-syntax-error 'material-overlay-state "each declared close action must bind a fixed descendant event target" (c-node-source overlay)))
+            (define overlay-tile-ids
+              (sort (remove-duplicates
+                     (for/list ([tile (in-list tiles)] [tile-id (in-naturals)]
+                                #:when (ormap (lambda (layout)
+                                                (rect-intersection (layout-rect layout) (tile-rect tile)))
+                                              child-layouts))
+                       tile-id))
+                    <))
+            (unless (and (pair? instance-offsets) (pair? glyph-slots) (pair? overlay-tile-ids))
+              (raise-syntax-error 'material-overlay-state
+                                  "overlay must own fixed quad, glyph and tile resources"
+                                  (c-node-source overlay)))
+            (c-overlay-state-entry (c-node-id overlay) state-id
+                                   (hash-ref (state-index-by-id states) state-id)
+                                   initial-visible open-action close-actions
+                                   (sort (cons (c-event-slot (car open-events)) close-event-slots) <)
+                                   instance-offsets glyph-slots overlay-tile-ids)))))
+
+  (define (overlay-state-plan->datum plan)
+    (if (not plan)
+        '#f
+        `(list ,@(for/list ([entry (in-list plan)])
+                    `(overlay-state-entry ',(c-overlay-state-entry-id entry)
+                                          ',(c-overlay-state-entry-state entry)
+                                          ,(c-overlay-state-entry-state-index entry)
+                                          ,(c-overlay-state-entry-initial-visible entry)
+                                          ',(c-overlay-state-entry-open-action entry)
+                                          ',(c-overlay-state-entry-close-actions entry)
+                                          ',(c-overlay-state-entry-event-slots entry)
+                                          ',(c-overlay-state-entry-instance-offsets entry)
+                                          ',(c-overlay-state-entry-glyph-slots entry)
+                                          ',(c-overlay-state-entry-tile-ids entry))))))
+
   (define (virtual-list-plan->datum plan)
     `(virtual-list-plan ',(c-virtual-list-plan-id plan)
                         ,(c-virtual-list-plan-capacity plan)
@@ -6768,8 +6954,9 @@ scene-glyph-draw-packets
                     [VISUAL-LANGUAGE (datum-stx stx '(visual-language-plan 'bench 640.0 360.0 16.0))]
                     [ROUNDED-SURFACES (datum-stx stx (rounded-surface-plan->datum rounded-surfaces))]
                     [SHADOW-SURFACES (datum-stx stx (shadow-surface-plan->datum shadow-surfaces))]
-                    [NAVIGATION-SELECTION (datum-stx stx '#f)])
-       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION))]
+                    [NAVIGATION-SELECTION (datum-stx stx '#f)]
+                   [OVERLAY-STATE (datum-stx stx '#f)])
+       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE #f))]
     [(_ root:expr extra:expr ...)
      (raise-syntax-error 'ui "expects exactly one root layout node" stx)]))
 
@@ -6909,6 +7096,8 @@ scene-glyph-draw-packets
        (compile-row-activation-plans root-node plans action-indexes annotated-schedule coalesced-batches))
      (define navigation-selection-plan
        (compile-navigation-selection-plan root-node layouts states actions action-indexes annotated-schedule))
+     (define overlay-state-plan
+       (compile-overlay-state-plan root-node layouts glyph-placements states actions events render-schedules action-indexes))
      (with-syntax ([ROOT (datum-stx stx (node->datum root-node))]
                    [STATIC (datum-stx stx (- total dynamic))]
                    [DYNAMIC (datum-stx stx dynamic)]
@@ -6947,7 +7136,9 @@ scene-glyph-draw-packets
                      [VISUAL-LANGUAGE (datum-stx stx visual-language-datum)]
                      [ROUNDED-SURFACES (datum-stx stx (rounded-surface-plan->datum rounded-surfaces))]
                      [SHADOW-SURFACES (datum-stx stx (shadow-surface-plan->datum shadow-surfaces))]
-                     [NAVIGATION-SELECTION (datum-stx stx (navigation-selection-plan->datum navigation-selection-plan))])
+                     [NAVIGATION-SELECTION (datum-stx stx (navigation-selection-plan->datum navigation-selection-plan))]
+                     [OVERLAY-STATE (datum-stx stx (overlay-state-plan->datum overlay-state-plan))]
+                     [OVERLAY-STATE-REQUIRED (datum-stx stx (and overlay-state-plan #t))])
        #'(begin
-           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION))
+           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE OVERLAY-STATE-REQUIRED))
            (provide app-scene)))]))
