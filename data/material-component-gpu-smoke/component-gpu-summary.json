@@ -1,0 +1,111 @@
+{
+  "schema": "noir-real-gpu-component-matrix-summary-v1",
+  "git_commit": "958b224f7f117bf52f50ac3227a72e047222c88d",
+  "adapter_name": "Microsoft Direct3D12 (AMD RadeonT 780M)",
+  "backend": "Vulkan",
+  "reports": 4,
+  "sessions_configured": 2,
+  "warmup": 5,
+  "samples": 20,
+  "rows": [
+    {
+      "fixture": "dashboard",
+      "workload_id": "coalesced-activate-material-alerts$target",
+      "sessions": 2,
+      "gpu_median_of_session_medians_ns": 23560.0,
+      "gpu_p95_of_session_p95_ns": 26788.0,
+      "cpu_submit_median_of_session_medians_ns": 157015.0,
+      "submitted_tile_count": 1.0,
+      "submitted_glyph_draw_count": 1.0,
+      "winner_write_bytes": 24.0
+    },
+    {
+      "fixture": "dashboard",
+      "workload_id": "coalesced-activate-material-overview$target",
+      "sessions": 2,
+      "gpu_median_of_session_medians_ns": 23400.0,
+      "gpu_p95_of_session_p95_ns": 26470.0,
+      "cpu_submit_median_of_session_medians_ns": 175932.5,
+      "submitted_tile_count": 1.0,
+      "submitted_glyph_draw_count": 1.0,
+      "winner_write_bytes": 24.0
+    },
+    {
+      "fixture": "dashboard",
+      "workload_id": "coalesced-activate-material-refresh-button",
+      "sessions": 2,
+      "gpu_median_of_session_medians_ns": 28520.0,
+      "gpu_p95_of_session_p95_ns": 30016.0,
+      "cpu_submit_median_of_session_medians_ns": 175722.5,
+      "submitted_tile_count": 2.0,
+      "submitted_glyph_draw_count": 2.0,
+      "winner_write_bytes": 36.0
+    },
+    {
+      "fixture": "dashboard",
+      "workload_id": "coalesced-activate-material-systems$target",
+      "sessions": 2,
+      "gpu_median_of_session_medians_ns": 23120.0,
+      "gpu_p95_of_session_p95_ns": 26694.0,
+      "cpu_submit_median_of_session_medians_ns": 152916.5,
+      "submitted_tile_count": 1.0,
+      "submitted_glyph_draw_count": 1.0,
+      "winner_write_bytes": 24.0
+    },
+    {
+      "fixture": "overlay",
+      "workload_id": "coalesced-activate-deployment-confirm",
+      "sessions": 2,
+      "gpu_median_of_session_medians_ns": 27400.0,
+      "gpu_p95_of_session_p95_ns": 28896.0,
+      "cpu_submit_median_of_session_medians_ns": 171413.0,
+      "submitted_tile_count": 2.0,
+      "submitted_glyph_draw_count": 2.0,
+      "winner_write_bytes": 32.0
+    },
+    {
+      "fixture": "overlay",
+      "workload_id": "coalesced-activate-deployment-dismiss",
+      "sessions": 2,
+      "gpu_median_of_session_medians_ns": 27420.0,
+      "gpu_p95_of_session_p95_ns": 28008.0,
+      "cpu_submit_median_of_session_medians_ns": 175460.0,
+      "submitted_tile_count": 2.0,
+      "submitted_glyph_draw_count": 2.0,
+      "winner_write_bytes": 32.0
+    },
+    {
+      "fixture": "overlay",
+      "workload_id": "coalesced-activate-menu-copy$target",
+      "sessions": 2,
+      "gpu_median_of_session_medians_ns": 40220.0,
+      "gpu_p95_of_session_p95_ns": 41350.0,
+      "cpu_submit_median_of_session_medians_ns": 175092.0,
+      "submitted_tile_count": 2.0,
+      "submitted_glyph_draw_count": 2.0,
+      "winner_write_bytes": 32.0
+    },
+    {
+      "fixture": "overlay",
+      "workload_id": "coalesced-activate-menu-export$target",
+      "sessions": 2,
+      "gpu_median_of_session_medians_ns": 40620.0,
+      "gpu_p95_of_session_p95_ns": 41452.0,
+      "cpu_submit_median_of_session_medians_ns": 171519.0,
+      "submitted_tile_count": 2.0,
+      "submitted_glyph_draw_count": 2.0,
+      "winner_write_bytes": 32.0
+    },
+    {
+      "fixture": "overlay",
+      "workload_id": "coalesced-activate-menu-pin$target",
+      "sessions": 2,
+      "gpu_median_of_session_medians_ns": 40480.0,
+      "gpu_p95_of_session_p95_ns": 41546.0,
+      "cpu_submit_median_of_session_medians_ns": 175722.5,
+      "submitted_tile_count": 2.0,
+      "submitted_glyph_draw_count": 2.0,
+      "winner_write_bytes": 32.0
+    }
+  ]
+}

@@ -13,10 +13,13 @@ DISPLAY_NUM="${DISPLAY_NUM:-:463}"
 DRY_RUN=0
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
 
-TOOLCHAIN="/home/ubuntu/.rustup-noir-wgpu30/toolchains/1.87.0-x86_64-unknown-linux-gnu/bin"
-export PATH="$TOOLCHAIN:$PATH"
-export RUSTUP_HOME=/home/ubuntu/.rustup-noir-wgpu30
-export CARGO_HOME=/home/ubuntu/.cargo-noir-wgpu30
+# Use standard Rust toolchain if noir-specific one doesn't exist
+if [[ -d "/home/ubuntu/.rustup-noir-wgpu30" ]]; then
+  TOOLCHAIN="/home/ubuntu/.rustup-noir-wgpu30/toolchains/1.87.0-x86_64-unknown-linux-gnu/bin"
+  export PATH="$TOOLCHAIN:$PATH"
+  export RUSTUP_HOME=/home/ubuntu/.rustup-noir-wgpu30
+  export CARGO_HOME=/home/ubuntu/.cargo-noir-wgpu30
+fi
 export WGPU_BACKEND=vulkan
 
 BIN="$ROOT/wgpu-verify/target/release/noir_winit_host"
@@ -30,14 +33,33 @@ if ! command -v vulkaninfo >/dev/null 2>&1; then
 fi
 VULKAN_SUMMARY="$OUT_ROOT/vulkaninfo-summary.txt"
 vulkaninfo --summary >"$VULKAN_SUMMARY" 2>&1 || true
-if grep -Eqi 'llvmpipe|lavapipe|physical_device_type_cpu|deviceType[[:space:]]*=.*CPU' "$VULKAN_SUMMARY"; then
-  echo "ERROR: CPU Vulkan adapter detected; refusing to publish pseudo-real-GPU measurements." >&2
-  echo "See $VULKAN_SUMMARY" >&2
-  exit 42
-fi
+
+# Check if at least one non-CPU GPU exists
 if ! grep -Eq 'GPU[0-9]+:' "$VULKAN_SUMMARY"; then
   echo "ERROR: no Vulkan physical GPU was detected." >&2
   exit 43
+fi
+has_real_gpu=0
+in_gpu_block=0
+is_cpu_device=0
+while IFS= read -r line; do
+  if [[ "$line" =~ ^GPU[0-9]+: ]]; then
+    in_gpu_block=1
+    is_cpu_device=0
+  elif [[ "$in_gpu_block" == 1 && "$line" =~ deviceType.*PHYSICAL_DEVICE_TYPE_(INTEGRATED_GPU|DISCRETE_GPU) ]]; then
+    has_real_gpu=1
+    break
+  elif [[ "$in_gpu_block" == 1 && "$line" =~ deviceType.*CPU ]]; then
+    is_cpu_device=1
+    in_gpu_block=0
+  elif [[ "$in_gpu_block" == 1 && "$line" =~ ^GPU[0-9]+: ]]; then
+    in_gpu_block=0
+  fi
+done < "$VULKAN_SUMMARY"
+if [[ "$has_real_gpu" -eq 0 ]]; then
+  echo "ERROR: Only CPU Vulkan adapters detected; refusing to publish pseudo-real-GPU measurements." >&2
+  echo "See $VULKAN_SUMMARY" >&2
+  exit 42
 fi
 
 if [[ "$DRY_RUN" -eq 1 ]]; then

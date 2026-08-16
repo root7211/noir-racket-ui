@@ -1,0 +1,14 @@
+{
+  "schema": "noir-real-gpu-component-matrix-v1",
+  "git_commit": "958b224f7f117bf52f50ac3227a72e047222c88d",
+  "host": "DESKTOP-IM0IS4D",
+  "display": ":0",
+  "backend": "vulkan",
+  "sessions": 2,
+  "warmup": 5,
+  "samples": 20,
+  "scenes": [
+    "material-profile-dashboard",
+    "material-overlay-showcase"
+  ]
+}

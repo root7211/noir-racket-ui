@@ -1,0 +1,601 @@
+{
+  "schema": "noir-wgpu-replay-matrix-v2",
+  "renderer": "full-redraw / packet-aware / action-aware / coalesced / compiler-selected",
+  "profile_id": "noir-static-cost-v1",
+  "adapter_name": "Microsoft Direct3D12 (AMD RadeonT 780M)",
+  "backend": "Vulkan",
+  "timestamp_query_supported": true,
+  "timestamp_period_ns": 10.0,
+  "warmup_iterations": 5,
+  "sample_iterations": 20,
+  "rows": [
+    {
+      "workload_id": "coalesced-activate-material-alerts$target",
+      "mode": "full-redraw",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 7,
+      "submitted_glyph_instance_count": 227,
+      "expected_write_bytes": 24,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 208520.0,
+        "median_ns": 209520.0,
+        "p95_ns": 210400.0,
+        "max_ns": 210560.0,
+        "mean_ns": 209514.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 193905.0,
+        "median_ns": 332002.0,
+        "p95_ns": 1683762.0,
+        "max_ns": 3493009.0,
+        "mean_ns": 728701.65
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-alerts$target",
+      "mode": "packet-aware",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 5,
+      "submitted_glyph_draw_count": 5,
+      "submitted_glyph_instance_count": 34,
+      "expected_write_bytes": 24,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 53120.0,
+        "median_ns": 53800.0,
+        "p95_ns": 55160.0,
+        "max_ns": 55920.0,
+        "mean_ns": 53920.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 245402.0,
+        "median_ns": 401471.0,
+        "p95_ns": 2194849.0,
+        "max_ns": 3648763.0,
+        "mean_ns": 844503.0
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-alerts$target",
+      "mode": "action-aware",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 7,
+      "expected_write_bytes": 0,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 20760.0,
+        "median_ns": 26240.0,
+        "p95_ns": 26880.0,
+        "max_ns": 26920.0,
+        "mean_ns": 25260.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 138834.0,
+        "median_ns": 156175.0,
+        "p95_ns": 284919.0,
+        "max_ns": 295428.0,
+        "mean_ns": 170562.15
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-alerts$target",
+      "mode": "coalesced",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 7,
+      "expected_write_bytes": 24,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 20880.0,
+        "median_ns": 26360.0,
+        "p95_ns": 27080.0,
+        "max_ns": 27480.0,
+        "mean_ns": 25514.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 149028.0,
+        "median_ns": 196952.0,
+        "p95_ns": 414503.0,
+        "max_ns": 2688280.0,
+        "mean_ns": 337183.15
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-alerts$target",
+      "mode": "compiler-selected",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 7,
+      "expected_write_bytes": 24,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 20600.0,
+        "median_ns": 21000.0,
+        "p95_ns": 26800.0,
+        "max_ns": 27200.0,
+        "mean_ns": 23142.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 141355.0,
+        "median_ns": 148923.0,
+        "p95_ns": 382028.0,
+        "max_ns": 426064.0,
+        "mean_ns": 182574.75
+      },
+      "compiler_selected": {
+        "compiler_strategy_id": "coalesced",
+        "proof_profile_id": "noir-static-cost-v1",
+        "proof_winner": "coalesced",
+        "actual_executor": "coalesced",
+        "expected_tile_mask_hex": "0x0000000000000008",
+        "observed_tile_mask_hex": "0x0000000000000008",
+        "expected_tile_count": 1,
+        "observed_tile_count": 1,
+        "expected_glyph_draw_count": 1,
+        "observed_glyph_draw_count": 1,
+        "expected_glyph_instance_count": 7,
+        "observed_glyph_instance_count": 7,
+        "expected_winner_write_bytes": 24,
+        "observed_winner_write_bytes": 24,
+        "self_consistent": true
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-overview$target",
+      "mode": "full-redraw",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 7,
+      "submitted_glyph_instance_count": 227,
+      "expected_write_bytes": 24,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 207760.0,
+        "median_ns": 209040.0,
+        "p95_ns": 210360.0,
+        "max_ns": 210480.0,
+        "mean_ns": 209142.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 196427.0,
+        "median_ns": 215555.0,
+        "p95_ns": 375722.0,
+        "max_ns": 489858.0,
+        "mean_ns": 255323.2
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-overview$target",
+      "mode": "packet-aware",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 5,
+      "submitted_glyph_draw_count": 5,
+      "submitted_glyph_instance_count": 34,
+      "expected_write_bytes": 24,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 53560.0,
+        "median_ns": 54000.0,
+        "p95_ns": 54680.0,
+        "max_ns": 54920.0,
+        "mean_ns": 54064.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 338413.0,
+        "median_ns": 501944.0,
+        "p95_ns": 4650233.0,
+        "max_ns": 17976342.0,
+        "mean_ns": 1807282.1
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-overview$target",
+      "mode": "action-aware",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 9,
+      "expected_write_bytes": 0,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 24160.0,
+        "median_ns": 26160.0,
+        "p95_ns": 26640.0,
+        "max_ns": 26680.0,
+        "mean_ns": 26052.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 142617.0,
+        "median_ns": 168681.0,
+        "p95_ns": 249080.0,
+        "max_ns": 266106.0,
+        "mean_ns": 185086.6
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-overview$target",
+      "mode": "coalesced",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 9,
+      "expected_write_bytes": 24,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 20760.0,
+        "median_ns": 26160.0,
+        "p95_ns": 26440.0,
+        "max_ns": 26560.0,
+        "mean_ns": 25530.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 147031.0,
+        "median_ns": 181188.0,
+        "p95_ns": 298160.0,
+        "max_ns": 313715.0,
+        "mean_ns": 198638.7
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-overview$target",
+      "mode": "compiler-selected",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 9,
+      "expected_write_bytes": 24,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 20840.0,
+        "median_ns": 26200.0,
+        "p95_ns": 26480.0,
+        "max_ns": 26520.0,
+        "mean_ns": 25894.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 131266.0,
+        "median_ns": 212822.0,
+        "p95_ns": 285549.0,
+        "max_ns": 325696.0,
+        "mean_ns": 218176.3
+      },
+      "compiler_selected": {
+        "compiler_strategy_id": "coalesced",
+        "proof_profile_id": "noir-static-cost-v1",
+        "proof_winner": "coalesced",
+        "actual_executor": "coalesced",
+        "expected_tile_mask_hex": "0x0000000000000002",
+        "observed_tile_mask_hex": "0x0000000000000002",
+        "expected_tile_count": 1,
+        "observed_tile_count": 1,
+        "expected_glyph_draw_count": 1,
+        "observed_glyph_draw_count": 1,
+        "expected_glyph_instance_count": 9,
+        "observed_glyph_instance_count": 9,
+        "expected_winner_write_bytes": 24,
+        "observed_winner_write_bytes": 24,
+        "self_consistent": true
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-refresh-button",
+      "mode": "full-redraw",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 7,
+      "submitted_glyph_instance_count": 227,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 204040.0,
+        "median_ns": 209520.0,
+        "p95_ns": 240320.0,
+        "max_ns": 240560.0,
+        "mean_ns": 214038.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 225328.0,
+        "median_ns": 301418.0,
+        "p95_ns": 518444.0,
+        "max_ns": 601471.0,
+        "mean_ns": 337561.5
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-refresh-button",
+      "mode": "packet-aware",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 5,
+      "submitted_glyph_draw_count": 5,
+      "submitted_glyph_instance_count": 34,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 48720.0,
+        "median_ns": 53520.0,
+        "p95_ns": 54080.0,
+        "max_ns": 54200.0,
+        "mean_ns": 53242.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 210405.0,
+        "median_ns": 243720.0,
+        "p95_ns": 337046.0,
+        "max_ns": 353231.0,
+        "mean_ns": 257593.0
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-refresh-button",
+      "mode": "action-aware",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 3,
+      "expected_write_bytes": 12,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 20160.0,
+        "median_ns": 20360.0,
+        "p95_ns": 24560.0,
+        "max_ns": 24600.0,
+        "mean_ns": 21522.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 141356.0,
+        "median_ns": 148713.0,
+        "p95_ns": 177404.0,
+        "max_ns": 177404.0,
+        "mean_ns": 154088.3
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-refresh-button",
+      "mode": "coalesced",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 2,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 10,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 25040.0,
+        "median_ns": 29360.0,
+        "p95_ns": 29960.0,
+        "max_ns": 29960.0,
+        "mean_ns": 28244.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 158697.0,
+        "median_ns": 175932.0,
+        "p95_ns": 227115.0,
+        "max_ns": 231845.0,
+        "mean_ns": 184555.7
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-refresh-button",
+      "mode": "compiler-selected",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 2,
+      "submitted_glyph_draw_count": 2,
+      "submitted_glyph_instance_count": 10,
+      "expected_write_bytes": 36,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 25000.0,
+        "median_ns": 29320.0,
+        "p95_ns": 30040.0,
+        "max_ns": 32840.0,
+        "mean_ns": 29070.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 150920.0,
+        "median_ns": 181923.0,
+        "p95_ns": 246348.0,
+        "max_ns": 260115.0,
+        "mean_ns": 193573.05
+      },
+      "compiler_selected": {
+        "compiler_strategy_id": "coalesced",
+        "proof_profile_id": "noir-static-cost-v1",
+        "proof_winner": "coalesced",
+        "actual_executor": "coalesced",
+        "expected_tile_mask_hex": "0x0000000000000011",
+        "observed_tile_mask_hex": "0x0000000000000011",
+        "expected_tile_count": 2,
+        "observed_tile_count": 2,
+        "expected_glyph_draw_count": 2,
+        "observed_glyph_draw_count": 2,
+        "expected_glyph_instance_count": 10,
+        "observed_glyph_instance_count": 10,
+        "expected_winner_write_bytes": 36,
+        "observed_winner_write_bytes": 36,
+        "self_consistent": true
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-systems$target",
+      "mode": "full-redraw",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 7,
+      "submitted_glyph_instance_count": 227,
+      "expected_write_bytes": 24,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 206000.0,
+        "median_ns": 209000.0,
+        "p95_ns": 209880.0,
+        "max_ns": 756460.0,
+        "mean_ns": 236207.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 191067.0,
+        "median_ns": 209353.0,
+        "p95_ns": 359117.0,
+        "max_ns": 359327.0,
+        "mean_ns": 232737.55
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-systems$target",
+      "mode": "packet-aware",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 5,
+      "submitted_glyph_draw_count": 5,
+      "submitted_glyph_instance_count": 34,
+      "expected_write_bytes": 24,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 51960.0,
+        "median_ns": 53640.0,
+        "p95_ns": 54200.0,
+        "max_ns": 414950.0,
+        "mean_ns": 71605.5
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 260010.0,
+        "median_ns": 336732.0,
+        "p95_ns": 2020072.0,
+        "max_ns": 3638674.0,
+        "mean_ns": 694455.7
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-systems$target",
+      "mode": "action-aware",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 8,
+      "expected_write_bytes": 0,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 20600.0,
+        "median_ns": 22360.0,
+        "p95_ns": 26200.0,
+        "max_ns": 26360.0,
+        "mean_ns": 23398.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 124435.0,
+        "median_ns": 144509.0,
+        "p95_ns": 225959.0,
+        "max_ns": 227010.0,
+        "mean_ns": 159043.65
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-systems$target",
+      "mode": "coalesced",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 8,
+      "expected_write_bytes": 24,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 20640.0,
+        "median_ns": 26000.0,
+        "p95_ns": 26600.0,
+        "max_ns": 26880.0,
+        "mean_ns": 25026.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 146295.0,
+        "median_ns": 167000.0,
+        "p95_ns": 230267.0,
+        "max_ns": 271887.0,
+        "mean_ns": 176941.35
+      }
+    },
+    {
+      "workload_id": "coalesced-activate-material-systems$target",
+      "mode": "compiler-selected",
+      "warmup_iterations": 5,
+      "sample_iterations": 20,
+      "submitted_tile_count": 1,
+      "submitted_glyph_draw_count": 1,
+      "submitted_glyph_instance_count": 8,
+      "expected_write_bytes": 24,
+      "gpu_elapsed_ns": {
+        "sample_count": 20,
+        "min_ns": 20480.0,
+        "median_ns": 25360.0,
+        "p95_ns": 26720.0,
+        "max_ns": 26760.0,
+        "mean_ns": 23824.0
+      },
+      "cpu_event_to_submit_ns": {
+        "sample_count": 20,
+        "min_ns": 135681.0,
+        "median_ns": 155859.0,
+        "p95_ns": 198739.0,
+        "max_ns": 245507.0,
+        "mean_ns": 164125.0
+      },
+      "compiler_selected": {
+        "compiler_strategy_id": "coalesced",
+        "proof_profile_id": "noir-static-cost-v1",
+        "proof_winner": "coalesced",
+        "actual_executor": "coalesced",
+        "expected_tile_mask_hex": "0x0000000000000004",
+        "observed_tile_mask_hex": "0x0000000000000004",
+        "expected_tile_count": 1,
+        "observed_tile_count": 1,
+        "expected_glyph_draw_count": 1,
+        "observed_glyph_draw_count": 1,
+        "expected_glyph_instance_count": 8,
+        "observed_glyph_instance_count": 8,
+        "expected_winner_write_bytes": 24,
+        "observed_winner_write_bytes": 24,
+        "self_consistent": true
+      }
+    }
+  ]
+}
