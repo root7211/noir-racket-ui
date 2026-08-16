@@ -22,7 +22,9 @@
 }
 ```
 
-输入文本仅用于构建期coverage扩展；`charset`与`extra_text`共同决定允许glyph domain。任何字体文件、字号、coverage或packing参数变更都必须生成新的manifest hash。
+输入文本仅用于构建期coverage扩展；`ASCII_PRINTABLE`与`extra_text`共同决定静态chrome允许glyph domain。v1还定义第二个封闭值`TABULAR_BODY_V1`：它固定为`SPACE + 0–9 + A–Z`，不得携带`extra_text`，并必须声明`advance_policy: "fixed-tabular"`与正数`fixed_advance`。任何字体文件、字号、coverage、advance policy或packing参数变更都必须生成新的manifest hash。
+
+`TABULAR_BODY_V1`仅生成受限资产，并不自动授予运行时动态文本权限；其page-3消费必须等待独立的`dynamic_font_cell_plan v1`准入。
 
 ### 输出
 
@@ -54,7 +56,7 @@
 }
 ```
 
-Glyph ID根据升序Unicode codepoint稳定分配。packing使用确定性row-major shelf策略；同一输入必须得到字节一致的R8、JSON和preview。fontc拒绝atlas容量不足、重复字符或缺失glyph。
+Glyph ID根据升序Unicode codepoint稳定分配。packing使用确定性row-major shelf策略；同一输入必须得到字节一致的R8、JSON和preview。fontc拒绝atlas容量不足、重复字符或缺失glyph。对于`fixed-tabular`，manifest附加`coverage_policy`、`advance_policy`、`fixed_advance`和每glyph的审计性`source_advance`；运行时布局未来只能读取统一的`advance`，不得使用`source_advance`重新排版。
 
 ### 启动期准入
 
@@ -89,4 +91,4 @@ Theme v1提供编译期符号解析及可审计导出，不产生运行时hash-m
 
 ## 兼容性与版本规则
 
-`noir-fontc-spec-v1`、`noir-font-asset-manifest-v1`和`noir-static-theme-v1`均独立版本化。v1的字段不能改写；新增语义必须新建schema/revision。未启用theme的既有Noir fixture继续以原始literal颜色和几何编译，从而保持现有Scene ABI兼容。
+`noir-fontc-spec-v1`、`noir-font-asset-manifest-v1`和`noir-static-theme-v1`均独立版本化。既有必填字段和既有`ASCII_PRINTABLE`语义不得改写；仅构建审计用的可选描述字段可后向兼容地加入manifest。任何会改变Scene资源选择、GPU page、cell写权限或运行时解释的语义，必须新建独立Scene ABI；`TABULAR_BODY_V1`后续消费即为`dynamic_font_cell_plan v1`。未启用theme的既有Noir fixture继续以原始literal颜色和几何编译，从而保持现有Scene ABI兼容。

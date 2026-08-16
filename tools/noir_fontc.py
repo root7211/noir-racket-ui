@@ -21,6 +21,9 @@ from fontTools.ttLib import TTFont
 SCHEMA = "noir-font-asset-manifest-v1"
 REVISION = 1
 ASCII_PRINTABLE = "".join(chr(codepoint) for codepoint in range(32, 127))
+# The entire first dynamic-table body domain.  Its order is semantic: glyph IDs
+# are assigned after ascending-codepoint normalization, never at runtime.
+TABULAR_BODY_V1 = " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 def fail(message: str) -> None:
@@ -61,11 +64,24 @@ def load_spec(path: Path) -> dict[str, Any]:
         fail("atlas width and height must be positive integers")
     if not isinstance(atlas["padding"], int) or atlas["padding"] < 0:
         fail("atlas.padding must be a non-negative integer")
-    if raw["charset"] not in ("ASCII_PRINTABLE",):
-        fail("v1 only supports charset=ASCII_PRINTABLE; use extra_text to extend coverage")
+    if raw["charset"] not in ("ASCII_PRINTABLE", "TABULAR_BODY_V1"):
+        fail("v1 supports only charset=ASCII_PRINTABLE or the closed TABULAR_BODY_V1 domain")
     extras = raw.get("extra_text", [])
     if not isinstance(extras, list) or not all(isinstance(value, str) for value in extras):
         fail("extra_text must be an array of strings")
+    advance_policy = raw.get("advance_policy", "proportional")
+    if advance_policy not in ("proportional", "fixed-tabular"):
+        fail("advance_policy must be proportional or fixed-tabular")
+    if raw["charset"] == "TABULAR_BODY_V1":
+        if extras:
+            fail("TABULAR_BODY_V1 is closed; extra_text would widen its dynamic glyph domain")
+        if advance_policy != "fixed-tabular":
+            fail("TABULAR_BODY_V1 requires advance_policy=fixed-tabular")
+        fixed_advance = raw.get("fixed_advance")
+        if not isinstance(fixed_advance, (int, float)) or not float(fixed_advance) > 0.0:
+            fail("TABULAR_BODY_V1 requires positive numeric fixed_advance")
+    elif advance_policy != "proportional":
+        fail("ASCII_PRINTABLE must retain proportional advance_policy in fontc v1")
     return raw
 
 
@@ -89,9 +105,12 @@ def resolve_font(font_ref: str) -> Path:
 
 
 def coverage_from_spec(spec: dict[str, Any]) -> list[str]:
-    characters = set(ASCII_PRINTABLE)
-    for text in spec.get("extra_text", []):
-        characters.update(text)
+    if spec["charset"] == "TABULAR_BODY_V1":
+        characters = set(TABULAR_BODY_V1)
+    else:
+        characters = set(ASCII_PRINTABLE)
+        for text in spec.get("extra_text", []):
+            characters.update(text)
     codepoints = sorted(ord(character) for character in characters)
     if any(codepoint > 0x7F for codepoint in codepoints):
         fail("v1 fontc coverage is intentionally ASCII-only; declare a v2 CJK shaping plan first")
@@ -109,7 +128,7 @@ def glyph_id_map(font_path: Path) -> dict[int, int]:
         tt.close()
 
 
-def pack_glyphs(font: ImageFont.FreeTypeFont, characters: list[str], width: int, height: int, padding: int) -> tuple[Image.Image, list[dict[str, Any]]]:
+def pack_glyphs(font: ImageFont.FreeTypeFont, characters: list[str], width: int, height: int, padding: int, fixed_advance: float | None = None) -> tuple[Image.Image, list[dict[str, Any]]]:
     atlas = Image.new("L", (width, height), 0)
     x = padding
     y = padding
@@ -136,7 +155,8 @@ def pack_glyphs(font: ImageFont.FreeTypeFont, characters: list[str], width: int,
         if mask_width and mask_height:
             glyph_image = Image.frombytes("L", (mask_width, mask_height), bytes(mask))
         atlas.paste(glyph_image, (x + padding, y + padding))
-        glyphs.append({
+        source_advance = round(float(font.getlength(character)), 6)
+        glyph = {
             "codepoint": ord(character),
             "character": character,
             "glyph_id": slot,
@@ -144,10 +164,13 @@ def pack_glyphs(font: ImageFont.FreeTypeFont, characters: list[str], width: int,
             "y": y + padding,
             "width": glyph_width,
             "height": glyph_height,
-            "advance": round(float(font.getlength(character)), 6),
+            "advance": round(float(fixed_advance), 6) if fixed_advance is not None else source_advance,
             "bearing_x": left,
             "bearing_y": -top,
-        })
+        }
+        if fixed_advance is not None:
+            glyph["source_advance"] = source_advance
+        glyphs.append(glyph)
         x += needed_width
         shelf_height = max(shelf_height, needed_height)
     return atlas, glyphs
@@ -161,7 +184,9 @@ def make_preview(atlas: Image.Image, spec: dict[str, Any], glyph_count: int) -> 
     ink = Image.new("RGB", enlarged.size, (244, 247, 251))
     canvas.paste(ink, (0, 72), alpha)
     draw = ImageDraw.Draw(canvas)
-    label = f"{spec['face_id']}  {spec['pixel_size']}px  {glyph_count} glyphs  atlas-gray"
+    policy = spec.get("advance_policy", "proportional")
+    suffix = f"  fixed={spec['fixed_advance']}px" if policy == "fixed-tabular" else ""
+    label = f"{spec['face_id']}  {spec['pixel_size']}px  {glyph_count} glyphs  atlas-gray {policy}{suffix}"
     draw.text((12, 18), label, fill=(154, 166, 183))
     return canvas
 
@@ -173,7 +198,8 @@ def compile_asset(spec_path: Path, out_dir: Path) -> dict[str, Any]:
     glyph_ids = glyph_id_map(font_path)
     font = ImageFont.truetype(str(font_path), spec["pixel_size"])
     atlas_spec = spec["atlas"]
-    atlas, glyphs = pack_glyphs(font, characters, atlas_spec["width"], atlas_spec["height"], atlas_spec["padding"])
+    fixed_advance = float(spec["fixed_advance"]) if spec.get("advance_policy") == "fixed-tabular" else None
+    atlas, glyphs = pack_glyphs(font, characters, atlas_spec["width"], atlas_spec["height"], atlas_spec["padding"], fixed_advance)
     for glyph in glyphs:
         codepoint = glyph["codepoint"]
         if codepoint not in glyph_ids:
@@ -192,6 +218,9 @@ def compile_asset(spec_path: Path, out_dir: Path) -> dict[str, Any]:
         "revision": REVISION,
         "face_id": spec["face_id"],
         "renderer_kind": "atlas-gray",
+        "coverage_policy": "tabular-body-v1" if spec["charset"] == "TABULAR_BODY_V1" else "ascii-printable",
+        "advance_policy": spec.get("advance_policy", "proportional"),
+        "fixed_advance": fixed_advance,
         "font_source": str(font_path),
         "font_sha256": sha256_file(font_path),
         "atlas_sha256": sha256_file(raw_path),

@@ -1,0 +1,15 @@
+{
+  "schema": "noir-fontc-spec-v1",
+  "face_id": "noir-table-body-mono-16",
+  "font": "DejaVu Sans Mono",
+  "pixel_size": 16,
+  "charset": "TABULAR_BODY_V1",
+  "advance_policy": "fixed-tabular",
+  "fixed_advance": 10.0,
+  "atlas": {
+    "width": 256,
+    "height": 256,
+    "padding": 2,
+    "mode": "gray"
+  }
+}

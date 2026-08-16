@@ -1,4 +1,5 @@
 {
+  "advance_policy": "proportional",
   "atlas": {
     "channels": 1,
     "height": 512,
@@ -7,7 +8,9 @@
     "width": 512
   },
   "atlas_sha256": "613ac89f108883cfdff0d3e422a2a265120eb4a1c6099803958a102c0fd6956c",
+  "coverage_policy": "ascii-printable",
   "face_id": "noir-desktop-sans-18",
+  "fixed_advance": null,
   "font_sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280",
   "font_source": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
   "glyph_count": 95,

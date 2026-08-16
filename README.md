@@ -45,6 +45,16 @@ NOIR_ENTRY_MODULE=examples/realtime-monitor.rkt PLTCOLLECTS="$PWD:" \
 
 该回归同时证明：非法字符Scene篡改会被启动期glyph-domain proof拒绝；可见数据更新只写固定glyph地址；纯不可见记录只进入预分配arena，产生零glyph GPU写入和零render request。GPU replay策略图、原始时间戳数据及边界说明见[实时监控表格报告](REALTIME_MONITOR_TABLE_V1_REPORT.md)。
 
+## Tabular Body Font Asset v1
+
+[`noir-table-body-mono-16`](assets/fontc/noir-table-body-mono-16/) 是为动态表格正文准备的第一阶段字体资产。它使用DejaVu Sans Mono 16px、256×256 R8 atlas、37个封闭glyph（空格、`0–9`与`A–Z`）和固定10px advance；fontc manifest保留每个glyph的source advance，但运行时布局未来只能消费固定advance。此资产当前**尚未注册或采样到page 3**，因此不会改变已冻结的列表热路径。
+
+```bash
+./tools/verify_tabular_body_font.sh
+```
+
+该入口会二次确定性构建并比较atlas、manifest、preview和PNG，验证日志/监控正文语料覆盖，并拒绝通过`extra_text`扩大动态字符domain。完整规格与后续`dynamic_font_cell_plan v1`边界见[Tabular Body Font Asset v1](TABULAR_BODY_FONT_ASSET_V1.md)。
+
 ## 编译期桌面视觉语言 v1
 
 Noir的视觉语言v1不在运行时解析theme，也不允许宿主从layout猜测尺度。`(visual-preset desktop-wide)` 会在宏展开期固定1280×720 canvas和32px margin；Racket以该唯一真值计算layout NDC、glyph bounds、tile、scroll scissor和scrollbar，Scene导出`noir-visual-language-plan-v1@1`。Rust在创建窗口前验证schema、preset、精确canvas和全部layout containment，再用同一尺寸配置window与offscreen canvas。
@@ -98,6 +108,7 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/verify_realtime_monitor.sh` | 实时监控表格的真实X11/Vulkan、glyph-domain篡改、可见性分流与键鼠回归。 |
 | `tools/verify_desktop_component_macros.sh` | 编译期组件宏与手写primitive Scene等价性回归。 |
 | `tools/verify_visual_language.sh` | desktop-wide视觉canvas、Scene篡改拒绝与三套真实X11/Vulkan回归。 |
+| `tools/verify_tabular_body_font.sh` | 受限tabular正文face的确定性、闭域、固定advance与语料覆盖回归。 |
 | `tools/audit_visual_canvas.py` | 对visual_language_plan将NDC反算为像素rect并审计layout containment。 |
 | `tests/run.rkt` | Scene 预算、更新计划和 JSON 导出的断言。 |
 | `tests/duplicate-id.rkt` | 失败样例；演示带源位置的宏诊断。 |
