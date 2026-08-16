@@ -91,6 +91,39 @@ def main() -> None:
     if any(float(entry["radius_px"]) <= 0 or float(entry["aa_width_px"]) != 1.0 for entry in rounded["surfaces"]):
         fail("rounded Material metadata must contain positive radius and fixed 1px AA")
 
+    shadow = scene["shadow_surface_plan"]
+    if not isinstance(shadow, dict):
+        fail("desktop Material Scene may not disable shadow_surface_plan")
+    if (shadow["abi_schema"], shadow["abi_revision"]) != ("noir-shadow-surface-plan-v1", 1):
+        fail(f"unexpected shadow contract {shadow}")
+    elevated = {entry["id"]: entry for entry in layout if int(entry.get("elevation", 0)) > 0}
+    if set(elevated) != {"material-summary-card", "material-performance-card", "material-activity-card"}:
+        fail(f"unexpected fixed Material elevation domain {sorted(elevated)}")
+    by_source: dict[str, list[dict]] = {}
+    for layer in shadow["layers"]:
+        by_source.setdefault(layer["source_id"], []).append(layer)
+    if set(by_source) != set(elevated) or len(shadow["layers"]) != 2 * len(elevated):
+        fail("shadow plan must contain exactly two static layers for each elevated Material card")
+    for source_id, source_layers in by_source.items():
+        layout_entry = elevated[source_id]
+        if sorted(int(layer["layer"]) for layer in source_layers) != [1, 2]:
+            fail(f"shadow source {source_id} has noncanonical layer IDs")
+        for layer in source_layers:
+            index = int(layer["layer"])
+            blur, opacity = {1: (3.0, 0.14), 2: (7.0, 0.055)}[index]
+            if not (
+                int(layer["elevation"]) == 1
+                and int(layer["source_instance_offset"]) == int(layout_entry["instance_offset"])
+                and close(layer["blur_px"], blur)
+                and close(layer["opacity"], opacity)
+                and close(layer["x"], float(layout_entry["x"]) - blur)
+                and close(layer["y"], float(layout_entry["y"]) - blur)
+                and close(layer["width"], float(layout_entry["width"]) + 2.0 * blur)
+                and close(layer["height"], float(layout_entry["height"]) + 2.0 * blur)
+                and float(layer["radius_px"]) > 0.0
+            ):
+                fail(f"shadow source {source_id} layer {index} disagrees with fixed layout recipe")
+
     if [entry["node"] for entry in scene["event_map"]] != ["material-refresh-button"]:
         fail("filled Material button did not lower to the expected fixed event target")
     if list(scene["actions"].keys()) != ["material-refresh"]:
@@ -104,6 +137,7 @@ def main() -> None:
         "scene": str(path),
         "layout_nodes": len(layout),
         "rounded_surfaces": len(rounded["surfaces"]),
+        "shadow_layers": len(shadow["layers"]),
         "static_page2_glyphs": sum(1 for entry in scene["glyph_placement_plan"] if entry["atlas_page"] == 2),
         "status": "PASS",
     }, indent=2, sort_keys=True))

@@ -82,11 +82,23 @@ bash tools/verify_rounded_surface_plan.sh
 
 该回归执行Racket测试、Rust 1.87/wgpu 30 release build、双应用Scene/视觉结构oracle、真实X11/Vulkan圆角帧、四类篡改拒绝，以及日志浏览器和实时监控表格的原有键鼠交互回归。设计契约与边界见[`rounded_surface_plan v1 ABI`](ROUNDED_SURFACE_PLAN_ABI_V1.md)，正式验收记录见[交付报告](ROUNDED_SURFACE_PLAN_V1_REPORT.md)；同一Scene geometry下的真实v2/v3对照为[日志浏览器](out/log-browser-rounded-v2-v3-comparison.png)与[实时监控表格](out/realtime-monitor-rounded-v2-v3-comparison.png)。
 
+## 编译期 Shadow Surface v1（视觉渲染 v3）
+
+`shadow_surface_plan v1` 将已解析的静态`elevation 1–5`降低为独立的、不可变的多层SDF shadow quad。Material level-1 card固定生成两层ambient shadow：外层`7px / 0.055`先绘制，内层`3px / 0.140`随后绘制。每层的expanded rect、source layout ID、44-byte source instance offset、radius、blur与opacity都由Racket在宏展开期确定；Rust在GPU resource创建前反向验证这些值与冻结layout及canonical recipe完全一致。
+
+shadow使用独立只读metadata storage buffer和instance buffer，**不修改**44-byte `QuadInstance` ABI、glyph、列表ring、state/action patch、tile/worklist或runtime theme路径。完整静态canvas的固定顺序是root background、shadow layers、剩余static instance、glyph；因此opaque root不会覆盖阴影，source surface也会正确遮蔽自身内部的shadow。desktop-wide Scene不能将计划篡改为`false`；`blur`、`offset`、`geometry`与`disable`四类结构化攻击均在事件循环前拒绝。
+
+```bash
+bash tools/verify_shadow_surface_plan.sh
+```
+
+该入口复用Material真实X11/Vulkan按钮交互，并增加四类shadow攻击拒绝。正式合同见[`shadow_surface_plan v1 ABI`](SHADOW_SURFACE_PLAN_ABI_V1.md)，验收证据见[交付报告](SHADOW_SURFACE_PLAN_V1_REPORT.md)；同一真实场景的[before/after对照](out/material-profile-shadow-v1-comparison.png)与[最终截图](out/material-profile-dashboard-v1.png)可直接审阅。
+
 ## Material Profile v1
 
 Noir 现在提供受限的 `(material-profile material-dark)`：它把Material Design 3的语义颜色、surface阶梯、shape、space/type、0–5 elevation token以及small app bar、card、filled button、navigation rail编译为已有的固定primitive Scene。profile仅在Racket宏展开期存在；Scene、Rust host与WGSL都不会持有或查询运行时Material theme对象。Material高层组件全部内联为`stack`、`surface`、`button`、`text`与`overlay`，因此不增加组件树、theme lookup、自由reflow或GPU ABI。
 
-[`examples/material-profile-dashboard.rkt`](examples/material-profile-dashboard.rkt) 是完整桌面示例：1280×720固定Scene、3个静态rail destination、active pill、small app bar、三张rounded card和一个filled button。真实X11/Vulkan点击按钮只会触发预先确定的`material-refresh` action、一个state slot写入及3个glyph ID patch。
+[`examples/material-profile-dashboard.rkt`](examples/material-profile-dashboard.rkt) 是完整桌面示例：1280×720固定Scene、3个静态rail destination、active pill、small app bar、三张rounded且level-1 shadow card和一个filled button。真实X11/Vulkan点击按钮只会触发预先确定的`material-refresh` action、一个state slot写入及3个glyph ID patch。
 
 ```bash
 bash tools/verify_material_profile_v1.sh
@@ -142,7 +154,10 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/verify_rounded_surface_plan.sh` | rounded surface v1的Racket/Rust、双应用X11/Vulkan、四类篡改拒绝与交互全链回归。 |
 | `tools/mutate_rounded_surface_scene.py` | 生成radius、offset、geometry和disable四类精确Scene攻击样本。 |
 | `tools/verify_material_profile_v1.sh` | Material Profile v1的静态Scene oracle、宏输入拒绝、Rust构建与真实X11/Vulkan交互回归。 |
-| `tools/verify_material_profile_v1.py` | Material Profile v1的primitive-only lowering、fixed canvas、rounded metadata、action/state/glyph结构oracle。 |
+| `tools/verify_material_profile_v1.py` | Material Profile v1的primitive-only lowering、fixed canvas、rounded/shadow metadata、action/state/glyph结构oracle。 |
+| `tools/verify_shadow_surface_plan.sh` | shadow surface v1正向Material X11/Vulkan路径与blur/offset/geometry/disable攻击拒绝回归。 |
+| `tools/mutate_shadow_surface_scene.py` | 生成shadow recipe、source地址、扩展几何与禁用攻击Scene。 |
+| `tools/make_shadow_surface_v1_comparison.py` | 将无shadow发布帧与当前真实X11/Vulkan帧生成确定性before/after审阅板。 |
 | `tools/make_font_baseline_comparison.py` | 从修复前后真实X11/Vulkan帧生成page-2小写baseline对照图。 |
 | `tools/make_visual_language_v2_comparison.py` | 从同分辨率真实帧确定性生成视觉v1/v2前后对照图。 |
 | `tools/make_rounded_surface_v3_comparison.py` | 从同分辨率真实帧确定性生成rounded surface v2/v3前后对照图。 |

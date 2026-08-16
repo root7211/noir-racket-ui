@@ -48,6 +48,8 @@ const VISUAL_LANGUAGE_PLAN_ABI_SCHEMA: &str = "noir-visual-language-plan-v1";
 const VISUAL_LANGUAGE_PLAN_ABI_REVISION: u32 = 1;
 const ROUNDED_SURFACE_PLAN_ABI_SCHEMA: &str = "noir-rounded-surface-plan-v1";
 const ROUNDED_SURFACE_PLAN_ABI_REVISION: u32 = 1;
+const SHADOW_SURFACE_PLAN_ABI_SCHEMA: &str = "noir-shadow-surface-plan-v1";
+const SHADOW_SURFACE_PLAN_ABI_REVISION: u32 = 1;
 
 #[derive(Debug, Deserialize)]
 struct Scene {
@@ -89,6 +91,8 @@ struct Scene {
     visual_language_plan: VisualLanguagePlan,
     #[serde(deserialize_with = "deserialize_rounded_surface_plan_option")]
     rounded_surface_plan: Option<RoundedSurfacePlan>,
+    #[serde(deserialize_with = "deserialize_shadow_surface_plan_option")]
+    shadow_surface_plan: Option<ShadowSurfacePlan>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -105,6 +109,7 @@ struct AbiContracts {
     dynamic_font_cell_plan: AbiContract,
     visual_language_plan: AbiContract,
     rounded_surface_plan: AbiContract,
+    shadow_surface_plan: AbiContract,
 }
 
 #[derive(Debug, Deserialize)]
@@ -151,6 +156,46 @@ where D: Deserializer<'de> {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct GpuRoundedSurfaceMeta { radius_px: f32, aa_width_px: f32, width_px: f32, height_px: f32 }
+
+#[derive(Debug, Deserialize)]
+struct ShadowSurfacePlan {
+    abi_schema: String,
+    abi_revision: u32,
+    layers: Vec<ShadowSurfaceEntry>,
+}
+#[derive(Debug, Deserialize)]
+struct ShadowSurfaceEntry {
+    id: String,
+    source_id: String,
+    source_instance_offset: usize,
+    elevation: u32,
+    layer: u32,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    radius_px: f32,
+    blur_px: f32,
+    opacity: f32,
+}
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ShadowSurfacePlanWire { Plan(ShadowSurfacePlan), Disabled(bool) }
+fn deserialize_shadow_surface_plan_option<'de, D>(deserializer: D) -> std::result::Result<Option<ShadowSurfacePlan>, D::Error>
+where D: Deserializer<'de> {
+    match ShadowSurfacePlanWire::deserialize(deserializer)? {
+        ShadowSurfacePlanWire::Plan(plan) => Ok(Some(plan)),
+        ShadowSurfacePlanWire::Disabled(false) => Ok(None),
+        ShadowSurfacePlanWire::Disabled(true) => Err(serde::de::Error::custom("shadow_surface_plan may be an object or false, never true")),
+    }
+}
+
+// The shadow shader samples a source-shaped SDF inside a larger immutable quad.
+// `[radius, blur, source_width, source_height]` is deliberately 16 bytes like
+// rounded metadata, but indexed by shadow layer rather than UI instance slot.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct GpuShadowSurfaceMeta { radius_px: f32, blur_px: f32, source_width_px: f32, source_height_px: f32 }
 
 #[derive(Debug, Deserialize)]
 struct BuildAttestation {
@@ -846,6 +891,7 @@ struct LayoutEntry {
     #[serde(rename = "tag")] tag: String,
     ndc_pos: [f32; 2],
     ndc_size: [f32; 2],
+    #[serde(default)] elevation: u32,
     color: [f32; 4],
     glyph_offset: usize,
     glyph_count: usize,
@@ -1475,6 +1521,11 @@ struct Host {
     static_pipeline: wgpu::RenderPipeline,
     rounded_surface_bind_group: wgpu::BindGroup,
     _rounded_surface_buffer: wgpu::Buffer,
+    shadow_pipeline: wgpu::RenderPipeline,
+    shadow_surface_bind_group: wgpu::BindGroup,
+    shadow_instance_buffer: wgpu::Buffer,
+    shadow_instance_count: u32,
+    _shadow_surface_buffer: wgpu::Buffer,
     text_pipeline: wgpu::RenderPipeline,
     glyph_bind_group: wgpu::BindGroup,
     blit_pipeline: wgpu::RenderPipeline,
@@ -1548,6 +1599,7 @@ impl Host {
         // Must complete before adapter/device/window rendering side effects. The returned
         // table has exactly one immutable metadata slot per frozen QuadInstance.
         let rounded_surface_metadata = compiler_rounded_surface_plan(&scene)?;
+        let (shadow_instances, shadow_surface_metadata) = compiler_shadow_surface_plan(&scene)?;
         let source_fingerprint_fnv1a64 = scene.build_attestation.as_ref()
             .filter(|attestation| attestation.schema == "noir-build-attestation-v1")
             .map(|attestation| attestation.source_fingerprint_fnv1a64.clone())
@@ -1675,11 +1727,19 @@ impl Host {
         let clear_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("noir-tile-clear-quad"), contents: bytemuck::bytes_of(&clear), usage: wgpu::BufferUsages::VERTEX });
         let (rounded_surface_layout, rounded_surface_buffer, rounded_surface_bind_group) =
             make_rounded_surface_resources(&device, &rounded_surface_metadata);
+        let shadow_instance_count = shadow_instances.len() as u32;
+        let shadow_instance_upload = if shadow_instances.is_empty() { vec![QuadInstance::zeroed()] } else { shadow_instances };
+        let shadow_instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("noir-immutable-shadow-instance-buffer"), contents: bytemuck::cast_slice(&shadow_instance_upload), usage: wgpu::BufferUsages::VERTEX,
+        });
+        let (shadow_surface_layout, shadow_surface_buffer, shadow_surface_bind_group) =
+            make_shadow_surface_resources(&device, &shadow_surface_metadata);
 
         let font_atlases = make_registered_font_atlases(&device, &queue, &verified_font_assets)?;
         let dynamic_font_cell_atlas = make_dynamic_font_cell_atlas(&device, &queue, verified_dynamic_font_cells.as_ref())?;
         let (glyph_bind_group, text_pipeline) = make_text_resources(&device, &queue, format, &glyph_buffer, &font_atlases, dynamic_font_cell_atlas.as_ref(), verified_dynamic_font_cells.as_ref())?;
         let static_pipeline = make_static_pipeline(&device, format, &rounded_surface_layout);
+        let shadow_pipeline = make_shadow_pipeline(&device, format, &shadow_surface_layout);
         let gpu_timer = if timestamp_supported { Some(make_gpu_timestamp_timer(&device, queue.get_timestamp_period())) } else { None };
         println!("compiler subgroup packets: {} width-32 packet(s), vertex-subgroup-supported={subgroup_vertex_supported}; packet draw fallback is always ABI-equivalent", subgroup_packets.len());
         println!("compiler packet activity: gpu-driven-indirect={} variant={:?} adapter-subgroup={} wgsl-subgroup={} fixed activity-word/indirect-command ABI", packet_activity.is_some(), packet_activity_variant, subgroup_adapter_supported, subgroup_wgsl_supported);
@@ -1688,7 +1748,8 @@ impl Host {
         let initial_instances = instances.clone();
         let initial_glyph_bytes = glyph_bytes.clone();
         let virtual_list_count = virtual_lists.len();
-        let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, canvas_width: visual_canvas.width, canvas_height: visual_canvas.height, canvas_margin: visual_canvas.margin, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, rounded_surface_bind_group, _rounded_surface_buffer: rounded_surface_buffer, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group, cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
+        let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, canvas_width: visual_canvas.width, canvas_height: visual_canvas.height, canvas_margin: visual_canvas.margin, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, rounded_surface_bind_group, _rounded_surface_buffer: rounded_surface_buffer, shadow_pipeline, shadow_surface_bind_group, shadow_instance_buffer, shadow_instance_count, _shadow_surface_buffer: shadow_surface_buffer, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group,
+ cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
         host.sync_focus_visuals();
         host.execute_scene_data_update_batches()?;
         host.redraw_canvas_full();
@@ -2418,13 +2479,41 @@ impl Host {
         elapsed
     }
 
+    fn draw_shadow_surfaces<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
+        if self.shadow_instance_count == 0 { return; }
+        pass.set_pipeline(&self.shadow_pipeline);
+        pass.set_bind_group(0, &self.shadow_surface_bind_group, &[]);
+        pass.set_vertex_buffer(0, self.unit_quad.slice(..));
+        pass.set_vertex_buffer(1, self.shadow_instance_buffer.slice(..));
+        pass.draw(0..6, 0..self.shadow_instance_count);
+    }
+
+    // Slot 0 is the compiler-reserved root canvas quad. It must establish the
+    // opaque background before shadow layers, otherwise the root would erase the
+    // entire shadow pass. Remaining slots preserve the compiler's frozen DFS order.
+    fn draw_full_static_with_shadows<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
+        if self.instances.is_empty() { return; }
+        pass.set_vertex_buffer(0, self.unit_quad.slice(..));
+        pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+        pass.set_pipeline(&self.static_pipeline);
+        pass.set_bind_group(0, &self.rounded_surface_bind_group, &[]);
+        pass.draw(0..6, 0..1);
+        self.draw_shadow_surfaces(pass);
+        if self.instances.len() > 1 {
+            pass.set_vertex_buffer(0, self.unit_quad.slice(..));
+            pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            pass.set_pipeline(&self.static_pipeline);
+            pass.set_bind_group(0, &self.rounded_surface_bind_group, &[]);
+            pass.draw(0..6, 1..self.instances.len() as u32);
+        }
+    }
+
     fn redraw_full_replay(&mut self, measure_gpu: bool, cpu_started: Instant) -> (SubmittedTileStats, Option<f64>, u128) {
-        let all=DrawRange{first_instance:0,instance_count:self.instances.len() as u32};
         let mut encoder=self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor{label:Some("noir-full-replay-canvas")});
         self.encode_packet_activity(&mut encoder, 0);
         if measure_gpu { if let Some(timer)=self.gpu_timer.as_ref() { encoder.write_timestamp(&timer.query_set, 0); } }
         { let mut pass=encoder.begin_render_pass(&wgpu::RenderPassDescriptor{label:Some("noir-full-replay-canvas-pass"),color_attachments:&[Some(wgpu::RenderPassColorAttachment{view:&self.canvas_view,resolve_target:None,depth_slice:None,ops:wgpu::Operations{load:wgpu::LoadOp::Clear(wgpu::Color{r:0.008,g:0.012,b:0.025,a:1.0}),store:wgpu::StoreOp::Store}})],depth_stencil_attachment:None,timestamp_writes:None,occlusion_query_set: None, multiview_mask: None});
-            self.draw_ranges(&mut pass,std::iter::once(&all));
+            self.draw_full_static_with_shadows(&mut pass);
             self.draw_all_glyph_packets(&mut pass);
         }
         if measure_gpu { if let Some(timer)=self.gpu_timer.as_ref() {
@@ -2439,11 +2528,10 @@ impl Host {
     }
 
     fn redraw_canvas_full(&mut self) {
-        let all=DrawRange{first_instance:0,instance_count:self.instances.len() as u32};
         let mut encoder=self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor{label:Some("noir-full-canvas")});
         self.encode_packet_activity(&mut encoder, 0);
         { let mut pass=encoder.begin_render_pass(&wgpu::RenderPassDescriptor{label:Some("noir-full-canvas-pass"),color_attachments:&[Some(wgpu::RenderPassColorAttachment{view:&self.canvas_view,resolve_target:None,depth_slice:None,ops:wgpu::Operations{load:wgpu::LoadOp::Clear(wgpu::Color{r:0.008,g:0.012,b:0.025,a:1.0}),store:wgpu::StoreOp::Store}})],depth_stencil_attachment:None,timestamp_writes:None,occlusion_query_set: None, multiview_mask: None});
-          self.draw_ranges(&mut pass,std::iter::once(&all)); self.draw_all_glyph_packets(&mut pass); }
+          self.draw_full_static_with_shadows(&mut pass); self.draw_all_glyph_packets(&mut pass); }
         self.queue.submit(Some(encoder.finish())); self.canvas_dirty=false;
     }
     fn redraw_selected_tiles(&mut self, request: RenderRequest, measure_gpu: bool, cpu_started: Option<Instant>) -> (SubmittedTileStats, Option<f64>, Option<u128>) {
@@ -2468,6 +2556,7 @@ impl Host {
               let scissor_height = (tile.height.max(1.0) as u32).min(self.config.height.saturating_sub(scissor_y));
               pass.set_scissor_rect(scissor_x, scissor_y, scissor_width.max(1), scissor_height.max(1));
               pass.set_pipeline(&self.static_pipeline); pass.set_bind_group(0, &self.rounded_surface_bind_group, &[]); pass.set_vertex_buffer(0,self.unit_quad.slice(..)); pass.set_vertex_buffer(1,self.clear_buffer.slice(..)); pass.draw(0..6,0..1);
+              self.draw_shadow_surfaces(&mut pass);
               self.draw_ranges(&mut pass,tile.draw_ranges.iter());
               self.draw_tile_glyph_packets(&mut pass, tile_index, &tile.glyph_packet_ranges,
                                            request.packet_worklist_index == RenderRequest::NO_PACKETS);
@@ -3629,6 +3718,33 @@ fn make_rounded_surface_resources(device: &wgpu::Device, metadata: &[GpuRoundedS
     (layout, buffer, bind_group)
 }
 
+fn make_shadow_surface_resources(device: &wgpu::Device, metadata: &[GpuShadowSurfaceMeta]) -> (wgpu::BindGroupLayout, wgpu::Buffer, wgpu::BindGroup) {
+    // wgpu storage bindings may not be zero-sized. A disabled bench Scene receives
+    // one all-zero sentinel that is never drawn because shadow_instance_count is zero.
+    let upload = if metadata.is_empty() { vec![GpuShadowSurfaceMeta::zeroed()] } else { metadata.to_vec() };
+    let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("noir-shadow-surface-layout"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0, visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None },
+            count: None,
+        }],
+    });
+    let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("noir-shadow-surface-metadata"), contents: bytemuck::cast_slice(&upload), usage: wgpu::BufferUsages::STORAGE,
+    });
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("noir-shadow-surface-bind-group"), layout: &layout,
+        entries: &[wgpu::BindGroupEntry { binding: 0, resource: buffer.as_entire_binding() }],
+    });
+    (layout, buffer, bind_group)
+}
+
+fn make_shadow_pipeline(device:&wgpu::Device, format:wgpu::TextureFormat, shadow_surface_layout: &wgpu::BindGroupLayout)->wgpu::RenderPipeline{
+ let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor{label:Some("noir-shadow-sdf"),source:wgpu::ShaderSource::Wgsl(include_str!("../host_shadow.wgsl").into())}); let layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{label:Some("noir-shadow-layout"),bind_group_layouts:&[Some(shadow_surface_layout)],immediate_size:0});
+ device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{label:Some("noir-shadow-pipeline"),layout:Some(&layout),vertex:wgpu::VertexState{module:&shader,entry_point:Some("vs_main"),buffers:&[Some(unit_layout()),Some(static_instance_layout())],compilation_options:Default::default()},fragment:Some(wgpu::FragmentState{module:&shader,entry_point:Some("fs_main"),targets:&[Some(wgpu::ColorTargetState{format,blend:Some(wgpu::BlendState::ALPHA_BLENDING),write_mask:wgpu::ColorWrites::ALL})],compilation_options:Default::default()}),primitive:wgpu::PrimitiveState::default(),depth_stencil:None,multisample:wgpu::MultisampleState::default(),multiview_mask:None,cache:None})
+}
+
 fn make_static_pipeline(device:&wgpu::Device, format:wgpu::TextureFormat, rounded_surface_layout: &wgpu::BindGroupLayout)->wgpu::RenderPipeline{
  let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor{label:Some("noir-static-quad"),source:wgpu::ShaderSource::Wgsl(include_str!("../host_quad.wgsl").into())}); let layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{label:Some("noir-static-layout"),bind_group_layouts:&[Some(rounded_surface_layout)],immediate_size:0});
  device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{label:Some("noir-static-pipeline"),layout:Some(&layout),vertex:wgpu::VertexState{module:&shader,entry_point:Some("vs_main"),buffers:&[Some(unit_layout()),Some(static_instance_layout())],compilation_options:Default::default()},fragment:Some(wgpu::FragmentState{module:&shader,entry_point:Some("fs_main"),targets:&[Some(wgpu::ColorTargetState{format,blend:Some(wgpu::BlendState::ALPHA_BLENDING),write_mask:wgpu::ColorWrites::ALL})],compilation_options:Default::default()}),primitive:wgpu::PrimitiveState::default(),depth_stencil:None,multisample:wgpu::MultisampleState::default(),multiview_mask:None,cache:None})
@@ -4205,7 +4321,12 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
                     "unsupported rounded_surface_plan ABI {}@{}; expected {}@{}",
                     scene.abi_contracts.rounded_surface_plan.schema, scene.abi_contracts.rounded_surface_plan.revision,
                     ROUNDED_SURFACE_PLAN_ABI_SCHEMA, ROUNDED_SURFACE_PLAN_ABI_REVISION);
-    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} rounded-surface={}@{} frozen",
+    anyhow::ensure!(scene.abi_contracts.shadow_surface_plan.schema == SHADOW_SURFACE_PLAN_ABI_SCHEMA
+                    && scene.abi_contracts.shadow_surface_plan.revision == SHADOW_SURFACE_PLAN_ABI_REVISION,
+                    "unsupported shadow_surface_plan ABI {}@{}; expected {}@{}",
+                    scene.abi_contracts.shadow_surface_plan.schema, scene.abi_contracts.shadow_surface_plan.revision,
+                    SHADOW_SURFACE_PLAN_ABI_SCHEMA, SHADOW_SURFACE_PLAN_ABI_REVISION);
+    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} rounded-surface={}@{} shadow-surface={}@{} frozen",
              scene.abi_contracts.virtual_list_plan.schema, scene.abi_contracts.virtual_list_plan.revision,
              scene.abi_contracts.row_activation_plan.schema, scene.abi_contracts.row_activation_plan.revision,
              scene.abi_contracts.scrollbar_plan.schema, scene.abi_contracts.scrollbar_plan.revision,
@@ -4215,7 +4336,8 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
              scene.abi_contracts.font_placement_plan.schema, scene.abi_contracts.font_placement_plan.revision,
              scene.abi_contracts.dynamic_font_cell_plan.schema, scene.abi_contracts.dynamic_font_cell_plan.revision,
              scene.abi_contracts.visual_language_plan.schema, scene.abi_contracts.visual_language_plan.revision,
-             scene.abi_contracts.rounded_surface_plan.schema, scene.abi_contracts.rounded_surface_plan.revision);
+             scene.abi_contracts.rounded_surface_plan.schema, scene.abi_contracts.rounded_surface_plan.revision,
+             scene.abi_contracts.shadow_surface_plan.schema, scene.abi_contracts.shadow_surface_plan.revision);
     Ok(())
 }
 
@@ -4298,6 +4420,85 @@ fn compiler_rounded_surface_plan(scene: &Scene) -> Result<Vec<GpuRoundedSurfaceM
     println!("compiler rounded surfaces: v1 surfaces={} metadata-slots={} aa-width=1px immutable-instance-slots",
              plan.surfaces.len(), metadata.len());
     Ok(metadata)
+}
+
+fn shadow_layer_recipe(elevation: u32) -> &'static [(f32, f32)] {
+    match elevation {
+        1 => &[(3.0, 0.14), (7.0, 0.055)],
+        2 => &[(4.0, 0.17), (10.0, 0.070)],
+        3 => &[(6.0, 0.19), (14.0, 0.080)],
+        4 => &[(8.0, 0.21), (18.0, 0.090)],
+        5 => &[(10.0, 0.23), (22.0, 0.100)],
+        _ => &[],
+    }
+}
+
+fn compiler_shadow_surface_plan(scene: &Scene) -> Result<(Vec<QuadInstance>, Vec<GpuShadowSurfaceMeta>)> {
+    let Some(plan) = &scene.shadow_surface_plan else {
+        anyhow::ensure!(scene.visual_language_plan.preset == "bench",
+                        "desktop-wide visual Scene may not disable shadow_surface_plan v1");
+        println!("compiler shadow surfaces: disabled layers=0 immutable-instances=0");
+        return Ok((Vec::new(), Vec::new()));
+    };
+    anyhow::ensure!(plan.abi_schema == SHADOW_SURFACE_PLAN_ABI_SCHEMA && plan.abi_revision == SHADOW_SURFACE_PLAN_ABI_REVISION
+                    && !plan.layers.is_empty() && plan.layers.len() <= scene.resource_budget.instance_capacity.saturating_mul(2),
+                    "shadow_surface_plan payload must be nonempty bounded v1");
+    let canvas_width = scene.visual_language_plan.canvas.width;
+    let canvas_height = scene.visual_language_plan.canvas.height;
+    let mut layouts = HashMap::new();
+    for layout in &scene.layout_plan {
+        anyhow::ensure!(layouts.insert(layout.id.as_str(), layout).is_none(),
+                        "duplicate layout id {} while proving shadow surfaces", layout.id);
+    }
+    let mut ids = HashSet::new();
+    let mut source_layers = HashSet::new();
+    let mut instances = Vec::with_capacity(plan.layers.len());
+    let mut metadata = Vec::with_capacity(plan.layers.len());
+    for entry in &plan.layers {
+        anyhow::ensure!(ids.insert(entry.id.as_str()) && source_layers.insert((entry.source_id.as_str(), entry.layer)),
+                        "shadow layer {} has duplicate ID or source/layer address", entry.id);
+        let layout = layouts.get(entry.source_id.as_str())
+            .with_context(|| format!("shadow layer {} references unknown source {}", entry.id, entry.source_id))?;
+        anyhow::ensure!(layout.tag == "stack" && layout.elevation == entry.elevation && entry.elevation >= 1 && entry.elevation <= 5
+                        && layout._instance_offset == entry.source_instance_offset,
+                        "shadow layer {} source/elevation/instance offset disagrees with frozen layout", entry.id);
+        let recipe = shadow_layer_recipe(entry.elevation);
+        anyhow::ensure!(entry.layer >= 1 && (entry.layer as usize) <= recipe.len(),
+                        "shadow layer {} uses invalid v1 layer {} for elevation {}", entry.id, entry.layer, entry.elevation);
+        let (expected_blur, expected_opacity) = recipe[entry.layer as usize - 1];
+        let source_x = (layout.ndc_pos[0] + 1.0) * canvas_width * 0.5;
+        let source_y = (1.0 - layout.ndc_pos[1] - layout.ndc_size[1]) * canvas_height * 0.5;
+        let source_width = layout.ndc_size[0] * canvas_width * 0.5;
+        let source_height = layout.ndc_size[1] * canvas_height * 0.5;
+        anyhow::ensure!([entry.x, entry.y, entry.width, entry.height, entry.radius_px, entry.blur_px, entry.opacity]
+                            .iter().all(|value| value.is_finite())
+                        && source_width > 0.0 && source_height > 0.0
+                        && entry.radius_px > 0.0 && entry.radius_px <= source_width.min(source_height) * 0.5
+                        && (entry.blur_px - expected_blur).abs() <= 1e-6
+                        && (entry.opacity - expected_opacity).abs() <= 1e-6
+                        && (entry.x - (source_x - entry.blur_px)).abs() <= 1e-3
+                        && (entry.y - (source_y - entry.blur_px)).abs() <= 1e-3
+                        && (entry.width - (source_width + 2.0 * entry.blur_px)).abs() <= 1e-3
+                        && (entry.height - (source_height + 2.0 * entry.blur_px)).abs() <= 1e-3,
+                        "shadow layer {} geometry/recipe disagrees with compiler layout", entry.id);
+        let ndc_pos = [2.0 * entry.x / canvas_width - 1.0,
+                       1.0 - 2.0 * (entry.y + entry.height) / canvas_height];
+        let ndc_size = [2.0 * entry.width / canvas_width, 2.0 * entry.height / canvas_height];
+        instances.push(QuadInstance { pos: ndc_pos, size: ndc_size, color: [0.0, 0.0, 0.0, entry.opacity], glyph_word_offset: 0, glyph_enabled: 0, glyph_count: 0 });
+        metadata.push(GpuShadowSurfaceMeta { radius_px: entry.radius_px, blur_px: entry.blur_px, source_width_px: source_width, source_height_px: source_height });
+    }
+    for layout in scene.layout_plan.iter().filter(|layout| layout.elevation > 0) {
+        anyhow::ensure!(layout.tag == "stack", "elevated layout {} must be a static stack", layout.id);
+        let recipe = shadow_layer_recipe(layout.elevation);
+        anyhow::ensure!(!recipe.is_empty(), "layout {} has unsupported elevation {}", layout.id, layout.elevation);
+        for layer in 1..=recipe.len() as u32 {
+            anyhow::ensure!(source_layers.contains(&(layout.id.as_str(), layer)),
+                            "elevated layout {} is missing required shadow layer {}", layout.id, layer);
+        }
+    }
+    println!("compiler shadow surfaces: v1 layers={} elevated-sources={} immutable-shadow-instances=1pass",
+             instances.len(), scene.layout_plan.iter().filter(|layout| layout.elevation > 0).count());
+    Ok((instances, metadata))
 }
 
 fn compiler_virtual_list_plans(scene: &Scene) -> Result<Vec<CompiledVirtualListPlan>> {

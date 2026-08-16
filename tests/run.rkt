@@ -105,6 +105,24 @@
 (define material-rounded-json (hash-ref material-scene-json 'rounded_surface_plan))
 (check-equal? (hash-ref material-rounded-json 'abi_schema) "noir-rounded-surface-plan-v1")
 (check-true (>= (length (hash-ref material-rounded-json 'surfaces)) 6))
+;; Shadow v1 is a second immutable pass, not a runtime `elevation` style lookup.
+;; Each level-1 Material card emits its broad layer before its dense near layer.
+(define material-shadow-plan (scene-shadow-surface-plan material-profile-app-scene))
+(check-not-false material-shadow-plan)
+(check-equal? (map shadow-surface-source-id (shadow-surface-plan-surfaces material-shadow-plan))
+              '(material-activity-card material-activity-card
+                material-performance-card material-performance-card
+                material-summary-card material-summary-card))
+(check-equal? (map shadow-surface-layer (shadow-surface-plan-surfaces material-shadow-plan))
+              '(2 1 2 1 2 1))
+(check-equal? (map shadow-surface-blur-px (shadow-surface-plan-surfaces material-shadow-plan))
+              '(7.0 3.0 7.0 3.0 7.0 3.0))
+(check-equal? (map shadow-surface-opacity (shadow-surface-plan-surfaces material-shadow-plan))
+              '(0.055 0.14 0.055 0.14 0.055 0.14))
+(check-false (scene-shadow-surface-plan app-scene))
+(define material-shadow-json (hash-ref material-scene-json 'shadow_surface_plan))
+(check-equal? (hash-ref material-shadow-json 'abi_schema) "noir-shadow-surface-plan-v1")
+(check-equal? (length (hash-ref material-shadow-json 'layers)) 6)
 ;; `GlyphPlacementInstance.ndc_pos` is the WGSL quad lower-left corner. In the
 ;; static `Service health` fixture all non-space glyphs are non-descenders, so their
 ;; lower edges (not their tops) must share one baseline despite x-height differences.

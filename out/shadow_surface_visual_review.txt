@@ -1,0 +1,10 @@
+Shadow surface v1 visual review
+
+Input: out/material-profile-dashboard-v1.png, captured through real X11/Vulkan after the fixed root-first shadow pass correction.
+
+Findings:
+- The Material activity card and the two upper cards retain rounded corners and correctly ordered static text.
+- Soft darkening is visible beyond elevated card side and lower edges; it is intentionally subtle for the dark Material profile.
+- The navigation rail, app bar, button event path, glyph placement, and page-2 baseline rendering remain intact.
+- A pixel comparison against the released no-shadow screenshot found 24,612 changed pixels. The visual difference is concentrated around elevated card perimeters, consistent with the fixed two-layer shadow plan.
+- The earlier hidden-shadow defect was caused by rendering the shadow pass before the opaque root canvas instance. The final pass order is root canvas -> immutable shadow layers -> remaining static instances -> glyphs.

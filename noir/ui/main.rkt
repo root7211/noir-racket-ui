@@ -54,6 +54,9 @@ scene-glyph-draw-packets
          scene-virtual-list-plans
          scene-log-browser-plans
          scene-font-assets
+         scene-shadow-surface-plan
+         (struct-out shadow-surface)
+         (struct-out shadow-surface-plan)
          (struct-out virtual-list-plan)
          (struct-out log-browser-plan)
          (struct-out font-asset-plan)
@@ -129,6 +132,10 @@ scene-glyph-draw-packets
 ;; 44-byte QuadInstance slot; it never mutates the QuadInstance ABI itself.
 (define rounded-surface-plan-abi-schema "noir-rounded-surface-plan-v1")
 (define rounded-surface-plan-abi-revision 1)
+;; Shadow metadata is a distinct immutable render pass. It stores fully expanded
+;; physical rectangles and never adds mutable instance slots to the UI Scene.
+(define shadow-surface-plan-abi-schema "noir-shadow-surface-plan-v1")
+(define shadow-surface-plan-abi-revision 1)
 
 (define (abi-contracts->jsexpr)
   (hash 'virtual_list_plan
@@ -160,12 +167,15 @@ scene-glyph-draw-packets
               'revision visual-language-plan-abi-revision)
         'rounded_surface_plan
         (hash 'schema rounded-surface-plan-abi-schema
-              'revision rounded-surface-plan-abi-revision)))
+              'revision rounded-surface-plan-abi-revision)
+        'shadow_surface_plan
+        (hash 'schema shadow-surface-plan-abi-schema
+              'revision shadow-surface-plan-abi-revision)))
 
 (struct ui-node (tag id props children source) #:transparent)
 ;; Scene 以静态树和增量执行计划共同组成。state/actions 由 `noir-app`
 ;; 的扩展语法生成；普通 `(ui ...)` 保持空状态表，仍可独立使用。
-(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan) #:transparent)
+(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan) #:transparent)
 ;; state-slot 的 index 是所有 runtime state read/write 的唯一地址；id/initial 只保留为启动期 proof 与可审计导出。
 (struct state-slot (index id initial) #:transparent)
 ;; action-slot 与 state-slot 一样为 macro expansion 生成的 dense canonical address。
@@ -261,6 +271,10 @@ scene-glyph-draw-packets
 ;; [radius, aa-width, width, height] indexed by instance_offset / 44.
 (struct rounded-surface (id instance-offset x y width height radius-px aa-width-px) #:transparent)
 (struct rounded-surface-plan (aa-width-px surfaces) #:transparent)
+;; Each entry is one compiler-selected, expanded SDF shadow layer. `source-id` and
+;; `source-instance-offset` are reverse-proof witnesses; runtime never follows them.
+(struct shadow-surface (id source-id source-instance-offset elevation layer x y width height radius-px blur-px opacity) #:transparent)
+(struct shadow-surface-plan (surfaces) #:transparent)
 
 (define (value->jsexpr v)
   (cond
@@ -840,6 +854,25 @@ scene-glyph-draw-packets
                      'radius_px (rounded-surface-radius-px surface)
                      'aa_width_px (rounded-surface-aa-width-px surface))))))
 
+(define (shadow-surface-plan->jsexpr plan)
+  (and plan
+       (hash 'abi_schema shadow-surface-plan-abi-schema
+             'abi_revision shadow-surface-plan-abi-revision
+             'layers
+             (for/list ([surface (in-list (shadow-surface-plan-surfaces plan))])
+               (hash 'id (symbol->string (shadow-surface-id surface))
+                     'source_id (symbol->string (shadow-surface-source-id surface))
+                     'source_instance_offset (shadow-surface-source-instance-offset surface)
+                     'elevation (shadow-surface-elevation surface)
+                     'layer (shadow-surface-layer surface)
+                     'x (shadow-surface-x surface)
+                     'y (shadow-surface-y surface)
+                     'width (shadow-surface-width surface)
+                     'height (shadow-surface-height surface)
+                     'radius_px (shadow-surface-radius-px surface)
+                     'blur_px (shadow-surface-blur-px surface)
+                     'opacity (shadow-surface-opacity surface))))))
+
 (define (scene->jsexpr s #:build-attestation [build-attestation #f])
   (define base
     (hash 'abi_contracts (abi-contracts->jsexpr)
@@ -880,6 +913,7 @@ scene-glyph-draw-packets
         'dynamic_font_cell_plan (dynamic-font-cell-plan->jsexpr (scene-dynamic-font-cell-plan s))
         'visual_language_plan (visual-language-plan->jsexpr (scene-visual-language-plan s))
         'rounded_surface_plan (rounded-surface-plan->jsexpr (scene-rounded-surface-plan s))
+        'shadow_surface_plan (shadow-surface-plan->jsexpr (scene-shadow-surface-plan s))
         'text_field_visuals (text-field-visuals->jsexpr s)))
   (if build-attestation
       (hash-set base 'build_attestation (value->jsexpr build-attestation))
@@ -930,7 +964,8 @@ scene-glyph-draw-packets
         'conflict-graph (scene-conflict-graph s)
         'render-schedules (scene-render-schedules s)
         'focus-graph (scene-focus-graph s)
-        'keyboard-map (scene-keyboard-map s)))
+        'keyboard-map (scene-keyboard-map s)
+        'shadow-surface-plan (scene-shadow-surface-plan s)))
 
 ;; -------------------------- Expand-time parser ---------------------------
 
@@ -973,10 +1008,11 @@ scene-glyph-draw-packets
    (struct c-action-plan (id action action-index text-updates instance-updates damage tile-ids) #:transparent)
   ;; Layout Plan 是后端可直接消费的静态几何契约。instance-offset 以
   ;; QuadInstance 的 44-byte packed layout 为单位，和 Rust vertex layout 对齐。
-  (struct c-layout (id tag x y width height color glyph-offset glyph-count atlas-page glyph-ids glyph-advances instance-offset vertex-count) #:transparent)
+  (struct c-layout (id tag x y width height elevation color glyph-offset glyph-count atlas-page glyph-ids glyph-advances instance-offset vertex-count) #:transparent)
   ;; Rounded metadata is emitted after layout offsets are frozen; it cannot alter
   ;; layout, event patch offsets, glyph placement or QuadInstance bytes.
   (struct c-rounded-surface (id instance-offset x y width height radius-px aa-width-px) #:transparent)
+  (struct c-shadow-surface (id source-id source-instance-offset elevation layer x y width height radius-px blur-px opacity) #:transparent)
   ;; 每个 c-glyph-placement 对应一个永不重新寻址的 32-byte glyph cell，以及已落位的 NDC quad。
   ;; glyph-id 对动态数字表示 initial state；action 可以覆写该 cell 的首个 u32，但不能改变 geometry/page/packet。
   (struct c-glyph-placement (slot node-id glyph-index glyph-id atlas-page glyph-byte-offset glyph-word-offset
@@ -2361,7 +2397,12 @@ scene-glyph-draw-packets
                                 ,@decorations
                                 ,@(map syntax->datum (syntax->list #'(child ...))))
                         stx stx))
-       (parse-node lowered seen)]
+       (define-values (surface-node surface-seen) (parse-node lowered seen))
+       ;; `elevation` is retained only in compiler IR. It is never a runtime style
+       ;; lookup: shadow lowering consumes this literal after layout is frozen.
+       (values (struct-copy c-node surface-node
+                            [props (hash-set (c-node-props surface-node) 'elevation elevation-value)])
+               surface-seen)]
        [_ (raise-syntax-error 'surface
                              "expected (surface #:id id [#:x n] [#:y n] [#:width n] [#:height n] [#:background color] [#:elevation 0..5] [#:radius n] [#:clip bool] child ...+)"
                              stx)]))
@@ -3388,6 +3429,7 @@ scene-glyph-draw-packets
       (define vertex-count (if binding (* glyph-count 6) 6))
       (define current
         (c-layout (c-node-id node) (c-node-tag node) resolved-x resolved-y resolved-width height
+                  (hash-ref (c-node-props node) 'elevation 0)
                   (layout-color node depth) glyph-offset glyph-count atlas-page glyph-ids glyph-advances 0 vertex-count))
       (cond
         [(eq? (c-node-tag node) 'virtual-list)
@@ -3512,6 +3554,89 @@ scene-glyph-draw-packets
     (unless (= (length sorted) (length (remove-duplicates (map c-rounded-surface-instance-offset sorted))))
       (raise-syntax-error 'rounded-surface-plan "rounded surfaces must own unique QuadInstance offsets" (c-node-source root)))
     sorted)
+
+  ;; The v1 recipe is deliberately finite and symmetric: it models ambient elevation
+  ;; without a runtime blur, filter, animation or directional light input. Every tuple
+  ;; is `(blur-px opacity)` and becomes one immutable shadow quad.
+  (define (shadow-layer-recipe elevation)
+    (case elevation
+      [(1) '((3.0 0.14) (7.0 0.055))]
+      [(2) '((4.0 0.17) (10.0 0.070))]
+      [(3) '((6.0 0.19) (14.0 0.080))]
+      [(4) '((8.0 0.21) (18.0 0.090))]
+      [(5) '((10.0 0.23) (22.0 0.100))]
+      [else '()]))
+
+  (define (compile-shadow-surface-plan root layouts)
+    ;; Shadow v1 is a desktop chrome feature. Bench fixtures retain a literal false
+    ;; plan for backwards compatibility and avoid allocating a second static pass.
+    (if (not (eq? (hash-ref (current-static-visual-preset) 'id) 'desktop-wide))
+        '()
+        (let* ([layout-by-id (for/hash ([layout (in-list layouts)]) (values (c-layout-id layout) layout))]
+               [layers
+                (append-map
+                 (lambda (node)
+                   (define elevation (hash-ref (c-node-props node) 'elevation 0))
+                   (cond
+                     [(zero? elevation) '()]
+                     [else
+                      (unless (and (eq? (c-node-tag node) 'stack)
+                                   (hash-has-key? (c-node-props node) '#:radius))
+                        (raise-syntax-error 'shadow-surface-plan
+                                            "positive elevation requires a static rounded stack surface"
+                                            (c-node-source node)))
+                      (define radius (hash-ref (c-node-props node) '#:radius))
+                      (define layout
+                        (hash-ref layout-by-id (c-node-id node)
+                                  (lambda () (raise-syntax-error 'shadow-surface-plan
+                                                                   "elevated surface is missing from layout plan"
+                                                                   (c-node-source node)))))
+                      (unless (and (exact-integer? elevation) (<= 1 elevation 5)
+                                   (real? radius) (> radius 0.0)
+                                   (> (c-layout-width layout) 0.0) (> (c-layout-height layout) 0.0)
+                                   (<= radius (/ (min (c-layout-width layout) (c-layout-height layout)) 2.0)))
+                        (raise-syntax-error 'shadow-surface-plan
+                                            "elevation/radius/geometry violates the fixed shadow contract"
+                                            (c-node-source node)))
+                      (for/list ([recipe (in-list (shadow-layer-recipe elevation))] [layer (in-naturals 1)])
+                        (define blur (first recipe))
+                        (define opacity (second recipe))
+                        (c-shadow-surface
+                         (string->symbol (format "~a$shadow-~a" (c-node-id node) layer))
+                         (c-node-id node) (c-layout-instance-offset layout) elevation layer
+                         (- (c-layout-x layout) blur) (- (c-layout-y layout) blur)
+                         (+ (c-layout-width layout) (* 2.0 blur))
+                         (+ (c-layout-height layout) (* 2.0 blur))
+                         radius blur opacity))]))
+                 (walk-nodes root))]
+               [sorted (sort layers < #:key c-shadow-surface-layer)])
+          (unless (= (length layers) (length (remove-duplicates (map c-shadow-surface-id layers))))
+            (raise-syntax-error 'shadow-surface-plan "shadow layer IDs must be unique" (c-node-source root)))
+          ;; Canonical source/layer sort prevents source-tree traversal accidents from
+          ;; changing blend order. Larger blur draws first; smaller, denser layer last.
+          (sort layers
+                (lambda (left right)
+                  (cond [(symbol<? (c-shadow-surface-source-id left) (c-shadow-surface-source-id right)) #t]
+                        [(symbol<? (c-shadow-surface-source-id right) (c-shadow-surface-source-id left)) #f]
+                        [else (> (c-shadow-surface-layer left) (c-shadow-surface-layer right))]))))))
+
+  (define (shadow-surface-plan->datum layers)
+    (if (null? layers)
+        '#f
+        `(shadow-surface-plan
+          (list ,@(for/list ([surface (in-list layers)])
+                     `(shadow-surface ',(c-shadow-surface-id surface)
+                                      ',(c-shadow-surface-source-id surface)
+                                      ,(c-shadow-surface-source-instance-offset surface)
+                                      ,(c-shadow-surface-elevation surface)
+                                      ,(c-shadow-surface-layer surface)
+                                      ,(c-shadow-surface-x surface)
+                                      ,(c-shadow-surface-y surface)
+                                      ,(c-shadow-surface-width surface)
+                                      ,(c-shadow-surface-height surface)
+                                      ,(c-shadow-surface-radius-px surface)
+                                      ,(c-shadow-surface-blur-px surface)
+                                      ,(c-shadow-surface-opacity surface)))))))
 
   (define (rounded-surface-plan->datum surfaces)
     (if (null? surfaces)
@@ -5131,6 +5256,7 @@ scene-glyph-draw-packets
     `(hash 'id ',(c-layout-id layout)
            'tag ',(c-layout-tag layout)
            'x ,x 'y ,y 'width ,full-width 'height ,height
+           'elevation ,(c-layout-elevation layout)
            'ndc_pos ',ndc-pos
            'ndc_size ',ndc-size
            'color ',(c-layout-color layout)
@@ -6231,6 +6357,7 @@ scene-glyph-draw-packets
      (define-values (total dynamic budget updates) (compile-scene root-node))
      (define layouts (compile-layout-plan root-node))
      (define rounded-surfaces (compile-rounded-surface-plan root-node layouts))
+     (define shadow-surfaces (compile-shadow-surface-plan root-node layouts))
      (define-values (glyph-placements glyph-packets)
        (compile-glyph-placement-plan root-node '() layouts (hash)))
      (define subgroup-packets (compile-subgroup-packet-plan glyph-packets))
@@ -6279,8 +6406,9 @@ scene-glyph-draw-packets
                     [FONT-ASSETS (datum-stx stx ''())]
                     [DYNAMIC-FONT-CELL-PLAN (datum-stx stx '#f)]
                     [VISUAL-LANGUAGE (datum-stx stx '(visual-language-plan 'bench 640.0 360.0 16.0))]
-                    [ROUNDED-SURFACES (datum-stx stx (rounded-surface-plan->datum rounded-surfaces))])
-       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES))]
+                    [ROUNDED-SURFACES (datum-stx stx (rounded-surface-plan->datum rounded-surfaces))]
+                    [SHADOW-SURFACES (datum-stx stx (shadow-surface-plan->datum shadow-surfaces))])
+       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES))]
     [(_ root:expr extra:expr ...)
      (raise-syntax-error 'ui "expects exactly one root layout node" stx)]))
 
@@ -6358,6 +6486,9 @@ scene-glyph-draw-packets
      (define rounded-surfaces
        (parameterize ([current-static-visual-preset static-visual-preset])
          (compile-rounded-surface-plan root-node layouts)))
+     (define shadow-surfaces
+       (parameterize ([current-static-visual-preset static-visual-preset])
+         (compile-shadow-surface-plan root-node layouts)))
      (define-values (glyph-placements glyph-packets)
        (parameterize ([current-static-visual-preset static-visual-preset])
          (with-static-font-assets font-assets
@@ -6451,7 +6582,8 @@ scene-glyph-draw-packets
                     [FONT-ASSETS (datum-stx stx (font-asset-plans->datum font-assets))]
                      [DYNAMIC-FONT-CELL-PLAN (datum-stx stx dynamic-font-cell-plan-datum)]
                      [VISUAL-LANGUAGE (datum-stx stx visual-language-datum)]
-                     [ROUNDED-SURFACES (datum-stx stx (rounded-surface-plan->datum rounded-surfaces))])
+                     [ROUNDED-SURFACES (datum-stx stx (rounded-surface-plan->datum rounded-surfaces))]
+                     [SHADOW-SURFACES (datum-stx stx (shadow-surface-plan->datum shadow-surfaces))])
        #'(begin
-           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES))
+           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES))
            (provide app-scene)))]))
