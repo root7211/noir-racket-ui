@@ -125,6 +125,10 @@ scene-glyph-draw-packets
 ;; Visual language v1 fixes the compile-time canvas used by layout/NDC/tile lowering.
 (define visual-language-plan-abi-schema "noir-visual-language-plan-v1")
 (define visual-language-plan-abi-revision 1)
+;; Rounded surface metadata is a parallel immutable table indexed by the frozen
+;; 44-byte QuadInstance slot; it never mutates the QuadInstance ABI itself.
+(define rounded-surface-plan-abi-schema "noir-rounded-surface-plan-v1")
+(define rounded-surface-plan-abi-revision 1)
 
 (define (abi-contracts->jsexpr)
   (hash 'virtual_list_plan
@@ -153,12 +157,15 @@ scene-glyph-draw-packets
               'revision dynamic-font-cell-plan-abi-revision)
         'visual_language_plan
         (hash 'schema visual-language-plan-abi-schema
-              'revision visual-language-plan-abi-revision)))
+              'revision visual-language-plan-abi-revision)
+        'rounded_surface_plan
+        (hash 'schema rounded-surface-plan-abi-schema
+              'revision rounded-surface-plan-abi-revision)))
 
 (struct ui-node (tag id props children source) #:transparent)
 ;; Scene 以静态树和增量执行计划共同组成。state/actions 由 `noir-app`
 ;; 的扩展语法生成；普通 `(ui ...)` 保持空状态表，仍可独立使用。
-(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan) #:transparent)
+(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan) #:transparent)
 ;; state-slot 的 index 是所有 runtime state read/write 的唯一地址；id/initial 只保留为启动期 proof 与可审计导出。
 (struct state-slot (index id initial) #:transparent)
 ;; action-slot 与 state-slot 一样为 macro expansion 生成的 dense canonical address。
@@ -249,6 +256,11 @@ scene-glyph-draw-packets
 (struct dynamic-font-cell-plan (face-id manifest-path atlas-path font-sha256 atlas-sha256 atlas-width atlas-height atlas-channels coverage-policy advance-policy fixed-advance glyph-domain-first glyph-domain-count tables) #:transparent)
 ;; Window dimensions are fixed compiler-owned geometry; host may configure but cannot infer them.
 (struct visual-language-plan (preset width height margin) #:transparent)
+;; A rounded surface is immutable shader metadata for one static QuadInstance slot.
+;; It stores physical geometry as a reverse-proof witness; runtime consumes only
+;; [radius, aa-width, width, height] indexed by instance_offset / 44.
+(struct rounded-surface (id instance-offset x y width height radius-px aa-width-px) #:transparent)
+(struct rounded-surface-plan (aa-width-px surfaces) #:transparent)
 
 (define (value->jsexpr v)
   (cond
@@ -812,6 +824,22 @@ scene-glyph-draw-packets
                       'height (visual-language-plan-height plan)
                       'margin (visual-language-plan-margin plan))))
 
+(define (rounded-surface-plan->jsexpr plan)
+  (and plan
+       (hash 'abi_schema rounded-surface-plan-abi-schema
+             'abi_revision rounded-surface-plan-abi-revision
+             'aa_width_px (rounded-surface-plan-aa-width-px plan)
+             'surfaces
+             (for/list ([surface (in-list (rounded-surface-plan-surfaces plan))])
+               (hash 'id (symbol->string (rounded-surface-id surface))
+                     'instance_offset (rounded-surface-instance-offset surface)
+                     'x (rounded-surface-x surface)
+                     'y (rounded-surface-y surface)
+                     'width (rounded-surface-width surface)
+                     'height (rounded-surface-height surface)
+                     'radius_px (rounded-surface-radius-px surface)
+                     'aa_width_px (rounded-surface-aa-width-px surface))))))
+
 (define (scene->jsexpr s #:build-attestation [build-attestation #f])
   (define base
     (hash 'abi_contracts (abi-contracts->jsexpr)
@@ -851,6 +879,7 @@ scene-glyph-draw-packets
         'font_assets (map font-asset-plan->jsexpr (scene-font-assets s))
         'dynamic_font_cell_plan (dynamic-font-cell-plan->jsexpr (scene-dynamic-font-cell-plan s))
         'visual_language_plan (visual-language-plan->jsexpr (scene-visual-language-plan s))
+        'rounded_surface_plan (rounded-surface-plan->jsexpr (scene-rounded-surface-plan s))
         'text_field_visuals (text-field-visuals->jsexpr s)))
   (if build-attestation
       (hash-set base 'build_attestation (value->jsexpr build-attestation))
@@ -945,6 +974,9 @@ scene-glyph-draw-packets
   ;; Layout Plan 是后端可直接消费的静态几何契约。instance-offset 以
   ;; QuadInstance 的 44-byte packed layout 为单位，和 Rust vertex layout 对齐。
   (struct c-layout (id tag x y width height color glyph-offset glyph-count atlas-page glyph-ids glyph-advances instance-offset vertex-count) #:transparent)
+  ;; Rounded metadata is emitted after layout offsets are frozen; it cannot alter
+  ;; layout, event patch offsets, glyph placement or QuadInstance bytes.
+  (struct c-rounded-surface (id instance-offset x y width height radius-px aa-width-px) #:transparent)
   ;; 每个 c-glyph-placement 对应一个永不重新寻址的 32-byte glyph cell，以及已落位的 NDC quad。
   ;; glyph-id 对动态数字表示 initial state；action 可以覆写该 cell 的首个 u32，但不能改变 geometry/page/packet。
   (struct c-glyph-placement (slot node-id glyph-index glyph-id atlas-page glyph-byte-offset glyph-word-offset
@@ -2346,7 +2378,7 @@ scene-glyph-draw-packets
                         `(stack #:id ,(syntax-e #'id) #:height ,(syntax->datum #'height)
                                 #:background ,(syntax->datum #'background)
                            (button #:id ,(syntax-e #'button-id) #:height ,(syntax->datum #'height)
-                                   #:background ,(syntax->datum #'background)
+                                   #:radius (theme-radius card) #:background ,(syntax->datum #'background)
                                    ,button-label-value #:on ,(syntax-e #'action))
                            (text #:id ,(syntax-e #'label-id) #:height ,(syntax->datum #'height)
                                  #:background ,(syntax->datum #'background)
@@ -2376,7 +2408,7 @@ scene-glyph-draw-packets
          (datum->syntax stx
                         `(stack #:id ,id-value #:x ,x-value #:y ,y-value
                                 ,@(if width-value (list '#:width width-value) '())
-                                #:height ,height-value #:visual-anchor #t
+                                #:height ,height-value #:visual-anchor #t #:radius (theme-radius card)
                                 #:background ,(syntax->datum #'background)
                            (text #:id ,(syntax-e #'text-id) #:height ,height-value
                                  #:background ,(syntax->datum #'background)
@@ -2453,7 +2485,7 @@ scene-glyph-draw-packets
          (datum->syntax
           stx
           `(stack #:id ,id-value #:x ,x-value #:y ,y-value #:width ,width-value #:height ,height-value
-                  #:background ,(syntax->datum #'background)
+                  #:radius (theme-radius card) #:background ,(syntax->datum #'background)
              (text #:id ,(syntax-e #'eyebrow-id) #:x ,(+ x-value 24) #:y ,(+ y-value 6)
                    #:width ,(- width-value 48) #:height 18 #:font-face ,(syntax-e #'face)
                    #:font-scale 0.72 #:text-inset 0.0 ,eyebrow-value)
@@ -2488,7 +2520,7 @@ scene-glyph-draw-packets
          (datum->syntax
           stx
           `(stack #:id ,id-value #:x ,x-value #:y ,y-value #:width ,width-value #:height ,height-value
-                  #:background ,(syntax->datum #'background)
+                  #:radius (theme-radius card) #:background ,(syntax->datum #'background)
              (overlay #:id ,(component-child-id id-value 'accent) #:x ,x-value #:y ,y-value #:width 4 #:height ,height-value
                       #:background ,(syntax->datum #'accent) #:opacity 1.0 #:z 5)
              (text #:id ,(syntax-e #'label-id) #:x ,(+ x-value 18) #:y ,(+ y-value 8)
@@ -3222,6 +3254,55 @@ scene-glyph-draw-packets
     ;; Offset 与 layout entry index 一一对应，后端无需根据 node tree 再寻址。
     (for/list ([layout (in-list raw-layouts)] [index (in-naturals)])
       (struct-copy c-layout layout [instance-offset (* index quad-instance-bytes)])))
+
+  ;; Radius is a compiler-owned visual declaration. v3 admits only static stack
+  ;; surfaces and buttons with an explicit positive radius; all list rows, scrollbars,
+  ;; overlays, text and root clear slot remain hard rectangles.
+  (define (compile-rounded-surface-plan root layouts)
+    (define aa-width-px 1.0)
+    (define layout-by-id
+      (for/hash ([layout (in-list layouts)])
+        (values (c-layout-id layout) layout)))
+    (define surfaces
+      (for/list ([node (in-list (walk-nodes root))]
+                 #:when (let ([radius (hash-ref (c-node-props node) '#:radius #f)])
+                          (and radius
+                               (member (c-node-tag node) '(stack button)))))
+        (define radius (hash-ref (c-node-props node) '#:radius))
+        (unless (and (real? radius) (> radius 0.0))
+          (raise-syntax-error 'rounded-surface-plan "#:radius must lower to a positive compile-time number" (c-node-source node)))
+        (define layout (hash-ref layout-by-id (c-node-id node)
+                                 (lambda () (raise-syntax-error 'rounded-surface-plan "rounded node is missing from layout plan" (c-node-source node)))))
+        (define width (c-layout-width layout))
+        (define height (c-layout-height layout))
+        (define offset (c-layout-instance-offset layout))
+        (unless (and (> width 0.0) (> height 0.0)
+                     (<= radius (/ (min width height) 2.0)))
+          (raise-syntax-error 'rounded-surface-plan
+                              "#:radius must not exceed half of the compiler-fixed surface size"
+                              (c-node-source node)))
+        (unless (positive? offset)
+          (raise-syntax-error 'rounded-surface-plan "root clear quad may not be a rounded surface" (c-node-source node)))
+        (c-rounded-surface (c-node-id node) offset (c-layout-x layout) (c-layout-y layout)
+                           width height radius aa-width-px)))
+    (define sorted (sort surfaces < #:key c-rounded-surface-instance-offset))
+    (unless (= (length sorted) (length (remove-duplicates (map c-rounded-surface-instance-offset sorted))))
+      (raise-syntax-error 'rounded-surface-plan "rounded surfaces must own unique QuadInstance offsets" (c-node-source root)))
+    sorted)
+
+  (define (rounded-surface-plan->datum surfaces)
+    (if (null? surfaces)
+        '#f
+        `(rounded-surface-plan 1.0
+          (list ,@(for/list ([surface (in-list surfaces)])
+                     `(rounded-surface ',(c-rounded-surface-id surface)
+                                       ,(c-rounded-surface-instance-offset surface)
+                                       ,(c-rounded-surface-x surface)
+                                       ,(c-rounded-surface-y surface)
+                                       ,(c-rounded-surface-width surface)
+                                       ,(c-rounded-surface-height surface)
+                                       ,(c-rounded-surface-radius-px surface)
+                                       ,(c-rounded-surface-aa-width-px surface)))))))
 
   (define (compile-event-map root layouts action-indexes transaction-indexes)
     (define layout-by-id (for/hash ([layout (in-list layouts)]) (values (c-layout-id layout) layout)))
@@ -5918,6 +5999,7 @@ scene-glyph-draw-packets
      (define-values (root-node _) (parse-node #'root (set)))
      (define-values (total dynamic budget updates) (compile-scene root-node))
      (define layouts (compile-layout-plan root-node))
+     (define rounded-surfaces (compile-rounded-surface-plan root-node layouts))
      (define-values (glyph-placements glyph-packets)
        (compile-glyph-placement-plan root-node '() layouts (hash)))
      (define subgroup-packets (compile-subgroup-packet-plan glyph-packets))
@@ -5965,8 +6047,9 @@ scene-glyph-draw-packets
                     [LOG-BROWSERS (datum-stx stx ''())]
                     [FONT-ASSETS (datum-stx stx ''())]
                     [DYNAMIC-FONT-CELL-PLAN (datum-stx stx '#f)]
-                    [VISUAL-LANGUAGE (datum-stx stx '(visual-language-plan 'bench 640.0 360.0 16.0))])
-       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE))]
+                    [VISUAL-LANGUAGE (datum-stx stx '(visual-language-plan 'bench 640.0 360.0 16.0))]
+                    [ROUNDED-SURFACES (datum-stx stx (rounded-surface-plan->datum rounded-surfaces))])
+       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES))]
     [(_ root:expr extra:expr ...)
      (raise-syntax-error 'ui "expects exactly one root layout node" stx)]))
 
@@ -6032,6 +6115,9 @@ scene-glyph-draw-packets
      (define layouts
        (parameterize ([current-static-visual-preset static-visual-preset])
          (with-static-font-assets font-assets (lambda () (compile-layout-plan root-node)))))
+     (define rounded-surfaces
+       (parameterize ([current-static-visual-preset static-visual-preset])
+         (compile-rounded-surface-plan root-node layouts)))
      (define-values (glyph-placements glyph-packets)
        (parameterize ([current-static-visual-preset static-visual-preset])
          (with-static-font-assets font-assets
@@ -6124,7 +6210,8 @@ scene-glyph-draw-packets
                     [LOG-BROWSERS (datum-stx stx (log-browser-plans->datum log-browser-plans))]
                     [FONT-ASSETS (datum-stx stx (font-asset-plans->datum font-assets))]
                      [DYNAMIC-FONT-CELL-PLAN (datum-stx stx dynamic-font-cell-plan-datum)]
-                     [VISUAL-LANGUAGE (datum-stx stx visual-language-datum)])
+                     [VISUAL-LANGUAGE (datum-stx stx visual-language-datum)]
+                     [ROUNDED-SURFACES (datum-stx stx (rounded-surface-plan->datum rounded-surfaces))])
        #'(begin
-           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE))
+           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES))
            (provide app-scene)))]))

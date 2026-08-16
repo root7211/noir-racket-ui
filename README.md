@@ -70,6 +70,18 @@ Noir的视觉语言v2把EUI-NEO式桌面信息层级转译为可证明编译产�
 
 该入口审计两个Scene的v2结构、canvas containment、primitive-only lowering和page分布，拒绝schema、preset和canvas尺寸篡改，并继续执行组件等价性、font placement、日志浏览器与实时监控表格的真实X11/Vulkan回归，且重新生成最终截图。完整设计、前后对照、proof与保留边界见[视觉语言规范](VISUAL_LANGUAGE_V2.md)和[交付报告](VISUAL_LANGUAGE_V2_REPORT.md)。
 
+## 编译期 Rounded Surface v1（视觉渲染 v3）
+
+视觉渲染v3第一部分为桌面chrome增加真实的 **SDF圆角与1px抗锯齿coverage**。`rounded_surface_plan v1` 在Racket宏展开期从显式 `#:radius` 的静态`stack`/`button`收集固定quad instance地址、精确几何和token半径，并导出`noir-rounded-surface-plan-v1@1`。Rust在创建窗口、pipeline和GPU资源之前反向验证schema、固定AA、44-byte instance对齐、ID/geometry一致性、唯一slot、tag白名单及`radius ≤ min(width,height)/2`，然后一次性上传只读metadata storage buffer。WGSL仅在相应静态quad slot执行rounded-rectangle SDF；未列入计划的slot仍走硬矩形路径。
+
+这一能力不扩大44-byte `QuadInstance` ABI，也不改变glyph placement、虚拟列表row arena、state/action patch、tile/worklist或draw range。desktop-wide Scene 不能将nonempty计划篡改为`false`而静默降级；`radius`、`offset`、`geometry`和`disable`四类结构化攻击均在事件循环前被拒绝。
+
+```bash
+bash tools/verify_rounded_surface_plan.sh
+```
+
+该回归执行Racket测试、Rust 1.87/wgpu 30 release build、双应用Scene/视觉结构oracle、真实X11/Vulkan圆角帧、四类篡改拒绝，以及日志浏览器和实时监控表格的原有键鼠交互回归。设计契约与边界见[`rounded_surface_plan v1 ABI`](ROUNDED_SURFACE_PLAN_ABI_V1.md)，正式验收记录见[交付报告](ROUNDED_SURFACE_PLAN_V1_REPORT.md)；同一Scene geometry下的真实v2/v3对照为[日志浏览器](out/log-browser-rounded-v2-v3-comparison.png)与[实时监控表格](out/realtime-monitor-rounded-v2-v3-comparison.png)。
+
 ## 桌面组件宏 v1
 
 Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`detail-panel`是**编译期语法压缩**，而不是运行时组件对象。宏展开后只剩已有的`column`、`stack`、`text`和`button`，并保留调用者明确给出的detail、button和label ID。因此已有state slot、font placement、event map、tile和worklist无需增加组件分支。
@@ -112,7 +124,10 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/verify_desktop_component_macros.sh` | 编译期组件宏与手写primitive Scene等价性回归。 |
 | `tools/verify_visual_language.sh` | visual v2结构、canvas篡改、组件内联、字体与双应用真实X11/Vulkan回归，并生成最终截图。 |
 | `tools/verify_visual_language_v2.py` | visual v2固定几何、primitive-only lowering、page分布与冻结列表ABI的Scene结构oracle。 |
+| `tools/verify_rounded_surface_plan.sh` | rounded surface v1的Racket/Rust、双应用X11/Vulkan、四类篡改拒绝与交互全链回归。 |
+| `tools/mutate_rounded_surface_scene.py` | 生成radius、offset、geometry和disable四类精确Scene攻击样本。 |
 | `tools/make_visual_language_v2_comparison.py` | 从同分辨率真实帧确定性生成视觉v1/v2前后对照图。 |
+| `tools/make_rounded_surface_v3_comparison.py` | 从同分辨率真实帧确定性生成rounded surface v2/v3前后对照图。 |
 | `tools/verify_tabular_body_font.sh` | 受限tabular正文face的确定性、闭域、固定advance与语料覆盖回归。 |
 | `tools/verify_dynamic_font_cell_plan.sh` | page-3动态cell的Racket/Rust/X11正向路径、face/UV/word-offset拒绝与两应用交互回归。 |
 | `tools/audit_visual_canvas.py` | 对visual_language_plan将NDC反算为像素rect并审计layout containment。 |
