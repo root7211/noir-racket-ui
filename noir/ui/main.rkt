@@ -118,6 +118,9 @@ scene-glyph-draw-packets
 ;; placement contract activates its atlas only for compiler-proved static page-2 runs.
 (define font-placement-plan-abi-schema "noir-font-placement-plan-v1")
 (define font-placement-plan-abi-revision 1)
+;; Visual language v1 fixes the compile-time canvas used by layout/NDC/tile lowering.
+(define visual-language-plan-abi-schema "noir-visual-language-plan-v1")
+(define visual-language-plan-abi-revision 1)
 
 (define (abi-contracts->jsexpr)
   (hash 'virtual_list_plan
@@ -140,12 +143,15 @@ scene-glyph-draw-packets
               'revision font-asset-plan-abi-revision)
         'font_placement_plan
         (hash 'schema font-placement-plan-abi-schema
-              'revision font-placement-plan-abi-revision)))
+              'revision font-placement-plan-abi-revision)
+        'visual_language_plan
+        (hash 'schema visual-language-plan-abi-schema
+              'revision visual-language-plan-abi-revision)))
 
 (struct ui-node (tag id props children source) #:transparent)
 ;; Scene 以静态树和增量执行计划共同组成。state/actions 由 `noir-app`
 ;; 的扩展语法生成；普通 `(ui ...)` 保持空状态表，仍可独立使用。
-(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets) #:transparent)
+(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets visual-language-plan) #:transparent)
 ;; state-slot 的 index 是所有 runtime state read/write 的唯一地址；id/initial 只保留为启动期 proof 与可审计导出。
 (struct state-slot (index id initial) #:transparent)
 ;; action-slot 与 state-slot 一样为 macro expansion 生成的 dense canonical address。
@@ -231,6 +237,8 @@ scene-glyph-draw-packets
 ;; A v1 asset is uploaded and startup-proved but registered inactive until a later
 ;; placement plan explicitly targets atlas page 2 with fontc UV/metrics.
 (struct font-asset-plan (face-id manifest-path atlas-path font-sha256 atlas-sha256 atlas-width atlas-height atlas-channels pixel-size line-height glyph-domain-first glyph-domain-count atlas-page activation) #:transparent)
+;; Window dimensions are fixed compiler-owned geometry; host may configure but cannot infer them.
+(struct visual-language-plan (preset width height margin) #:transparent)
 
 (define (value->jsexpr v)
   (cond
@@ -766,6 +774,14 @@ scene-glyph-draw-packets
                       'viewport_only #t
                       'row_tile_rule "logical-mod-physical-slots")))
 
+(define (visual-language-plan->jsexpr plan)
+  (hash 'abi_schema visual-language-plan-abi-schema
+        'abi_revision visual-language-plan-abi-revision
+        'preset (symbol->string (visual-language-plan-preset plan))
+        'canvas (hash 'width (visual-language-plan-width plan)
+                      'height (visual-language-plan-height plan)
+                      'margin (visual-language-plan-margin plan))))
+
 (define (scene->jsexpr s #:build-attestation [build-attestation #f])
   (define base
     (hash 'abi_contracts (abi-contracts->jsexpr)
@@ -803,6 +819,7 @@ scene-glyph-draw-packets
         'list_navigation_plans (map list-navigation-plan->jsexpr (scene-list-navigation-plans s))
         'log_browser_plans (map log-browser-plan->jsexpr (scene-log-browser-plans s))
         'font_assets (map font-asset-plan->jsexpr (scene-font-assets s))
+        'visual_language_plan (visual-language-plan->jsexpr (scene-visual-language-plan s))
         'text_field_visuals (text-field-visuals->jsexpr s)))
   (if build-attestation
       (hash-set base 'build_attestation (value->jsexpr build-attestation))
@@ -1468,7 +1485,7 @@ scene-glyph-draw-packets
 
   (define layout-props
 (set '#:id '#:gap '#:padding '#:x '#:width '#:height '#:grow '#:align '#:justify
-          '#:clip '#:background '#:radius '#:opacity '#:z))
+          '#:clip '#:background '#:radius '#:opacity '#:z '#:visual-flow))
   (define leaf-props
 (set '#:id '#:x '#:y '#:width '#:height '#:grow '#:align '#:clip '#:background
           '#:radius '#:opacity '#:max '#:z))
@@ -1502,6 +1519,26 @@ scene-glyph-draw-packets
   ;; A theme exists only while `noir-app` expands its one static root.  Property
   ;; parsing resolves tokens here, so the runtime Scene cannot observe a theme map.
   (define current-static-theme (make-parameter #f))
+  ;; A visual preset is an expansion-time canvas contract, not a runtime resize policy.
+  ;; Existing fixture applications stay on bench; desktop examples opt into desktop-wide.
+  (define visual-preset-table
+    (hash 'bench (hash 'id 'bench 'width 640.0 'height 360.0 'margin 16.0)
+          'desktop-compact (hash 'id 'desktop-compact 'width 1024.0 'height 720.0 'margin 24.0)
+          'desktop-wide (hash 'id 'desktop-wide 'width 1280.0 'height 720.0 'margin 32.0)))
+  (define current-static-visual-preset (make-parameter (hash-ref visual-preset-table 'bench)))
+  (define (canvas-width) (hash-ref (current-static-visual-preset) 'width))
+  (define (canvas-height) (hash-ref (current-static-visual-preset) 'height))
+  (define (canvas-margin) (hash-ref (current-static-visual-preset) 'margin))
+  (define (parse-visual-preset-form form)
+    (syntax-parse form
+      #:datum-literals (visual-preset)
+      [(visual-preset preset:id)
+       (define id (syntax-e #'preset))
+       (hash-ref visual-preset-table id
+                 (lambda ()
+                   (raise-syntax-error 'visual-preset
+                                       "expected bench, desktop-compact, or desktop-wide" #'preset)))]
+      [_ (raise-syntax-error 'visual-preset "expected (visual-preset bench|desktop-compact|desktop-wide)" form)]))
 ;; The font-face index exists only during macro expansion. Runtime Scene data contains
 ;; already-resolved UV/advance/face evidence rather than a mutable font registry.
 (define current-static-font-assets (make-parameter '()))
@@ -1533,7 +1570,7 @@ scene-glyph-draw-packets
   (define (parse-theme-form form)
     (define pieces (syntax->list form))
     (unless (and pieces (>= (length pieces) 3) (eq? (syntax-e (first pieces)) 'theme))
-      (raise-syntax-error 'theme "expected (theme name (color ...) (space ...) (type ...) (radius ...))" form))
+      (raise-syntax-error 'theme "expected (theme name (color ...) (space ...) (type ...) (radius ...) [(elevation ...)])" form))
     (define theme-id (expect-symbol 'theme (second pieces)))
     (define sections (drop pieces 2))
     (define parsed (make-hash))
@@ -1553,7 +1590,13 @@ scene-glyph-draw-packets
              (unless (and (real? number) (> number 0))
                (raise-syntax-error 'theme "theme numeric values must be positive literals" value))
              number)]
-          [else (raise-syntax-error 'theme "theme sections are color, space, type, or radius" section)]))
+          [(elevation)
+           (lambda (value)
+             (define number (syntax-e value))
+             (unless (and (exact-integer? number) (<= 0 number 3))
+               (raise-syntax-error 'theme "elevation tokens must be integer literals in [0, 3]" value))
+             number)]
+          [else (raise-syntax-error 'theme "theme sections are color, space, type, radius, or elevation" section)]))
       (hash-set! parsed kind (parse-theme-pairs 'theme section parser)))
     (for ([required '(color space type radius)])
       (unless (hash-has-key? parsed required)
@@ -1562,7 +1605,10 @@ scene-glyph-draw-packets
           'color (hash-ref parsed 'color)
           'space (hash-ref parsed 'space)
           'type (hash-ref parsed 'type)
-          'radius (hash-ref parsed 'radius)))
+          'radius (hash-ref parsed 'radius)
+          ;; Preserve backwards compatibility for existing themes while making elevation
+          ;; a static, versionable semantic token for visual-language applications.
+          'elevation (hash-ref parsed 'elevation (hash 'flat 0 'border 1 'raised 2 'overlay 3))))
 
   (define (theme-token-value who kind x)
     (define call (syntax->list x))
@@ -1570,7 +1616,8 @@ scene-glyph-draw-packets
                             [(color) 'theme-color]
                             [(space) 'theme-space]
                             [(type) 'theme-type]
-                            [(radius) 'theme-radius]))
+                            [(radius) 'theme-radius]
+                            [(elevation) 'theme-elevation]))
     (cond
       [(and call (= (length call) 2) (eq? (syntax-e (first call)) expected-head))
        (define theme (current-static-theme))
@@ -1592,6 +1639,11 @@ scene-glyph-draw-packets
       [(#:radius) (number-or-token who 'radius x)]
       [(#:x #:y #:width #:height #:grow #:opacity #:z)
        (expect-number who x)]
+      [(#:visual-flow)
+       (define value (syntax-e x))
+       (unless (boolean? value)
+         (raise-syntax-error who "#:visual-flow expects a boolean literal" x))
+       value]
       [(#:background) (or (theme-token-value who 'color x) (syntax-e x))]
       [(#:align #:justify)
        (define v (syntax-e x))
@@ -2062,14 +2114,17 @@ scene-glyph-draw-packets
                   (~optional (~seq #:background background) #:defaults ([background #'(theme-color canvas)]))
                   (~optional (~seq #:radius radius) #:defaults ([radius #'(theme-radius panel)]))
                   child:expr ...+)
+       (define id-value (syntax-e #'id))
+       (define frame-height (- (canvas-height) (* 2.0 (canvas-margin))))
+       (define content-id (component-child-id id-value 'content))
        (define lowered
          (datum->syntax stx
-                        `(column #:id ,(syntax-e #'id)
-                                 #:gap ,(syntax->datum #'gap)
-                                 #:padding ,(syntax->datum #'padding)
-                                 #:background ,(syntax->datum #'background)
-                                 #:radius ,(syntax->datum #'radius)
-                                 ,@(map syntax->datum (syntax->list #'(child ...))))
+                        `(stack #:id ,id-value #:height ,frame-height #:clip #t
+                                #:background ,(syntax->datum #'background)
+                           (column #:id ,content-id #:visual-flow #t
+                                    #:gap ,(syntax->datum #'gap)
+                                    #:padding ,(syntax->datum #'padding)
+                                    ,@(map syntax->datum (syntax->list #'(child ...)))))
                         stx stx))
        (parse-node lowered seen)]
       [_ (raise-syntax-error 'app-shell
@@ -2082,38 +2137,93 @@ scene-glyph-draw-packets
       [(surface #:id id:id
                 (~optional (~seq #:height height) #:defaults ([height #'#f]))
                 (~optional (~seq #:background background) #:defaults ([background #'(theme-color surface)]))
+                (~optional (~seq #:elevation elevation) #:defaults ([elevation #'(theme-elevation flat)]))
                 (~optional (~seq #:radius radius) #:defaults ([radius #'#f]))
                 (~optional (~seq #:clip clip) #:defaults ([clip #'#f]))
                 child:expr ...+)
+       (define id-value (syntax-e #'id))
+       (define height-value (and (not (eq? (syntax-e #'height) #f)) (expect-number 'surface #'height)))
+       (define elevation-value
+         (or (theme-token-value 'surface 'elevation #'elevation)
+             (let ([value (syntax-e #'elevation)])
+               (unless (and (exact-integer? value) (<= 0 value 3))
+                 (raise-syntax-error 'surface "#:elevation expects 0..3 or (theme-elevation token)" #'elevation))
+               value)))
+       (when (and (> elevation-value 0) (not height-value))
+         (raise-syntax-error 'surface "border/raised/overlay surface needs a fixed #:height" stx))
        (define optional-props
-         (append (if (eq? (syntax-e #'height) #f) '() (list '#:height (syntax->datum #'height)))
+         (append (if height-value (list '#:height height-value) '())
                  (if (eq? (syntax-e #'radius) #f) '() (list '#:radius (syntax->datum #'radius)))))
+       ;; Elevation is a finite compile-time overlay recipe. No blur, query or dynamic shadow exists.
+       (define decorations
+         (if (> elevation-value 0)
+             (list `(overlay #:id ,(component-child-id id-value 'border-bottom)
+                             #:y ,(- height-value 1) #:height 1
+                             #:background (theme-color border-subtle) #:opacity 1.0 #:z 8))
+             '()))
        (define lowered
          (datum->syntax stx
-                        `(stack #:id ,(syntax-e #'id) ,@optional-props
+                        `(stack #:id ,id-value ,@optional-props
                                 #:clip ,(syntax->datum #'clip)
                                 #:background ,(syntax->datum #'background)
+                                ,@decorations
                                 ,@(map syntax->datum (syntax->list #'(child ...))))
                         stx stx))
        (parse-node lowered seen)]
       [_ (raise-syntax-error 'surface
-                             "expected (surface #:id id [#:height n] [#:background color] [#:radius n] [#:clip bool] child ...+)"
+                             "expected (surface #:id id [#:height n] [#:background color] [#:elevation 0..3] [#:radius n] [#:clip bool] child ...+)"
                              stx)]))
+
+  (define (parse-divider stx seen)
+    (syntax-parse stx
+      #:datum-literals (divider)
+      [(divider #:id id:id
+                (~optional (~seq #:height height) #:defaults ([height #'1]))
+                (~optional (~seq #:background background) #:defaults ([background #'(theme-color border-subtle)])))
+       (define height-value (expect-positive-integer 'divider #'height))
+       (define lowered
+         (datum->syntax stx
+                        `(overlay #:id ,(syntax-e #'id) #:height ,height-value
+                                  #:background ,(syntax->datum #'background) #:opacity 1.0 #:z 8)
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'divider "expected (divider #:id id [#:height positive-int] [#:background color])" stx)]))
+
+  (define (parse-status-indicator stx seen)
+    (syntax-parse stx
+      #:datum-literals (status-indicator)
+      [(status-indicator #:id id:id #:height height #:background background
+                         (~optional (~seq #:width width) #:defaults ([width #'4])))
+       (define width-value (expect-positive-integer 'status-indicator #'width))
+       (define height-value (expect-positive-integer 'status-indicator #'height))
+       (define lowered
+         (datum->syntax stx
+                        `(overlay #:id ,(syntax-e #'id) #:width ,width-value #:height ,height-value
+                                  #:background ,(syntax->datum #'background) #:opacity 1.0 #:z 12)
+                        stx stx))
+       (parse-node lowered seen)]
+      [_ (raise-syntax-error 'status-indicator
+                             "expected (status-indicator #:id id #:height positive-int #:background color [#:width positive-int])" stx)]))
 
   (define (parse-toolbar stx seen)
     (syntax-parse stx
       #:datum-literals (toolbar)
       [(toolbar #:id id:id #:text-id text-id:id #:label label #:font-face face:id
                 (~optional (~seq #:height height) #:defaults ([height #'34]))
-                (~optional (~seq #:background background) #:defaults ([background #'(theme-color header)])))
+                (~optional (~seq #:background background) #:defaults ([background #'(theme-color surface-raised)])))
+       (define id-value (syntax-e #'id))
+       (define height-value (expect-positive-integer 'toolbar #'height))
        (define label-value (component-literal-string 'toolbar #'label))
        (define lowered
          (datum->syntax stx
-                        `(stack #:id ,(syntax-e #'id) #:height ,(syntax->datum #'height)
+                        `(stack #:id ,id-value #:height ,height-value
                                 #:background ,(syntax->datum #'background)
-                           (text #:id ,(syntax-e #'text-id) #:height ,(syntax->datum #'height)
+                           (text #:id ,(syntax-e #'text-id) #:height ,height-value
                                  #:background ,(syntax->datum #'background)
-                                 #:font-face ,(syntax-e #'face) ,label-value))
+                                 #:font-face ,(syntax-e #'face) ,label-value)
+                           (overlay #:id ,(component-child-id id-value 'divider)
+                                    #:y ,(- height-value 1) #:height 1
+                                    #:background (theme-color border-strong) #:opacity 1.0 #:z 10))
                         stx stx))
        (parse-node lowered seen)]
       [_ (raise-syntax-error 'toolbar
@@ -2126,14 +2236,19 @@ scene-glyph-draw-packets
       [(table-header #:id id:id #:text-id text-id:id #:label label #:font-face face:id
                      (~optional (~seq #:height height) #:defaults ([height #'24]))
                      (~optional (~seq #:background background) #:defaults ([background #'(theme-color surface)])))
+       (define id-value (syntax-e #'id))
+       (define height-value (expect-positive-integer 'table-header #'height))
        (define label-value (component-literal-string 'table-header #'label))
        (define lowered
          (datum->syntax stx
-                        `(stack #:id ,(syntax-e #'id) #:height ,(syntax->datum #'height)
+                        `(stack #:id ,id-value #:height ,height-value
                                 #:background ,(syntax->datum #'background)
-                           (text #:id ,(syntax-e #'text-id) #:height ,(syntax->datum #'height)
+                           (text #:id ,(syntax-e #'text-id) #:height ,height-value
                                  #:background ,(syntax->datum #'background)
-                                 #:font-face ,(syntax-e #'face) ,label-value))
+                                 #:font-face ,(syntax-e #'face) ,label-value)
+                           (overlay #:id ,(component-child-id id-value 'divider)
+                                    #:y ,(- height-value 1) #:height 1
+                                    #:background (theme-color border-subtle) #:opacity 1.0 #:z 10))
                         stx stx))
        (parse-node lowered seen)]
       [_ (raise-syntax-error 'table-header
@@ -2170,15 +2285,19 @@ scene-glyph-draw-packets
       #:datum-literals (detail-panel)
       [(detail-panel #:id id:id #:text-id text-id:id #:dynamic state:id #:max-chars max
                      (~optional (~seq #:height height) #:defaults ([height #'34]))
-                     (~optional (~seq #:background background) #:defaults ([background #'(theme-color surface)])))
+                     (~optional (~seq #:background background) #:defaults ([background #'(theme-color surface-raised)])))
+       (define id-value (syntax-e #'id))
        (define max-value (expect-positive-integer 'detail-panel #'max))
+       (define height-value (expect-positive-integer 'detail-panel #'height))
        (define lowered
          (datum->syntax stx
-                        `(stack #:id ,(syntax-e #'id) #:height ,(syntax->datum #'height)
+                        `(stack #:id ,id-value #:height ,height-value
                                 #:background ,(syntax->datum #'background)
-                           (text #:id ,(syntax-e #'text-id) #:height ,(syntax->datum #'height)
+                           (text #:id ,(syntax-e #'text-id) #:height ,height-value
                                  #:background ,(syntax->datum #'background)
-                                 #:dynamic ,(syntax-e #'state) #:max-chars ,max-value))
+                                 #:dynamic ,(syntax-e #'state) #:max-chars ,max-value)
+                           (overlay #:id ,(component-child-id id-value 'divider)
+                                    #:height 1 #:background (theme-color border-subtle) #:opacity 1.0 #:z 10))
                         stx stx))
        (parse-node lowered seen)]
       [_ (raise-syntax-error 'detail-panel
@@ -2491,9 +2610,11 @@ scene-glyph-draw-packets
 
   (define (parse-node stx seen)
     (syntax-parse stx
-#:datum-literals (row column stack grid text text-field button transaction-button multi-field-event multi-action-event virtual-list scrollbar control-button metric-card form-row settings-form app-shell surface toolbar table-header status-pill detail-panel repeat/ui progress overlay spacer)
+#:datum-literals (row column stack grid text text-field button transaction-button multi-field-event multi-action-event virtual-list scrollbar control-button metric-card form-row settings-form app-shell surface divider status-indicator toolbar table-header status-pill detail-panel repeat/ui progress overlay spacer)
         [(app-shell form ...) (parse-app-shell stx seen)]
         [(surface form ...) (parse-surface stx seen)]
+        [(divider form ...) (parse-divider stx seen)]
+        [(status-indicator form ...) (parse-status-indicator stx seen)]
         [(toolbar form ...) (parse-toolbar stx seen)]
         [(table-header form ...) (parse-table-header stx seen)]
         [(status-pill form ...) (parse-status-pill stx seen)]
@@ -2518,7 +2639,7 @@ scene-glyph-draw-packets
       [(overlay form ...) (parse-overlay stx (syntax->list #'(form ...)) seen)]
       [(spacer form ...) (parse-spacer stx (syntax->list #'(form ...)) seen)]
       [_ (raise-syntax-error 'ui
-                             "expected row, column, stack, grid, text, text-field, button, transaction-button, multi-field-event, multi-action-event, virtual-list, scrollbar, control-button, metric-card, form-row, settings-form, app-shell, surface, toolbar, table-header, status-pill, detail-panel, repeat/ui (as a layout child), progress, overlay, or spacer"
+                             "expected row, column, stack, grid, text, text-field, button, transaction-button, multi-field-event, multi-action-event, virtual-list, scrollbar, control-button, metric-card, form-row, settings-form, app-shell, surface, divider, status-indicator, toolbar, table-header, status-pill, detail-panel, repeat/ui (as a layout child), progress, overlay, or spacer"
                              stx)]))
 
   (define (dynamic-node? n)
@@ -2754,15 +2875,33 @@ scene-glyph-draw-packets
             (range (length (c-node-children node)))))
          (values (cons current child-results) (+ y height 10.0))]
         [(eq? (c-node-tag node) 'stack)
-         ;; stack 的子节点共享同一 rect；可被 `#:clip` 作为编译期 clip stack 使用。
-         (define child-results
-           (append-map
-            (lambda (child)
-              (define-values (layouts ignored-y)
-                (node-layout child (+ depth 1) x y width))
-              layouts)
-            (c-node-children node)))
-         (values (cons current child-results) (+ y height 10.0))]
+          ;; stack 的子节点共享同一 rect；可被 `#:clip` 作为编译期 clip stack 使用。
+          (define child-results
+            (append-map
+             (lambda (child)
+               (define-values (layouts ignored-y)
+                 (node-layout child (+ depth 1) x y width))
+               layouts)
+             (c-node-children node)))
+          (values (cons current child-results) (+ y height 10.0))]
+         [(and (eq? (c-node-tag node) 'column)
+               (hash-ref (c-node-props node) '#:visual-flow #f))
+          ;; visual-flow is emitted only by app-shell. Its padding and gap are literals
+          ;; resolved at expansion; runtime receives only the resulting layouts.
+          (define padding (hash-ref (c-node-props node) '#:padding 0.0))
+          (define gap (hash-ref (c-node-props node) '#:gap 0.0))
+          (define-values (child-results final-y)
+            (let loop ([children (c-node-children node)]
+                       [next-y (+ resolved-y padding)]
+                       [result '()])
+              (cond
+                [(null? children) (values (reverse result) next-y)]
+                [else
+                 (define-values (layouts child-next-y)
+                   (node-layout (car children) (+ depth 1) (+ resolved-x padding) next-y
+                                (- resolved-width (* 2.0 padding))))
+                 (loop (cdr children) (+ child-next-y gap) (append (reverse layouts) result))])))
+          (values (cons current child-results) final-y)]
         [(eq? (c-node-tag node) 'scrollbar)
          ;; Track and thumb share the compiler-resolved track origin. The thumb's local
          ;; `#:y` is initially zero; drag later patches only this known instance field.
@@ -2797,7 +2936,9 @@ scene-glyph-draw-packets
                   (node-layout (car children) (+ depth 1) (+ x 18.0) next-y (- width 36.0)))
                 (loop (cdr children) child-next-y (append (reverse layouts) result))])))
          (values (cons current child-layouts) final-y)]))
-    (define-values (raw-layouts ignored-y) (node-layout root 0 16.0 16.0 608.0))
+    (define-values (raw-layouts ignored-y)
+      (node-layout root 0 (canvas-margin) (canvas-margin)
+                   (- (canvas-width) (* 2.0 (canvas-margin)))))
     ;; Offset 与 layout entry index 一一对应，后端无需根据 node tree 再寻址。
     (for/list ([layout (in-list raw-layouts)] [index (in-naturals)])
       (struct-copy c-layout layout [instance-offset (* index quad-instance-bytes)])))
@@ -2811,10 +2952,10 @@ scene-glyph-draw-packets
       ;; slot 与 z-index 使用稳定 DFS 顺序；重叠时 host 选择更大的 z-index。
       (define layout (hash-ref layout-by-id (c-node-id node)))
       (define base-pos
-        (list (- (* 2.0 (/ (c-layout-x layout) 640.0)) 1.0)
-              (- 1.0 (* 2.0 (/ (+ (c-layout-y layout) (c-layout-height layout)) 360.0)))))
-      ;; Screen-space 向下 2 px 等于 NDC y 减去 4/360；这些常量不由 host 推导。
-      (define pressed-pos (list (first base-pos) (- (second base-pos) (/ 4.0 360.0))))
+        (list (- (* 2.0 (/ (c-layout-x layout) (canvas-width))) 1.0)
+              (- 1.0 (* 2.0 (/ (+ (c-layout-y layout) (c-layout-height layout)) (canvas-height))))))
+      ;; Screen-space 向下 2 px 的NDC值由当前编译期canvas高度确定。
+      (define pressed-pos (list (first base-pos) (- (second base-pos) (/ 4.0 (canvas-height)))))
       (define dispatch-id (hash-ref (c-node-props node) 'on))
       (define transaction-op (hash-ref (c-node-props node) '#:transaction-op #f))
       (define action-ids (hash-ref (c-node-props node) '#:multi-actions
@@ -3089,7 +3230,7 @@ scene-glyph-draw-packets
           (raise-syntax-error 'noir "coalesced batch includes an external conflict edge" (c-node-source root)))))
     (void))
 
-  (define viewport-area (* 640.0 360.0))
+  (define (viewport-area) (* (canvas-width) (canvas-height)))
   (define full-redraw-threshold 0.60)
 
   (define (rect->tile rect)
@@ -3127,7 +3268,7 @@ scene-glyph-draw-packets
 
   (struct c-composite (slot node-id z-layer clip-stack-id clip-rect blend-mode opaque? batch-key layout) #:transparent)
 
-  (define viewport-rect '(0.0 0.0 640.0 360.0))
+  (define (viewport-rect) (list 0.0 0.0 (canvas-width) (canvas-height)))
   (define fragment-budget 2)
 
   (define (rect-intersection left right)
@@ -3150,7 +3291,7 @@ scene-glyph-draw-packets
   (define (compile-composites root layouts)
     (define layout-by-id (for/hash ([layout (in-list layouts)]) (values (c-layout-id layout) layout)))
     (define (active-clip-rect clip-stack)
-      (for/fold ([rect viewport-rect]) ([clip-id (in-list clip-stack)])
+      (for/fold ([rect (viewport-rect)]) ([clip-id (in-list clip-stack)])
         (or (rect-intersection rect (layout-rect (hash-ref layout-by-id clip-id)))
             (raise-syntax-error 'noir "nested clip stack has empty intersection"))))
     (define (clip-stack-id clip-stack)
@@ -3197,11 +3338,11 @@ scene-glyph-draw-packets
       (for/hash ([composite (in-list (compile-composites root layouts))])
         (values (c-composite-node-id composite) composite)))
     (define (layout-ndc-pos layout)
-      (list (- (* 2.0 (/ (c-layout-x layout) 640.0)) 1.0)
-            (- 1.0 (* 2.0 (/ (+ (c-layout-y layout) (c-layout-height layout)) 360.0)))))
+        (list (- (* 2.0 (/ (c-layout-x layout) (canvas-width))) 1.0)
+              (- 1.0 (* 2.0 (/ (+ (c-layout-y layout) (c-layout-height layout)) (canvas-height))))))
     (define (layout-ndc-size layout)
-      (list (* 2.0 (/ (c-layout-width layout) 640.0))
-            (* 2.0 (/ (c-layout-height layout) 360.0))))
+      (list (* 2.0 (/ (c-layout-width layout) (canvas-width)))
+            (* 2.0 (/ (c-layout-height layout) (canvas-height)))))
     (define font-assets-by-face
       (for/hash ([asset (in-list (current-static-font-assets))])
         (values (c-font-asset-plan-face-id asset) asset)))
@@ -3318,15 +3459,17 @@ scene-glyph-draw-packets
            (= (c-glyph-placement-z-layer left) (c-glyph-placement-z-layer right))
            (eq? (c-glyph-placement-batch-key left) (c-glyph-placement-batch-key right))
            (equal? (c-glyph-placement-dynamic? left) (c-glyph-placement-dynamic? right))))
-    ;; Placement 的 pos 是 NDC 左下角；将其还原为固定 640×360 target 的 screen rect。
-    ;; bounds 是 glyph geometry 的 union 与既有 clip rect 的交集，绝不使用 text run 的粗略 layout rect。
+    ;; Placement 的pos是NDC左下角；恢复为当前编译期canvas的screen rect。
+    ;; bounds 是glyph geometry union与既有clip rect交集，绝不使用text run粗略layout rect。
     (define (glyph-placement-screen-rect placement)
       (define pos (c-glyph-placement-ndc-pos placement))
       (define size (c-glyph-placement-ndc-size placement))
-      (list (* (+ (first pos) 1.0) 320.0)
-            (* (- 1.0 (+ (second pos) (second size))) 180.0)
-            (* (first size) 320.0)
-            (* (second size) 180.0)))
+      (define half-width (/ (canvas-width) 2.0))
+      (define half-height (/ (canvas-height) 2.0))
+      (list (* (+ (first pos) 1.0) half-width)
+            (* (- 1.0 (+ (second pos) (second size))) half-height)
+            (* (first size) half-width)
+            (* (second size) half-height)))
     (define (rect-union rects)
       (define x (apply min (map first rects)))
       (define y (apply min (map second rects)))
@@ -3698,9 +3841,11 @@ scene-glyph-draw-packets
     (define base (composite-effective-rect candidate))
     (define occluders
       (filter (lambda (upper)
-                (and (c-composite-opaque? upper)
+                (define upper-rect (composite-effective-rect upper))
+                (and base upper-rect
+                     (c-composite-opaque? upper)
                      (> (c-composite-z-layer upper) (c-composite-z-layer candidate))
-                     (rect-intersection (composite-effective-rect upper) base)))
+                     (rect-intersection upper-rect base)))
               visible))
     (define fragments
       (foldl (lambda (upper remaining)
@@ -3775,10 +3920,12 @@ scene-glyph-draw-packets
   (define (glyph-placement-screen-rect placement)
     (define pos (c-glyph-placement-ndc-pos placement))
     (define size (c-glyph-placement-ndc-size placement))
-    (list (* (+ (first pos) 1.0) 320.0)
-          (* (- 1.0 (+ (second pos) (second size))) 180.0)
-          (* (first size) 320.0)
-          (* (second size) 180.0)))
+    (define half-width (/ (canvas-width) 2.0))
+    (define half-height (/ (canvas-height) 2.0))
+    (list (* (+ (first pos) 1.0) half-width)
+          (* (- 1.0 (+ (second pos) (second size))) half-height)
+          (* (first size) half-width)
+          (* (second size) half-height)))
   (define (glyph-placement-effective-rect placement)
     (rect-intersection (glyph-placement-screen-rect placement)
                        (c-glyph-placement-clip-rect placement)))
@@ -3966,9 +4113,9 @@ scene-glyph-draw-packets
                [tiles (reverse (foldl (lambda (rect acc) (insert-merged-tile (rect->tile rect) acc)) '() rects))]
                [covered-area (for/sum ([tile (in-list tiles)])
                                (* (c-render-tile-width tile) (c-render-tile-height tile)))]
-               [coverage (/ covered-area viewport-area)]
+                [coverage (/ covered-area (viewport-area))]
                [full? (>= coverage full-redraw-threshold)]
-               [raw-final-tiles (if full? (list (c-render-tile 0.0 0.0 640.0 360.0 '(full-frame) '() '() 'full-redraw-threshold 'full-tile-redraw (hash 'fragment 1e30 'complete-lower-range 1e30 'full-tile-redraw 230400.0))) tiles)]
+               [raw-final-tiles (if full? (list (c-render-tile 0.0 0.0 (canvas-width) (canvas-height) '(full-frame) '() '() 'full-redraw-threshold 'full-tile-redraw (hash 'fragment 1e30 'complete-lower-range 1e30 'full-tile-redraw 230400.0))) tiles)]
                [final-tiles (map (lambda (tile) (attach-tile-draw-ranges tile composites placements packets)) raw-final-tiles)])
           (assert-glyph-tile-culling! final-tiles placements packets root)
           (list (c-render-schedule
@@ -4335,10 +4482,10 @@ scene-glyph-draw-packets
       (if progress-state
           (* full-width (/ (hash-ref state-by-id progress-state) (hash-ref (c-node-props node) 'max)))
           full-width))
-    (define ndc-pos (list (- (* 2.0 (/ x 640.0)) 1.0)
-                          (- 1.0 (* 2.0 (/ (+ y height) 360.0)))))
-    (define ndc-size (list (* 2.0 (/ rendered-width 640.0))
-                           (* 2.0 (/ height 360.0))))
+    (define ndc-pos (list (- (* 2.0 (/ x (canvas-width))) 1.0)
+                          (- 1.0 (* 2.0 (/ (+ y height) (canvas-height))))))
+    (define ndc-size (list (* 2.0 (/ rendered-width (canvas-width)))
+                           (* 2.0 (/ height (canvas-height)))))
     `(hash 'id ',(c-layout-id layout)
            'tag ',(c-layout-tag layout)
            'x ,x 'y ,y 'width ,full-width 'height ,height
@@ -4426,12 +4573,12 @@ scene-glyph-draw-packets
         (if (visible? row-index viewport-slot)
             (- 1.0 (* 2.0 (/ (+ (- (c-layout-y layout) (* viewport-slot row-height))
                                 (c-layout-height layout))
-                             360.0)))
+                             (canvas-height))))
             -3.0))
       (define (target-glyph-y placement row-index viewport-slot)
         (if (visible? row-index viewport-slot)
             (- (second (c-glyph-placement-ndc-pos placement))
-               (* viewport-slot (/ (* 2.0 row-height) 360.0)))
+               (* viewport-slot (/ (* 2.0 row-height) (canvas-height))))
             -3.0))
       (define (transition from-slot to-slot)
         (define instance-y-patches
@@ -4467,13 +4614,13 @@ scene-glyph-draw-packets
           (define local-index (slot-visible-index physical-slot viewport-slot))
           (if (< local-index visible-rows)
               (- 1.0 (* 2.0 (/ (+ (c-layout-y layout) (* local-index row-height)
-                                   (c-layout-height layout)) 360.0)))
+                                   (c-layout-height layout)) (canvas-height))))
               -3.0))
         (define (slot-glyph-y placement physical-slot viewport-slot)
           (define local-index (slot-visible-index physical-slot viewport-slot))
           (if (< local-index visible-rows)
               (- (second (c-glyph-placement-ndc-pos placement))
-                 (* local-index (/ (* 2.0 row-height) 360.0)))
+                 (* local-index (/ (* 2.0 row-height) (canvas-height))))
               -3.0))
         (define (logical-glyph-ids logical-index glyph-count)
           (if (< logical-index logical-capacity)
@@ -4782,10 +4929,12 @@ scene-glyph-draw-packets
       (c-log-browser-plan (c-log-browser-spec-id spec) (c-log-browser-spec-list-id spec)
                           (string->symbol (format "~a-append" (c-log-browser-spec-id spec))) updates detail-id detail-offsets detail-tile-ids
                           (map (lambda (offset) (+ offset 16)) (c-virtual-list-plan-row-layout-offsets list-plan))
-(list (hash 'name 'INFO 'color '(0.055 0.095 0.150 1.0))
-                                 (hash 'name 'WARN 'color '(0.20 0.14 0.045 1.0))
-                                 (hash 'name 'ERROR 'color '(0.22 0.045 0.065 1.0))
-                                 (hash 'name 'DEBUG 'color '(0.10 0.075 0.18 1.0)))
+(list (hash 'name 'INFO 'color '(0.055 0.095 0.150 0.72))
+                                  ;; Semantic warning/error tints remain legible but no longer
+                                  ;; turn an entire dense row into an opaque high-saturation slab.
+                                  (hash 'name 'WARN 'color '(0.52 0.31 0.05 0.42))
+                                  (hash 'name 'ERROR 'color '(0.62 0.10 0.16 0.42))
+                                  (hash 'name 'DEBUG 'color '(0.20 0.16 0.42 0.36)))
                           2)))
 
   (define (log-browser-plan->datum plan)
@@ -5274,7 +5423,7 @@ scene-glyph-draw-packets
                             (define layout (c-instance-binding-layout binding))
                             ;; QuadInstance: pos[2] 位于 bytes 0..8，size.x 正好位于 byte 8。
                             (define size-x-offset (+ (c-layout-instance-offset layout) 8))
-                            (define scale (/ (* 2.0 (/ (c-layout-width layout) 640.0))
+                            (define scale (/ (* 2.0 (/ (c-layout-width layout) (canvas-width)))
                                              (c-instance-binding-max-value binding)))
                             `(instance-update 'instance-patch
                                               ',(c-instance-binding-node-id binding)
@@ -5355,9 +5504,10 @@ scene-glyph-draw-packets
                    [VIRTUAL-LISTS (datum-stx stx (virtual-list-plans->datum virtual-list-plans))]
                    [SCROLLBARS (datum-stx stx (scrollbar-plans->datum scrollbar-plans))]
                    [LIST-NAVIGATIONS (datum-stx stx (list-navigation-plans->datum list-navigation-plans))]
-                   [LOG-BROWSERS (datum-stx stx ''())]
-                   [FONT-ASSETS (datum-stx stx ''())])
-       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS))]
+                    [LOG-BROWSERS (datum-stx stx ''())]
+                    [FONT-ASSETS (datum-stx stx ''())]
+                    [VISUAL-LANGUAGE (datum-stx stx '(visual-language-plan 'bench 640.0 360.0 16.0))])
+       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS VISUAL-LANGUAGE))]
     [(_ root:expr extra:expr ...)
      (raise-syntax-error 'ui "expects exactly one root layout node" stx)]))
 
@@ -5373,9 +5523,10 @@ scene-glyph-draw-packets
      (define log-browser-forms (filter (lambda (form) (eq? (form-head-symbol form) 'log-browser)) forms))
      (define font-asset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'font-asset)) forms))
      (define theme-forms (filter (lambda (form) (eq? (form-head-symbol form) 'theme)) forms))
+     (define visual-preset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'visual-preset)) forms))
      (define layout-forms
        (filter (lambda (form)
-                 (not (memq (form-head-symbol form) '(state action commit-group command-table list-navigation log-browser font-asset theme))))
+                 (not (memq (form-head-symbol form) '(state action commit-group command-table list-navigation log-browser font-asset theme visual-preset))))
                forms))
      (unless (= (length state-forms) 1)
        (raise-syntax-error 'noir-app "expects exactly one (state ...) form" stx))
@@ -5383,7 +5534,18 @@ scene-glyph-draw-packets
        (raise-syntax-error 'noir-app "expects exactly one root layout form" stx))
      (unless (<= (length theme-forms) 1)
        (raise-syntax-error 'noir-app "accepts at most one (theme ...) declaration" stx))
+     (unless (<= (length visual-preset-forms) 1)
+       (raise-syntax-error 'noir-app "accepts at most one (visual-preset ...) declaration" stx))
      (define static-theme (and (pair? theme-forms) (parse-theme-form (car theme-forms))))
+     (define static-visual-preset
+       (if (pair? visual-preset-forms)
+           (parse-visual-preset-form (car visual-preset-forms))
+           (hash-ref visual-preset-table 'bench)))
+     (define visual-language-datum
+       `(visual-language-plan ',(hash-ref static-visual-preset 'id)
+                              ,(hash-ref static-visual-preset 'width)
+                              ,(hash-ref static-visual-preset 'height)
+                              ,(hash-ref static-visual-preset 'margin)))
      (define states (parse-state-form (car state-forms)))
      (define state-indexes (state-index-by-id states))
      (define actions (parse-action-forms action-forms (list->set (map c-state-id states))))
@@ -5397,34 +5559,46 @@ scene-glyph-draw-packets
      (define transaction-indexes (transaction-index-by-id transactions))
      (define-values (root-node _)
        (parameterize ([current-static-theme static-theme]
-                      [current-static-font-assets font-assets])
+                      [current-static-font-assets font-assets]
+                      [current-static-visual-preset static-visual-preset])
          (parse-node (car layout-forms) (set))))
      (define-values (total dynamic budget updates)
        (with-static-font-assets font-assets (lambda () (compile-scene root-node))))
      (define layouts
-       (with-static-font-assets font-assets (lambda () (compile-layout-plan root-node))))
+       (parameterize ([current-static-visual-preset static-visual-preset])
+         (with-static-font-assets font-assets (lambda () (compile-layout-plan root-node)))))
      (define-values (glyph-placements glyph-packets)
-       (with-static-font-assets font-assets
-         (lambda () (compile-glyph-placement-plan root-node states layouts state-indexes))))
+       (parameterize ([current-static-visual-preset static-visual-preset])
+         (with-static-font-assets font-assets
+           (lambda () (compile-glyph-placement-plan root-node states layouts state-indexes)))))
      (define subgroup-packets (compile-subgroup-packet-plan glyph-packets))
      (define packet-activity-contract (compile-packet-activity-contract subgroup-packets))
      (define base-packet-worklists (compile-packet-worklists subgroup-packets))
-     (define events (compile-event-map root-node layouts action-indexes transaction-indexes))
+     (define events
+       (parameterize ([current-static-visual-preset static-visual-preset])
+         (compile-event-map root-node layouts action-indexes transaction-indexes)))
      (define tracks (compile-animation-tracks events))
      (define raw-plans
-       (with-static-font-assets font-assets
-         (lambda () (compile-action-plans root-node states actions layouts action-indexes))))
+       (parameterize ([current-static-visual-preset static-visual-preset])
+         (with-static-font-assets font-assets
+           (lambda () (compile-action-plans root-node states actions layouts action-indexes)))))
      (define raw-schedule (compile-frame-schedule events tracks raw-plans))
-     (define render-schedules (compile-render-schedules root-node layouts events tracks raw-plans glyph-placements glyph-packets raw-schedule))
+     (define render-schedules
+       (parameterize ([current-static-visual-preset static-visual-preset])
+         (compile-render-schedules root-node layouts events tracks raw-plans glyph-placements glyph-packets raw-schedule)))
      (define-values (plans schedule)
        (compile-action-aware-tile-selection root-node layouts events raw-plans raw-schedule render-schedules))
-     (define virtual-list-plans (compile-virtual-list-plans root-node layouts glyph-placements))
+     (define virtual-list-plans
+       (parameterize ([current-static-visual-preset static-visual-preset])
+         (compile-virtual-list-plans root-node layouts glyph-placements)))
      (define scrollbar-plans (compile-scrollbar-plans root-node layouts virtual-list-plans render-schedules))
      (define list-navigation-plans (compile-list-navigation-plans list-navigation-specs virtual-list-plans scrollbar-plans))
      (define log-browser-plans (compile-log-browser-plans log-browser-specs root-node layouts glyph-placements virtual-list-plans render-schedules))
      ;; Coalesced batch must be built after packet-local task annotation; this prevents a
      ;; runtime batch executor from reconstructing glyph dependencies.
-     (define focus-graph (compile-focus-graph root-node layouts render-schedules state-indexes))
+     (define focus-graph
+       (parameterize ([current-static-visual-preset static-visual-preset])
+         (compile-focus-graph root-node layouts render-schedules state-indexes)))
      (define state-initial-by-id
        (for/hash ([state (in-list states)]) (values (c-state-id state) (c-state-initial state))))
      (define keyboard-map
@@ -5457,7 +5631,9 @@ scene-glyph-draw-packets
                    [COMMAND-MATCHERS (datum-stx stx (command-matchers->datum command-matchers))]
                    [ACTIONS (datum-stx stx `(list ,@(map (lambda (plan) (action-plan->datum plan state-indexes)) plans)))]
                    [UPDATES (datum-stx stx `(quote ,updates))]
-                   [LAYOUT (datum-stx stx (layout-plan->datum layouts root-node states))]
+                   [LAYOUT (datum-stx stx
+                                        (parameterize ([current-static-visual-preset static-visual-preset])
+                                          (layout-plan->datum layouts root-node states)))]
                    [GLYPH-PLACEMENTS (datum-stx stx (glyph-placement-plan->datum glyph-placements))]
                    [GLYPH-PACKETS (datum-stx stx (glyph-packets->datum glyph-packets))]
                    [SUBGROUP-PACKETS (datum-stx stx (subgroup-packets->datum subgroup-packets))]
@@ -5476,8 +5652,9 @@ scene-glyph-draw-packets
                    [ROW-ACTIVATIONS (datum-stx stx (row-activation-plans->datum row-activation-plans))]
                    [SCROLLBARS (datum-stx stx (scrollbar-plans->datum scrollbar-plans))]
                    [LIST-NAVIGATIONS (datum-stx stx (list-navigation-plans->datum list-navigation-plans))]
-                   [LOG-BROWSERS (datum-stx stx (log-browser-plans->datum log-browser-plans))]
-                   [FONT-ASSETS (datum-stx stx (font-asset-plans->datum font-assets))])
+                    [LOG-BROWSERS (datum-stx stx (log-browser-plans->datum log-browser-plans))]
+                    [FONT-ASSETS (datum-stx stx (font-asset-plans->datum font-assets))]
+                    [VISUAL-LANGUAGE (datum-stx stx visual-language-datum)])
        #'(begin
-           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS))
+           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS VISUAL-LANGUAGE))
            (provide app-scene)))]))

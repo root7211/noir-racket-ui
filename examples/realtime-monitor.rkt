@@ -6,12 +6,19 @@
 (noir-app
  (font-asset #:manifest "assets/fontc/noir-desktop-sans-18/manifest.json"
              #:atlas "assets/fontc/noir-desktop-sans-18/atlas.r8")
+ (visual-preset desktop-wide)
  (theme noir-monitor
-   (color canvas "#0B1018" surface "#141D2A" panel "#1B2636" header "#172B45"
-          accent "#2CB67D" danger "#E85D75" text "#F4F7FB" muted "#91A0B8")
+   (color canvas "#0A1119" canvas-quiet "#0E1823"
+          surface "#152231" surface-raised "#1D3042" surface-overlay "#274057"
+          border-subtle "#27455B" border-strong "#3F7891"
+          text-primary "#F0F7FB" text-muted "#9CB6C6" text-inverse "#071117"
+          accent "#48C7A0" accent-muted "#1D4D47"
+          success "#48C7A0" warning "#D9A84C" danger "#ED7083" info "#6FB5FF"
+          panel "#1D3042" header "#1D3042" text "#F0F7FB" muted "#9CB6C6")
    (space xs 4 sm 8 md 12 lg 16 xl 24 page 32)
    (type caption 13 body 15 label 16 title 28 display 36)
-   (radius control 6 card 10 panel 14 overlay 18))
+   (radius control 6 card 10 panel 14 overlay 18)
+   (elevation flat 0 border 1 raised 2 overlay 3))
  (state [monitor-detail-damage 0])
  (action open-monitor-detail (set monitor-detail-damage (+ monitor-detail-damage 1)))
  (list-navigation #:id monitor-navigation #:for telemetry-grid #:scrollbar monitor-scrollbar)
@@ -24,7 +31,7 @@
  (app-shell #:id monitor-shell
    (toolbar #:id monitor-app-bar #:text-id monitor-title #:label "REALTIME MONITOR TABLE" #:font-face noir-desktop-sans-18)
    (table-header #:id monitor-column-header #:text-id monitor-columns #:label "STATE HOST CPU MEM NET LAT JIT" #:font-face noir-desktop-sans-18)
-   (surface #:id monitor-list-shell #:height 84 #:background (theme-color panel) #:clip true
+   (surface #:id monitor-list-shell #:height 84 #:background (theme-color surface) #:elevation (theme-elevation border) #:clip true
      (virtual-list #:id telemetry-grid
                    #:logical-capacity 10000
                    #:physical-slots 4
@@ -44,7 +51,8 @@
                       (telemetry-row-d "NOMINAL ALPHA LOW MID LOW FAST LOW"))))
      (scrollbar #:id monitor-scrollbar #:for telemetry-grid
                 #:x 554 #:y 0 #:width 12 #:height 84 #:thumb-height 18))
-   (detail-panel #:id monitor-detail-panel #:text-id monitor-detail #:dynamic monitor-detail-damage #:max-chars 29)
+   (detail-panel #:id monitor-detail-panel #:text-id monitor-detail #:dynamic monitor-detail-damage #:max-chars 29
+                 #:background (theme-color surface-raised))
    (status-pill #:id monitor-refresh-bar #:button-id refresh-telemetry #:label-id refresh-telemetry-label
                 #:button-label "REFRESH BATCH" #:label "REFRESH FIXED BATCH"
-                #:font-face noir-desktop-sans-18 #:on open-monitor-detail #:background (theme-color accent))))
+                #:font-face noir-desktop-sans-18 #:on open-monitor-detail #:background (theme-color accent-muted))))

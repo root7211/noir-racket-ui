@@ -45,6 +45,18 @@ NOIR_ENTRY_MODULE=examples/realtime-monitor.rkt PLTCOLLECTS="$PWD:" \
 
 该回归同时证明：非法字符Scene篡改会被启动期glyph-domain proof拒绝；可见数据更新只写固定glyph地址；纯不可见记录只进入预分配arena，产生零glyph GPU写入和零render request。GPU replay策略图、原始时间戳数据及边界说明见[实时监控表格报告](REALTIME_MONITOR_TABLE_V1_REPORT.md)。
 
+## 编译期桌面视觉语言 v1
+
+Noir的视觉语言v1不在运行时解析theme，也不允许宿主从layout猜测尺度。`(visual-preset desktop-wide)` 会在宏展开期固定1280×720 canvas和32px margin；Racket以该唯一真值计算layout NDC、glyph bounds、tile、scroll scissor和scrollbar，Scene导出`noir-visual-language-plan-v1@1`。Rust在创建窗口前验证schema、preset、精确canvas和全部layout containment，再用同一尺寸配置window与offscreen canvas。
+
+两个完整应用已经采用语义色彩、surface/raised surface、subtle/strong divider、低压WARN/ERROR tint、比例字体静态chrome和desktop-wide frame。所有颜色与elevation均在宏展开期lower为固定RGBA与quad，运行时没有样式对象、theme查询或组件tag。
+
+```bash
+./tools/verify_visual_language.sh
+```
+
+该入口会审计两个Scene的canvas containment，拒绝schema、preset和canvas尺寸篡改，并继续执行font placement、日志浏览器与实时监控表格的真实X11/Vulkan回归。完整设计、截图、proof与已保留的动态列表字体边界见[视觉语言规范](VISUAL_LANGUAGE_V1.md)和[交付报告](VISUAL_LANGUAGE_V1_REPORT.md)。
+
 ## 桌面组件宏 v1
 
 Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`detail-panel`是**编译期语法压缩**，而不是运行时组件对象。宏展开后只剩已有的`column`、`stack`、`text`和`button`，并保留调用者明确给出的detail、button和label ID。因此已有state slot、font placement、event map、tile和worklist无需增加组件分支。
@@ -85,6 +97,8 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/verify_log_browser.sh` | 真实X11/Vulkan日志工作流与log-browser ABI篡改回归。 |
 | `tools/verify_realtime_monitor.sh` | 实时监控表格的真实X11/Vulkan、glyph-domain篡改、可见性分流与键鼠回归。 |
 | `tools/verify_desktop_component_macros.sh` | 编译期组件宏与手写primitive Scene等价性回归。 |
+| `tools/verify_visual_language.sh` | desktop-wide视觉canvas、Scene篡改拒绝与三套真实X11/Vulkan回归。 |
+| `tools/audit_visual_canvas.py` | 对visual_language_plan将NDC反算为像素rect并审计layout containment。 |
 | `tests/run.rkt` | Scene 预算、更新计划和 JSON 导出的断言。 |
 | `tests/duplicate-id.rkt` | 失败样例；演示带源位置的宏诊断。 |
 

@@ -42,6 +42,8 @@ const FONT_ASSET_PLAN_ABI_SCHEMA: &str = "noir-font-asset-plan-v1";
 const FONT_ASSET_PLAN_ABI_REVISION: u32 = 1;
 const FONT_PLACEMENT_PLAN_ABI_SCHEMA: &str = "noir-font-placement-plan-v1";
 const FONT_PLACEMENT_PLAN_ABI_REVISION: u32 = 1;
+const VISUAL_LANGUAGE_PLAN_ABI_SCHEMA: &str = "noir-visual-language-plan-v1";
+const VISUAL_LANGUAGE_PLAN_ABI_REVISION: u32 = 1;
 
 #[derive(Debug, Deserialize)]
 struct Scene {
@@ -77,6 +79,8 @@ struct Scene {
     // Not serde-defaulted: every Scene must explicitly declare whether it has zero
     // assets or a proved set; missing field is never allowed to masquerade as v1.
     font_assets: Vec<FontAssetPlan>,
+    // Mandatory compiler-owned canvas contract. Host never infers visual scale from layouts.
+    visual_language_plan: VisualLanguagePlan,
 }
 
 #[derive(Debug, Deserialize)]
@@ -90,6 +94,18 @@ struct AbiContracts {
     log_browser_plan: AbiContract,
     font_asset_plan: AbiContract,
     font_placement_plan: AbiContract,
+    visual_language_plan: AbiContract,
+}
+
+#[derive(Debug, Deserialize)]
+struct VisualCanvas { width: f32, height: f32, margin: f32 }
+
+#[derive(Debug, Deserialize)]
+struct VisualLanguagePlan {
+    abi_schema: String,
+    abi_revision: u32,
+    preset: String,
+    canvas: VisualCanvas,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1318,6 +1334,9 @@ struct Host {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     size: PhysicalSize<u32>,
+    canvas_width: u32,
+    canvas_height: u32,
+    canvas_margin: f32,
     scene: Scene,
     // Compiler-proved State Slot table; event paths use only array indices. Scene.state is retained only for admission parity checks.
     state_slot_ids: Vec<String>,
@@ -1400,6 +1419,8 @@ struct Host {
 
 impl Host {
     async fn new(window: Arc<Window>, scene: Scene, scene_dir: PathBuf, scene_fingerprint_fnv1a64: String) -> Result<Self> {
+        compiler_abi_contracts(&scene)?;
+        let visual_canvas = compiler_visual_language_plan(&scene)?;
         let source_fingerprint_fnv1a64 = scene.build_attestation.as_ref()
             .filter(|attestation| attestation.schema == "noir-build-attestation-v1")
             .map(|attestation| attestation.source_fingerprint_fnv1a64.clone())
@@ -1411,6 +1432,9 @@ impl Host {
             println!("compiler build attestation: absent (legacy Scene)");
         }
         let size = window.inner_size();
+        anyhow::ensure!(size.width == visual_canvas.width && size.height == visual_canvas.height,
+                        "window {}x{} disagrees with compiler visual canvas {}x{}",
+                        size.width, size.height, visual_canvas.width, visual_canvas.height);
         let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
         descriptor.flags |= wgpu::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER;
         let instance = wgpu::Instance::new(descriptor);
@@ -1433,7 +1457,6 @@ impl Host {
         let config = wgpu::SurfaceConfiguration { usage: wgpu::TextureUsages::RENDER_ATTACHMENT, format, color_space: wgpu::SurfaceColorSpace::Auto, width: size.width.max(1), height: size.height.max(1), present_mode: wgpu::PresentMode::Fifo, alpha_mode: caps.alpha_modes[0], view_formats: vec![], desired_maximum_frame_latency: 2 };
         surface.configure(&device, &config);
 
-        compiler_abi_contracts(&scene)?;
         let verified_font_assets = compiler_font_assets(&scene, &scene_dir)?;
         compiler_font_placements(&scene, &verified_font_assets)?;
         let virtual_lists = compiler_virtual_list_plans(&scene)?;
@@ -1530,11 +1553,11 @@ impl Host {
         println!("compiler subgroup packets: {} width-32 packet(s), vertex-subgroup-supported={subgroup_vertex_supported}; packet draw fallback is always ABI-equivalent", subgroup_packets.len());
         println!("compiler packet activity: gpu-driven-indirect={} variant={:?} adapter-subgroup={} wgsl-subgroup={} fixed activity-word/indirect-command ABI", packet_activity.is_some(), packet_activity_variant, subgroup_adapter_supported, subgroup_wgsl_supported);
         println!("compiler timestamp query: supported={timestamp_supported}");
-        let (canvas, canvas_view, blit_bind_group, blit_pipeline) = make_canvas_and_blit(&device, format, WIDTH, HEIGHT);
+        let (canvas, canvas_view, blit_bind_group, blit_pipeline) = make_canvas_and_blit(&device, format, visual_canvas.width, visual_canvas.height);
         let initial_instances = instances.clone();
         let initial_glyph_bytes = glyph_bytes.clone();
         let virtual_list_count = virtual_lists.len();
-        let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group, cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, log_browser_plans, log_levels, _font_atlases: font_atlases, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
+        let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, canvas_width: visual_canvas.width, canvas_height: visual_canvas.height, canvas_margin: visual_canvas.margin, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group, cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, log_browser_plans, log_levels, _font_atlases: font_atlases, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
         host.sync_focus_visuals();
         host.execute_scene_data_update_batches()?;
         host.redraw_canvas_full();
@@ -2752,7 +2775,7 @@ impl Host {
         let travel = plan.track_height - plan.thumb_height;
         let thumb_top = travel * viewport as f32 / plan.max_viewport as f32;
         let screen_top = plan.track_y + thumb_top;
-        let ndc_y = 1.0 - 2.0 * (screen_top + plan.thumb_height) / HEIGHT as f32;
+        let ndc_y = 1.0 - 2.0 * (screen_top + plan.thumb_height) / self.canvas_height as f32;
         self.patch_instance_f32((plan.thumb_instance_offset + 4) as u64, ndc_y);
     }
 
@@ -3886,18 +3909,59 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
                     "unsupported font_placement_plan ABI {}@{}; expected {}@{}",
                     scene.abi_contracts.font_placement_plan.schema, scene.abi_contracts.font_placement_plan.revision,
                     FONT_PLACEMENT_PLAN_ABI_SCHEMA, FONT_PLACEMENT_PLAN_ABI_REVISION);
-    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} frozen",
+    anyhow::ensure!(scene.abi_contracts.visual_language_plan.schema == VISUAL_LANGUAGE_PLAN_ABI_SCHEMA
+                    && scene.abi_contracts.visual_language_plan.revision == VISUAL_LANGUAGE_PLAN_ABI_REVISION,
+                    "unsupported visual_language_plan ABI {}@{}; expected {}@{}",
+                    scene.abi_contracts.visual_language_plan.schema, scene.abi_contracts.visual_language_plan.revision,
+                    VISUAL_LANGUAGE_PLAN_ABI_SCHEMA, VISUAL_LANGUAGE_PLAN_ABI_REVISION);
+    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} visual-language={}@{} frozen",
              scene.abi_contracts.virtual_list_plan.schema, scene.abi_contracts.virtual_list_plan.revision,
              scene.abi_contracts.row_activation_plan.schema, scene.abi_contracts.row_activation_plan.revision,
              scene.abi_contracts.scrollbar_plan.schema, scene.abi_contracts.scrollbar_plan.revision,
              scene.abi_contracts.list_navigation_plan.schema, scene.abi_contracts.list_navigation_plan.revision,
              scene.abi_contracts.log_browser_plan.schema, scene.abi_contracts.log_browser_plan.revision,
              scene.abi_contracts.font_asset_plan.schema, scene.abi_contracts.font_asset_plan.revision,
-             scene.abi_contracts.font_placement_plan.schema, scene.abi_contracts.font_placement_plan.revision);
+             scene.abi_contracts.font_placement_plan.schema, scene.abi_contracts.font_placement_plan.revision,
+             scene.abi_contracts.visual_language_plan.schema, scene.abi_contracts.visual_language_plan.revision);
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+struct VerifiedVisualCanvas { width: u32, height: u32, margin: f32 }
+
+fn compiler_visual_language_plan(scene: &Scene) -> Result<VerifiedVisualCanvas> {
+    let plan = &scene.visual_language_plan;
+    anyhow::ensure!(plan.abi_schema == VISUAL_LANGUAGE_PLAN_ABI_SCHEMA && plan.abi_revision == VISUAL_LANGUAGE_PLAN_ABI_REVISION,
+                    "unsupported visual_language_plan payload {}@{}", plan.abi_schema, plan.abi_revision);
+    anyhow::ensure!(plan.canvas.width.is_finite() && plan.canvas.height.is_finite() && plan.canvas.margin.is_finite()
+                    && plan.canvas.width > 0.0 && plan.canvas.height > 0.0 && plan.canvas.margin >= 0.0,
+                    "visual_language_plan has non-finite or non-positive canvas geometry");
+    let (expected_width, expected_height, expected_margin) = match plan.preset.as_str() {
+        "bench" => (640u32, 360u32, 16.0f32),
+        "desktop-wide" => (1280u32, 720u32, 32.0f32),
+        _ => anyhow::bail!("visual_language_plan uses unsupported preset {}", plan.preset),
+    };
+    anyhow::ensure!(plan.canvas.width == expected_width as f32 && plan.canvas.height == expected_height as f32 && plan.canvas.margin == expected_margin,
+                    "visual_language_plan {} geometry must be {}x{} margin {}", plan.preset, expected_width, expected_height, expected_margin);
+    for layout in &scene.layout_plan {
+        let x = (layout.ndc_pos[0] + 1.0) * plan.canvas.width * 0.5;
+        let y = (1.0 - layout.ndc_pos[1] - layout.ndc_size[1]) * plan.canvas.height * 0.5;
+        let width = layout.ndc_size[0] * plan.canvas.width * 0.5;
+        let height = layout.ndc_size[1] * plan.canvas.height * 0.5;
+        anyhow::ensure!(x.is_finite() && y.is_finite() && width.is_finite() && height.is_finite()
+                        && x >= -0.001 && y >= -0.001 && width >= 0.0 && height >= 0.0
+                        && x + width <= plan.canvas.width + 0.001 && y + height <= plan.canvas.height + 0.001,
+                        "layout {} escapes compiler-owned {} canvas", layout.id, plan.preset);
+    }
+    println!("compiler visual language: preset={} canvas={}x{} margin={} static-proof=layout-contained",
+             plan.preset, expected_width, expected_height, expected_margin);
+    Ok(VerifiedVisualCanvas { width: expected_width, height: expected_height, margin: expected_margin })
+}
+
 fn compiler_virtual_list_plans(scene: &Scene) -> Result<Vec<CompiledVirtualListPlan>> {
+    let visual_canvas = compiler_visual_language_plan(scene)?;
+    let canvas_width = visual_canvas.width as f32;
+    let canvas_height = visual_canvas.height as f32;
     let mut layout_by_id = HashMap::new();
     for layout in &scene.layout_plan {
         anyhow::ensure!(layout_by_id.insert(layout.id.as_str(), layout).is_none(),
@@ -3989,7 +4053,7 @@ fn compiler_virtual_list_plans(scene: &Scene) -> Result<Vec<CompiledVirtualListP
                             "virtual list {} has {} scroll transitions; expected {} directed adjacent edges", plan.id, plan.scroll_transitions.len(), max_scroll.saturating_mul(2));
         }
         let list_layout = layout_by_id.get(plan.id.as_str()).with_context(|| format!("virtual list {} lacks layout entry", plan.id))?;
-        let scroll_scissor = VirtualScrollScissor { x: (list_layout.ndc_pos[0] + 1.0) * WIDTH as f32 * 0.5, y: (1.0 - list_layout.ndc_pos[1] - list_layout.ndc_size[1]) * HEIGHT as f32 * 0.5, width: list_layout.ndc_size[0] * WIDTH as f32 * 0.5, height: list_layout.ndc_size[1] * HEIGHT as f32 * 0.5 };
+        let scroll_scissor = VirtualScrollScissor { x: (list_layout.ndc_pos[0] + 1.0) * canvas_width * 0.5, y: (1.0 - list_layout.ndc_pos[1] - list_layout.ndc_size[1]) * canvas_height * 0.5, width: list_layout.ndc_size[0] * canvas_width * 0.5, height: list_layout.ndc_size[1] * canvas_height * 0.5 };
         let row_base_instance_y = plan.row_instance_offsets.iter().map(|offsets| offsets.iter().map(|offset| {
             let layout = scene.layout_plan.iter().find(|entry| entry._instance_offset == *offset).expect("virtual-list instance offset admitted above"); layout.ndc_pos[1]
         }).collect::<Vec<_>>()).collect::<Vec<_>>();
@@ -4050,10 +4114,10 @@ fn compiler_virtual_list_plans(scene: &Scene) -> Result<Vec<CompiledVirtualListP
             } else {
                 anyhow::ensure!(transition.glyph_id_patches.is_empty(), "static virtual list {} unexpectedly carries data-binding patches", plan.id);
             }
-            let expected_scissor_x = (list_layout.ndc_pos[0] + 1.0) * WIDTH as f32 * 0.5;
-            let expected_scissor_y = (1.0 - list_layout.ndc_pos[1] - list_layout.ndc_size[1]) * HEIGHT as f32 * 0.5;
-            let expected_scissor_width = list_layout.ndc_size[0] * WIDTH as f32 * 0.5;
-            let expected_scissor_height = list_layout.ndc_size[1] * HEIGHT as f32 * 0.5;
+            let expected_scissor_x = (list_layout.ndc_pos[0] + 1.0) * canvas_width * 0.5;
+            let expected_scissor_y = (1.0 - list_layout.ndc_pos[1] - list_layout.ndc_size[1]) * canvas_height * 0.5;
+            let expected_scissor_width = list_layout.ndc_size[0] * canvas_width * 0.5;
+            let expected_scissor_height = list_layout.ndc_size[1] * canvas_height * 0.5;
             anyhow::ensure!((transition.scissor.x - expected_scissor_x).abs() < 0.001 && (transition.scissor.y - expected_scissor_y).abs() < 0.001 && (transition.scissor.width - expected_scissor_width).abs() < 0.001 && (transition.scissor.height - expected_scissor_height).abs() < 0.001,
                             "virtual list {} scroll edge {} -> {} has non-canonical scissor", plan.id, transition.from_slot, transition.to_slot);
         }
@@ -4113,6 +4177,9 @@ fn compiler_scrollbar_plans(
     lists: &[CompiledVirtualListPlan],
     packet_worklists: &[CompiledPacketWorklist],
 ) -> Result<Vec<CompiledScrollbarPlan>> {
+    let visual_canvas = compiler_visual_language_plan(scene)?;
+    let canvas_width = visual_canvas.width as f32;
+    let canvas_height = visual_canvas.height as f32;
     let layouts = scene.layout_plan.iter().map(|layout| (layout.id.as_str(), layout)).collect::<HashMap<_, _>>();
     let mut seen_ids = HashSet::new();
     let mut seen_lists = HashSet::new();
@@ -4161,10 +4228,10 @@ fn compiler_scrollbar_plans(
                         && seen_thumb_offsets.insert(artifact.thumb_instance_offset),
                         "scrollbar {} has invalid fixed track/thumb instance address", artifact.id);
         let layout_rect = |entry: &LayoutEntry| -> (f32, f32, f32, f32) {
-            ((entry.ndc_pos[0] + 1.0) * WIDTH as f32 * 0.5,
-             (1.0 - entry.ndc_pos[1] - entry.ndc_size[1]) * HEIGHT as f32 * 0.5,
-             entry.ndc_size[0] * WIDTH as f32 * 0.5,
-             entry.ndc_size[1] * HEIGHT as f32 * 0.5)
+            ((entry.ndc_pos[0] + 1.0) * canvas_width * 0.5,
+             (1.0 - entry.ndc_pos[1] - entry.ndc_size[1]) * canvas_height * 0.5,
+             entry.ndc_size[0] * canvas_width * 0.5,
+             entry.ndc_size[1] * canvas_height * 0.5)
         };
         let (track_x, track_y, track_width, track_height) = layout_rect(track);
         let (thumb_x, thumb_y, thumb_width, thumb_height) = layout_rect(thumb);
@@ -5475,8 +5542,10 @@ fn main() -> Result<()> {
     let mut builder = EventLoopBuilder::new();
     builder.with_x11();
     let event_loop = builder.build().context("create X11 event loop")?;
+    compiler_abi_contracts(&scene)?;
+    let visual_canvas = compiler_visual_language_plan(&scene)?;
     let window = Arc::new(WindowBuilder::new().with_title("Noir Glyph Atlas host")
-        .with_inner_size(PhysicalSize::new(WIDTH, HEIGHT)).build(&event_loop).context("create window")?);
+        .with_inner_size(PhysicalSize::new(visual_canvas.width, visual_canvas.height)).build(&event_loop).context("create window")?);
     let scene_dir = Path::new(&scene_path).parent().unwrap_or_else(|| Path::new(".")).to_path_buf();
     let mut host = pollster::block_on(Host::new(window.clone(), scene, scene_dir, scene_fingerprint_fnv1a64)).context("initialize host")?;
     println!("noir-winit-host: {} quad instances, {} glyph placement(s), {} packet(s), profile={}",
@@ -5515,8 +5584,8 @@ fn main() -> Result<()> {
                 WindowEvent::CloseRequested => target.exit(),
                 WindowEvent::Resized(size) => { host.resize(size); host.window.request_redraw(); }
                 WindowEvent::CursorMoved { position, .. } => {
-                    host.cursor = [position.x as f32 * WIDTH as f32 / host.size.width.max(1) as f32,
-                                   position.y as f32 * HEIGHT as f32 / host.size.height.max(1) as f32];
+                    host.cursor = [position.x as f32 * host.canvas_width as f32 / host.size.width.max(1) as f32,
+                                   position.y as f32 * host.canvas_height as f32 / host.size.height.max(1) as f32];
                     if !host.update_scrollbar_drag() {
                         if !host.set_list_hover_from_cursor() { host.set_hover(host.hit_test(host.cursor)); }
                     }
