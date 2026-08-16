@@ -56,10 +56,16 @@ scene-glyph-draw-packets
          scene-font-assets
          scene-shadow-surface-plan
          scene-navigation-selection-plan
+         scene-overlay-state-plan
+         scene-modal-focus-subgraph-plan
+         scene-modal-focus-subgraph-required?
          (struct-out navigation-selection-entry)
          (struct-out navigation-selection-plan)
          (struct-out shadow-surface)
          (struct-out shadow-surface-plan)
+         (struct-out overlay-state-entry)
+         (struct-out modal-focus-subgraph-entry)
+         (struct-out modal-focus-subgraph-plan)
          (struct-out virtual-list-plan)
          (struct-out log-browser-plan)
          (struct-out font-asset-plan)
@@ -147,6 +153,10 @@ scene-glyph-draw-packets
 ;; fields, glyph placement alpha lanes and fixed local tile masks.
 (define overlay-state-plan-abi-schema "noir-overlay-state-plan-v1")
 (define overlay-state-plan-abi-revision 1)
+;; Modal focus is a closed event-slot subgraph layered on a visible overlay.
+;; It has no runtime tree traversal, focus discovery or geometry query.
+(define modal-focus-subgraph-abi-schema "noir-modal-focus-subgraph-v1")
+(define modal-focus-subgraph-abi-revision 1)
 
 (define (abi-contracts->jsexpr)
   (hash 'virtual_list_plan
@@ -187,12 +197,15 @@ scene-glyph-draw-packets
               'revision navigation-selection-plan-abi-revision)
         'overlay_state_plan
         (hash 'schema overlay-state-plan-abi-schema
-              'revision overlay-state-plan-abi-revision)))
+              'revision overlay-state-plan-abi-revision)
+        'modal_focus_subgraph
+        (hash 'schema modal-focus-subgraph-abi-schema
+              'revision modal-focus-subgraph-abi-revision)))
 
 (struct ui-node (tag id props children source) #:transparent)
 ;; Scene 以静态树和增量执行计划共同组成。state/actions 由 `noir-app`
 ;; 的扩展语法生成；普通 `(ui ...)` 保持空状态表，仍可独立使用。
-(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan navigation-selection-plan overlay-state-plan overlay-state-required?) #:transparent)
+(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan navigation-selection-plan overlay-state-plan overlay-state-required? modal-focus-subgraph-plan modal-focus-subgraph-required?) #:transparent)
 ;; state-slot 的 index 是所有 runtime state read/write 的唯一地址；id/initial 只保留为启动期 proof 与可审计导出。
 (struct state-slot (index id initial) #:transparent)
 ;; action-slot 与 state-slot 一样为 macro expansion 生成的 dense canonical address。
@@ -299,6 +312,10 @@ scene-glyph-draw-packets
 ;; Overlay entries are finite 0/1 visibility machines. `glyph-slots` address the
 ;; final 4-byte alpha lane of the stable 48-byte GlyphPlacementInstance ABI.
 (struct overlay-state-entry (id state state-index initial-visible open-action close-actions event-slots instance-offsets glyph-slots tile-ids) #:transparent)
+;; Modal focus refers only to fixed Event Map slots. `restore-event-slot` is the
+;; external opener to re-focus after close; focus-event-slots form a cyclic Tab ring.
+(struct modal-focus-subgraph-entry (id state state-index restore-event-slot focus-event-slots next-slots previous-slots allowed-event-slots tile-ids) #:transparent)
+(struct modal-focus-subgraph-plan (entries) #:transparent)
 
 (define (value->jsexpr v)
   (cond
@@ -914,6 +931,22 @@ scene-glyph-draw-packets
                      'glyph_slots (overlay-state-entry-glyph-slots entry)
                      'tile_ids (overlay-state-entry-tile-ids entry))))))
 
+(define (modal-focus-subgraph-plan->jsexpr plan)
+  (and plan
+       (hash 'abi_schema modal-focus-subgraph-abi-schema
+             'abi_revision modal-focus-subgraph-abi-revision
+             'entries
+             (for/list ([entry (in-list (modal-focus-subgraph-plan-entries plan))])
+               (hash 'id (symbol->string (modal-focus-subgraph-entry-id entry))
+                     'state (symbol->string (modal-focus-subgraph-entry-state entry))
+                     'state_index (modal-focus-subgraph-entry-state-index entry)
+                     'restore_event_slot (modal-focus-subgraph-entry-restore-event-slot entry)
+                     'focus_event_slots (modal-focus-subgraph-entry-focus-event-slots entry)
+                     'next_slots (modal-focus-subgraph-entry-next-slots entry)
+                     'previous_slots (modal-focus-subgraph-entry-previous-slots entry)
+                     'allowed_event_slots (modal-focus-subgraph-entry-allowed-event-slots entry)
+                     'tile_ids (modal-focus-subgraph-entry-tile-ids entry))))))
+
 (define (navigation-selection-plan->jsexpr plan)
   (and plan
        (hash 'abi_schema navigation-selection-plan-abi-schema
@@ -979,6 +1012,8 @@ scene-glyph-draw-packets
         'navigation_selection_plan (navigation-selection-plan->jsexpr (scene-navigation-selection-plan s))
         'overlay_state_plan (overlay-state-plan->jsexpr (scene-overlay-state-plan s))
         'overlay_state_required (scene-overlay-state-required? s)
+        'modal_focus_subgraph_plan (modal-focus-subgraph-plan->jsexpr (scene-modal-focus-subgraph-plan s))
+        'modal_focus_subgraph_required (scene-modal-focus-subgraph-required? s)
         'text_field_visuals (text-field-visuals->jsexpr s)))
   (if build-attestation
       (hash-set base 'build_attestation (value->jsexpr build-attestation))
@@ -1032,7 +1067,9 @@ scene-glyph-draw-packets
         'keyboard-map (scene-keyboard-map s)
         'shadow-surface-plan (scene-shadow-surface-plan s)
         'navigation-selection-plan (scene-navigation-selection-plan s)
-        'overlay-state-plan (scene-overlay-state-plan s)))
+        'overlay-state-plan (scene-overlay-state-plan s)
+        'modal-focus-subgraph-plan (scene-modal-focus-subgraph-plan s)
+        'modal-focus-subgraph-required? (scene-modal-focus-subgraph-required? s)))
 
 ;; -------------------------- Expand-time parser ---------------------------
 
@@ -1070,6 +1107,10 @@ scene-glyph-draw-packets
   ;; Overlay v1 owns a finite 0/1 state. Every affected quad and glyph alpha field
   ;; is pre-addressed; host execution may only choose the emitted visible endpoint.
   (struct c-overlay-state-entry (id state state-index initial-visible open-action close-actions event-slots instance-offsets glyph-slots tile-ids) #:transparent)
+  ;; A modal subgraph is a fixed Event Map ring. Its slots are compiler addresses,
+  ;; not runtime-discovered focusable nodes.
+  (struct c-modal-focus-subgraph-entry (id state state-index restore-event-slot focus-event-slots next-slots previous-slots allowed-event-slots tile-ids) #:transparent)
+  (struct c-modal-focus-subgraph-plan (entries) #:transparent)
   ;; Application-only spec: list and detail glyph addresses are resolved after layout.
   (struct c-log-browser-spec (id list-id detail-id append-updates source) #:transparent)
   (struct c-log-browser-plan (id list-id append-batch-id append-updates detail-node-id detail-glyph-offsets detail-tile-ids row-color-offsets levels packet-worklist-index) #:transparent)
@@ -3083,35 +3124,53 @@ scene-glyph-draw-packets
   ;; parsed by the existing primitive lowerer; the wrapper metadata is consumed
   ;; after layout, glyph placement, event slots and tile IDs are frozen.
   (define (parse-material-overlay-state stx seen)
+    (define (lower id-value state-value initial-value open-value close-values focus-values child-datums)
+      (unless (member initial-value '(0 1))
+        (raise-syntax-error 'material-overlay-state "#:initial must be literal 0 (closed) or 1 (open)" stx))
+      (unless (= (length close-values) (length (remove-duplicates close-values)))
+        (raise-syntax-error 'material-overlay-state "#:close-on actions must be unique" stx))
+      (when (and (pair? focus-values)
+                 (or (< (length focus-values) 2) (> (length focus-values) 6)
+                     (not (= (length focus-values) (length (remove-duplicates focus-values))))))
+        (raise-syntax-error 'material-overlay-state "#:modal-focus requires 2..6 unique fixed dialog/menu target IDs" stx))
+      (define frame-width (- (canvas-width) (* 2.0 (canvas-margin))))
+      (define frame-height (- (canvas-height) (* 2.0 (canvas-margin))))
+      (define lowered
+        (datum->syntax stx
+                       `(stack #:id ,id-value #:width ,frame-width #:height ,frame-height
+                               #:background (0.0 0.0 0.0 0.0)
+                          ,@child-datums)
+                       stx stx))
+      (define-values (node seen*) (parse-node lowered seen))
+      (define state-props
+        (hash-set (c-node-props node) 'overlay-state
+                  (list state-value initial-value open-value close-values)))
+      (values (struct-copy c-node node
+                           [props (if (null? focus-values)
+                                      state-props
+                                      (hash-set state-props 'modal-focus focus-values))])
+              seen*))
     (syntax-parse stx
       #:datum-literals (material-overlay-state)
       [(material-overlay-state #:id id:id #:state state:id #:initial initial
+                               #:open-on open-action:id #:close-on (close-action:id ...+)
+                               #:modal-focus (focus-id:id ...+) child:expr ...+)
+       (lower (syntax-e #'id) (syntax-e #'state)
+              (expect-integer 'material-overlay-state #'initial)
+              (syntax-e #'open-action)
+              (map syntax-e (syntax->list #'(close-action ...)))
+              (map syntax-e (syntax->list #'(focus-id ...)))
+              (map syntax->datum (syntax->list #'(child ...))))]
+      [(material-overlay-state #:id id:id #:state state:id #:initial initial
                                #:open-on open-action:id #:close-on (close-action:id ...+) child:expr ...+)
-       (define id-value (syntax-e #'id))
-       (define state-value (syntax-e #'state))
-       (define initial-value (expect-integer 'material-overlay-state #'initial))
-       (unless (member initial-value '(0 1))
-         (raise-syntax-error 'material-overlay-state "#:initial must be literal 0 (closed) or 1 (open)" #'initial))
-       (define open-value (syntax-e #'open-action))
-       (define close-values (map syntax-e (syntax->list #'(close-action ...))))
-       (define child-datums (map syntax->datum (syntax->list #'(child ...))))
-       (unless (= (length close-values) (length (remove-duplicates close-values)))
-         (raise-syntax-error 'material-overlay-state "#:close-on actions must be unique" stx))
-       (define frame-width (- (canvas-width) (* 2.0 (canvas-margin))))
-       (define frame-height (- (canvas-height) (* 2.0 (canvas-margin))))
-       (define lowered
-         (datum->syntax stx
-                        `(stack #:id ,id-value #:width ,frame-width #:height ,frame-height
-                                #:background (0.0 0.0 0.0 0.0)
-                           ,@child-datums)
-                        stx stx))
-       (define-values (node seen*) (parse-node lowered seen))
-       (values (struct-copy c-node node
-                            [props (hash-set (c-node-props node) 'overlay-state
-                                             (list state-value initial-value open-value close-values))])
-               seen*)]
+       (lower (syntax-e #'id) (syntax-e #'state)
+              (expect-integer 'material-overlay-state #'initial)
+              (syntax-e #'open-action)
+              (map syntax-e (syntax->list #'(close-action ...)))
+              '()
+              (map syntax->datum (syntax->list #'(child ...))))]
       [_ (raise-syntax-error 'material-overlay-state
-                             "expected fixed id/state/initial/open-on/close-on and one or more static children" stx)]))
+                             "expected fixed id/state/initial/open-on/close-on, optional #:modal-focus target ring, and static children" stx)]))
 
   (define (parse-material-menu stx seen)
     (syntax-parse stx
@@ -6422,6 +6481,87 @@ scene-glyph-draw-packets
                                    (sort (cons (c-event-slot (car open-events)) close-event-slots) <)
                                    instance-offsets glyph-slots overlay-tile-ids)))))
 
+  ;; Modal focus consumes only already-proved overlay state/event addresses. It does
+  ;; not inspect the generic Focus Graph: dialog/menu controls are event targets,
+  ;; not editable text fields. `focus-event-slots` is a literal cyclic Tab ring.
+  (define (compile-modal-focus-subgraph-plan root overlay-state-plan events)
+    (define overlays
+      (filter (lambda (node) (hash-has-key? (c-node-props node) 'modal-focus))
+              (walk-nodes root)))
+    (if (null? overlays)
+        #f
+        (let ([overlay-by-id
+               (for/hash ([entry (in-list overlay-state-plan)])
+                 (values (c-overlay-state-entry-id entry) entry))])
+          (c-modal-focus-subgraph-plan
+           (for/list ([overlay (in-list overlays)])
+             (define overlay-id (c-node-id overlay))
+             (define entry (hash-ref overlay-by-id overlay-id
+                                     (lambda ()
+                                       (raise-syntax-error 'modal-focus-subgraph
+                                                           "modal focus overlay lacks an admitted overlay state entry"
+                                                           (c-node-source overlay)))))
+             (define focus-ids (hash-ref (c-node-props overlay) 'modal-focus))
+             (define close-events
+               (filter (lambda (event)
+                         (and (member (c-event-slot event) (c-overlay-state-entry-event-slots entry))
+                              (member (c-event-action event) (c-overlay-state-entry-close-actions entry))))
+                       events))
+             (define (event-for-focus id)
+               (or (for/first ([event (in-list close-events)]
+                               #:when (eq? (c-event-node-id event) id)) event)
+                   ;; material-menu-item has a public parent id but owns a stable
+                   ;; compiler child event id `<item>$target`.
+                   (let ([target-id (component-child-id id 'target)])
+                     (for/first ([event (in-list close-events)]
+                                 #:when (eq? (c-event-node-id event) target-id)) event))))
+             (define focus-events
+               (for/list ([id (in-list focus-ids)])
+                 (or (event-for-focus id)
+                     (raise-syntax-error 'material-overlay-state
+                                         (format "#:modal-focus target ~a must name a fixed dialog/menu close event" id)
+                                         (c-node-source overlay)))))
+             (define focus-slots (map c-event-slot focus-events))
+             (unless (and (<= 2 (length focus-slots) 6)
+                          (= (length focus-slots) (length (remove-duplicates focus-slots))))
+               (raise-syntax-error 'material-overlay-state
+                                   "modal focus targets must lower to 2..6 unique fixed event slots"
+                                   (c-node-source overlay)))
+             (define open-events
+               (filter (lambda (event)
+                         (eq? (c-event-action event) (c-overlay-state-entry-open-action entry))) events))
+             (unless (= (length open-events) 1)
+               (raise-syntax-error 'modal-focus-subgraph
+                                   "modal focus overlay must have exactly one fixed open event for focus restoration"
+                                   (c-node-source overlay)))
+             (define count (length focus-slots))
+             (define next-slots
+               (for/list ([index (in-range count)]) (list-ref focus-slots (modulo (add1 index) count))))
+             (define previous-slots
+               (for/list ([index (in-range count)]) (list-ref focus-slots (modulo (+ index count -1) count))))
+             (c-modal-focus-subgraph-entry overlay-id
+                                            (c-overlay-state-entry-state entry)
+                                            (c-overlay-state-entry-state-index entry)
+                                            (c-event-slot (car open-events))
+                                            focus-slots next-slots previous-slots
+                                            (sort (map c-event-slot close-events) <)
+                                            (c-overlay-state-entry-tile-ids entry)))))))
+
+  (define (modal-focus-subgraph-plan->datum plan)
+    (if (not plan)
+        '#f
+        `(modal-focus-subgraph-plan
+          (list ,@(for/list ([entry (in-list (c-modal-focus-subgraph-plan-entries plan))])
+                     `(modal-focus-subgraph-entry ',(c-modal-focus-subgraph-entry-id entry)
+                                                   ',(c-modal-focus-subgraph-entry-state entry)
+                                                   ,(c-modal-focus-subgraph-entry-state-index entry)
+                                                   ,(c-modal-focus-subgraph-entry-restore-event-slot entry)
+                                                   ',(c-modal-focus-subgraph-entry-focus-event-slots entry)
+                                                   ',(c-modal-focus-subgraph-entry-next-slots entry)
+                                                   ',(c-modal-focus-subgraph-entry-previous-slots entry)
+                                                   ',(c-modal-focus-subgraph-entry-allowed-event-slots entry)
+                                                   ',(c-modal-focus-subgraph-entry-tile-ids entry)))))))
+
   (define (overlay-state-plan->datum plan)
     (if (not plan)
         '#f
@@ -6955,8 +7095,9 @@ scene-glyph-draw-packets
                     [ROUNDED-SURFACES (datum-stx stx (rounded-surface-plan->datum rounded-surfaces))]
                     [SHADOW-SURFACES (datum-stx stx (shadow-surface-plan->datum shadow-surfaces))]
                     [NAVIGATION-SELECTION (datum-stx stx '#f)]
-                   [OVERLAY-STATE (datum-stx stx '#f)])
-       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE #f))]
+                   [OVERLAY-STATE (datum-stx stx '#f)]
+                   [MODAL-FOCUS-SUBGRAPH (datum-stx stx '#f)])
+       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE #f MODAL-FOCUS-SUBGRAPH #f))]
     [(_ root:expr extra:expr ...)
      (raise-syntax-error 'ui "expects exactly one root layout node" stx)]))
 
@@ -7098,6 +7239,8 @@ scene-glyph-draw-packets
        (compile-navigation-selection-plan root-node layouts states actions action-indexes annotated-schedule))
      (define overlay-state-plan
        (compile-overlay-state-plan root-node layouts glyph-placements states actions events render-schedules action-indexes))
+     (define modal-focus-subgraph-plan
+       (compile-modal-focus-subgraph-plan root-node overlay-state-plan events))
      (with-syntax ([ROOT (datum-stx stx (node->datum root-node))]
                    [STATIC (datum-stx stx (- total dynamic))]
                    [DYNAMIC (datum-stx stx dynamic)]
@@ -7138,7 +7281,9 @@ scene-glyph-draw-packets
                      [SHADOW-SURFACES (datum-stx stx (shadow-surface-plan->datum shadow-surfaces))]
                      [NAVIGATION-SELECTION (datum-stx stx (navigation-selection-plan->datum navigation-selection-plan))]
                      [OVERLAY-STATE (datum-stx stx (overlay-state-plan->datum overlay-state-plan))]
-                     [OVERLAY-STATE-REQUIRED (datum-stx stx (and overlay-state-plan #t))])
+                     [OVERLAY-STATE-REQUIRED (datum-stx stx (and overlay-state-plan #t))]
+                     [MODAL-FOCUS-SUBGRAPH (datum-stx stx (modal-focus-subgraph-plan->datum modal-focus-subgraph-plan))]
+                     [MODAL-FOCUS-REQUIRED (datum-stx stx (and modal-focus-subgraph-plan #t))])
        #'(begin
-           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE OVERLAY-STATE-REQUIRED))
+           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE OVERLAY-STATE-REQUIRED MODAL-FOCUS-SUBGRAPH MODAL-FOCUS-REQUIRED))
            (provide app-scene)))]))

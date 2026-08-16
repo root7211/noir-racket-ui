@@ -54,6 +54,8 @@ const NAVIGATION_SELECTION_PLAN_ABI_SCHEMA: &str = "noir-navigation-selection-pl
 const NAVIGATION_SELECTION_PLAN_ABI_REVISION: u32 = 1;
 const OVERLAY_STATE_PLAN_ABI_SCHEMA: &str = "noir-overlay-state-plan-v1";
 const OVERLAY_STATE_PLAN_ABI_REVISION: u32 = 1;
+const MODAL_FOCUS_SUBGRAPH_ABI_SCHEMA: &str = "noir-modal-focus-subgraph-v1";
+const MODAL_FOCUS_SUBGRAPH_ABI_REVISION: u32 = 1;
 
 #[derive(Debug, Deserialize)]
 struct Scene {
@@ -107,6 +109,10 @@ struct Scene {
     // Explicit compiler marker: ordinary static overlay primitives remain compatible;
     // only a lowered material-overlay-state may require the v1 transition plan.
     overlay_state_required: bool,
+    #[serde(deserialize_with = "deserialize_modal_focus_subgraph_plan_option")]
+    modal_focus_subgraph_plan: Option<ModalFocusSubgraphPlan>,
+    #[serde(default)]
+    modal_focus_subgraph_required: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -126,6 +132,7 @@ struct AbiContracts {
     shadow_surface_plan: AbiContract,
     navigation_selection_plan: AbiContract,
     overlay_state_plan: AbiContract,
+    modal_focus_subgraph: AbiContract,
 }
 
 #[derive(Debug, Deserialize)]
@@ -273,6 +280,38 @@ where D: Deserializer<'de> {
         OverlayStatePlanWire::Plan(plan) => Ok(Some(plan)),
         OverlayStatePlanWire::Disabled(false) => Ok(None),
         OverlayStatePlanWire::Disabled(true) => Err(serde::de::Error::custom("overlay_state_plan may be an object or false, never true")),
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct ModalFocusSubgraphEntry {
+    id: String,
+    state: String,
+    state_index: usize,
+    restore_event_slot: usize,
+    focus_event_slots: Vec<usize>,
+    next_slots: Vec<usize>,
+    previous_slots: Vec<usize>,
+    allowed_event_slots: Vec<usize>,
+    tile_ids: Vec<usize>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct ModalFocusSubgraphPlan {
+    abi_schema: String,
+    abi_revision: u32,
+    entries: Vec<ModalFocusSubgraphEntry>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ModalFocusSubgraphPlanWire { Plan(ModalFocusSubgraphPlan), Disabled(bool) }
+fn deserialize_modal_focus_subgraph_plan_option<'de, D>(deserializer: D) -> std::result::Result<Option<ModalFocusSubgraphPlan>, D::Error>
+where D: Deserializer<'de> {
+    match ModalFocusSubgraphPlanWire::deserialize(deserializer)? {
+        ModalFocusSubgraphPlanWire::Plan(plan) => Ok(Some(plan)),
+        ModalFocusSubgraphPlanWire::Disabled(false) => Ok(None),
+        ModalFocusSubgraphPlanWire::Disabled(true) => Err(serde::de::Error::custom("modal_focus_subgraph_plan may be an object or false, never true")),
     }
 }
 
@@ -647,6 +686,22 @@ struct CompiledOverlayStateEntry {
 
 #[derive(Clone, Debug)]
 struct CompiledOverlayStatePlan { entries: Vec<CompiledOverlayStateEntry> }
+
+#[derive(Clone, Debug)]
+struct CompiledModalFocusSubgraphEntry {
+    id: String,
+    state_index: usize,
+    restore_event_slot: usize,
+    focus_event_slots: Vec<usize>,
+    next_slots: Vec<usize>,
+    previous_slots: Vec<usize>,
+    allowed_event_slots: Vec<usize>,
+    tile_mask: u64,
+    current_index: usize,
+}
+
+#[derive(Clone, Debug)]
+struct CompiledModalFocusSubgraphPlan { entries: Vec<CompiledModalFocusSubgraphEntry> }
 
 #[derive(Clone, Debug, Deserialize)]
 struct LogAppendUpdate { index: usize, value: String }
@@ -1738,6 +1793,7 @@ struct Host {
     list_navigation_plans: Vec<CompiledListNavigationPlan>,
     navigation_selection_plan: Option<CompiledNavigationSelectionPlan>,
     overlay_state_plan: Option<CompiledOverlayStatePlan>,
+    modal_focus_subgraph_plan: Option<CompiledModalFocusSubgraphPlan>,
     log_browser_plans: Vec<CompiledLogBrowserPlan>,
     log_levels: Vec<Vec<LogLevel>>,
     // Registered v1 fontc atlases. They deliberately remain separate from legacy
@@ -1887,6 +1943,7 @@ impl Host {
         let glyph_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("noir-placement-glyph-id-storage"), contents: &glyph_bytes, usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST });
         let mut placements = placement_instances(&scene)?;
         let overlay_state_plan = compiler_overlay_state_plan(&scene, &state_slot_ids, &action_slot_ids, &action_tile_masks, &packet_worklists, &instances, &placements)?;
+        let modal_focus_subgraph_plan = compiler_modal_focus_subgraph_plan(&scene, &state_slot_ids, &overlay_state_plan, &event_tile_masks)?;
         if let Some(plan) = &overlay_state_plan {
             for entry in &plan.entries {
                 if state_slot_values[entry.state_index] == 0 {
@@ -1941,7 +1998,7 @@ impl Host {
         let initial_glyph_bytes = glyph_bytes.clone();
         let virtual_list_count = virtual_lists.len();
         let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, canvas_width: visual_canvas.width, canvas_height: visual_canvas.height, canvas_margin: visual_canvas.margin, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, rounded_surface_bind_group, _rounded_surface_buffer: rounded_surface_buffer, shadow_pipeline, shadow_surface_bind_group, shadow_instance_buffer, shadow_instance_count, shadow_instances: shadow_instance_upload, _shadow_surface_buffer: shadow_surface_buffer, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group,
- cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, release_tracks, active_release_tracks: Vec::new(), virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, navigation_selection_plan, overlay_state_plan, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
+ cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, release_tracks, active_release_tracks: Vec::new(), virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, navigation_selection_plan, overlay_state_plan, modal_focus_subgraph_plan, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
         host.sync_focus_visuals();
         host.execute_scene_data_update_batches()?;
         host.redraw_canvas_full();
@@ -2436,8 +2493,49 @@ impl Host {
             self.queue.write_buffer(&self.shadow_instance_buffer, (shadow_index * std::mem::size_of::<QuadInstance>() + 28) as u64, bytemuck::bytes_of(&value));
         }
         self.enqueue_render(RenderRequest::no_packets(entry.tile_mask), "overlay-state");
+        self.modal_focus_overlay_transition(&entry.id, visible);
         println!("overlay-state: id={} action={} visible={} quad-alpha-patches={} glyph-alpha-patches={} tile-mask=0x{:016x} worklist=no-packets",
                  entry.id, action, visible, entry.instance_offsets.len(), entry.glyph_slots.len(), entry.tile_mask);
+        true
+    }
+
+    fn modal_focus_overlay_transition(&mut self, overlay_id: &str, visible: bool) {
+        let Some(plan) = self.modal_focus_subgraph_plan.as_mut() else { return; };
+        let Some(entry) = plan.entries.iter_mut().find(|entry| entry.id == overlay_id) else { return; };
+        if visible {
+            entry.current_index = 0;
+            println!("modal-focus: overlay={} transition=open focus-event-slot={} tile-mask=0x{:016x}",
+                     entry.id, entry.focus_event_slots[entry.current_index], entry.tile_mask);
+        } else {
+            println!("modal-focus: overlay={} transition=close restore-event-slot={} background-isolated=false",
+                     entry.id, entry.restore_event_slot);
+        }
+    }
+
+    fn modal_focus_tab(&mut self, backward: bool) -> bool {
+        let Some(plan) = self.modal_focus_subgraph_plan.as_mut() else { return false; };
+        let Some(entry) = plan.entries.iter_mut().find(|entry| self.state_slot_values.get(entry.state_index).copied() == Some(1)) else { return false; };
+        let current_slot = entry.focus_event_slots[entry.current_index];
+        let next_slot = if backward { entry.previous_slots[entry.current_index] } else { entry.next_slots[entry.current_index] };
+        let next_index = entry.focus_event_slots.iter().position(|slot| *slot == next_slot)
+            .expect("compiler modal focus ring has admitted next slot");
+        entry.current_index = next_index;
+        println!("modal-focus: overlay={} key={} from-event-slot={} to-event-slot={} allowed={:?} tile-mask=0x{:016x}",
+                 entry.id, if backward { "shift-tab" } else { "tab" }, current_slot, next_slot,
+                 entry.allowed_event_slots, entry.tile_mask);
+        true
+    }
+
+    fn modal_focus_activate(&mut self) -> bool {
+        let Some(plan) = self.modal_focus_subgraph_plan.clone() else { return false; };
+        let Some(entry) = plan.entries.iter().find(|entry| self.state_slot_values.get(entry.state_index).copied() == Some(1)) else { return false; };
+        let event_slot = entry.focus_event_slots[entry.current_index];
+        assert!(entry.allowed_event_slots.contains(&event_slot),
+                "compiler-admitted modal focus current event slot escaped fixed allowed set");
+        let batch_id = self.event_batch_ids[event_slot].activate.clone();
+        self.dispatch_compiler_batch(&batch_id);
+        let closed = self.apply_overlay_state(event_slot);
+        println!("modal-focus: overlay={} key=enter event-slot={} close-transition={}", entry.id, event_slot, closed);
         true
     }
 
@@ -4687,7 +4785,12 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
                     "unsupported navigation_selection_plan ABI {}@{}; expected {}@{}",
                     scene.abi_contracts.navigation_selection_plan.schema, scene.abi_contracts.navigation_selection_plan.revision,
                     NAVIGATION_SELECTION_PLAN_ABI_SCHEMA, NAVIGATION_SELECTION_PLAN_ABI_REVISION);
-    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} rounded-surface={}@{} shadow-surface={}@{} navigation-selection={}@{} frozen",
+    anyhow::ensure!(scene.abi_contracts.modal_focus_subgraph.schema == MODAL_FOCUS_SUBGRAPH_ABI_SCHEMA
+                    && scene.abi_contracts.modal_focus_subgraph.revision == MODAL_FOCUS_SUBGRAPH_ABI_REVISION,
+                    "unsupported modal_focus_subgraph ABI {}@{}; expected {}@{}",
+                    scene.abi_contracts.modal_focus_subgraph.schema, scene.abi_contracts.modal_focus_subgraph.revision,
+                    MODAL_FOCUS_SUBGRAPH_ABI_SCHEMA, MODAL_FOCUS_SUBGRAPH_ABI_REVISION);
+    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} rounded-surface={}@{} shadow-surface={}@{} navigation-selection={}@{} modal-focus={}@{} frozen",
              scene.abi_contracts.virtual_list_plan.schema, scene.abi_contracts.virtual_list_plan.revision,
              scene.abi_contracts.row_activation_plan.schema, scene.abi_contracts.row_activation_plan.revision,
              scene.abi_contracts.scrollbar_plan.schema, scene.abi_contracts.scrollbar_plan.revision,
@@ -4699,7 +4802,8 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
              scene.abi_contracts.visual_language_plan.schema, scene.abi_contracts.visual_language_plan.revision,
              scene.abi_contracts.rounded_surface_plan.schema, scene.abi_contracts.rounded_surface_plan.revision,
              scene.abi_contracts.shadow_surface_plan.schema, scene.abi_contracts.shadow_surface_plan.revision,
-             scene.abi_contracts.navigation_selection_plan.schema, scene.abi_contracts.navigation_selection_plan.revision);
+             scene.abi_contracts.navigation_selection_plan.schema, scene.abi_contracts.navigation_selection_plan.revision,
+             scene.abi_contracts.modal_focus_subgraph.schema, scene.abi_contracts.modal_focus_subgraph.revision);
     Ok(())
 }
 
@@ -5395,6 +5499,77 @@ fn compiler_overlay_state_plan(
     println!("compiler overlay state: v1 entries={} fixed-alpha-lanes={} no-packets", compiled.len(),
              compiled.iter().map(|entry| entry.instance_offsets.len() + entry.glyph_slots.len()).sum::<usize>());
     Ok(Some(CompiledOverlayStatePlan { entries: compiled }))
+}
+
+fn compiler_modal_focus_subgraph_plan(
+    scene: &Scene,
+    state_slot_ids: &[String],
+    overlay_state_plan: &Option<CompiledOverlayStatePlan>,
+    event_tile_masks: &[EventTileMasks],
+) -> Result<Option<CompiledModalFocusSubgraphPlan>> {
+    let Some(plan) = &scene.modal_focus_subgraph_plan else {
+        anyhow::ensure!(!scene.modal_focus_subgraph_required,
+                        "Scene marked modal_focus_subgraph_required may not disable modal_focus_subgraph_plan v1");
+        println!("compiler modal focus: disabled entries=0");
+        return Ok(None);
+    };
+    anyhow::ensure!(plan.abi_schema == MODAL_FOCUS_SUBGRAPH_ABI_SCHEMA && plan.abi_revision == MODAL_FOCUS_SUBGRAPH_ABI_REVISION,
+                    "modal focus has unsupported ABI {}@{}", plan.abi_schema, plan.abi_revision);
+    let overlay_plan = overlay_state_plan.as_ref().context("modal focus requires an admitted overlay_state_plan")?;
+    anyhow::ensure!(!plan.entries.is_empty(), "modal focus plan may not be empty");
+    let mut seen_ids = HashSet::new();
+    let mut compiled = Vec::with_capacity(plan.entries.len());
+    for entry in &plan.entries {
+        anyhow::ensure!(seen_ids.insert(entry.id.as_str()), "modal focus has duplicate overlay id {}", entry.id);
+        anyhow::ensure!(entry.state_index < state_slot_ids.len() && state_slot_ids[entry.state_index] == entry.state,
+                        "modal focus {} has invalid state slot", entry.id);
+        let overlay = overlay_plan.entries.iter().find(|candidate| candidate.id == entry.id)
+            .with_context(|| format!("modal focus {} lacks admitted overlay state entry", entry.id))?;
+        anyhow::ensure!(overlay.state_index == entry.state_index,
+                        "modal focus {} state slot disagrees with overlay state plan", entry.id);
+        let restore_event = scene.event_map.get(entry.restore_event_slot)
+            .with_context(|| format!("modal focus {} restore event slot is absent", entry.id))?;
+        anyhow::ensure!(restore_event._action.as_deref() == Some(overlay.open_action.as_str())
+                        && overlay.event_slots.contains(&entry.restore_event_slot),
+                        "modal focus {} restore event is not the unique admitted open action", entry.id);
+        let count = entry.focus_event_slots.len();
+        anyhow::ensure!((2..=6).contains(&count)
+                        && entry.next_slots.len() == count && entry.previous_slots.len() == count
+                        && entry.focus_event_slots.iter().collect::<HashSet<_>>().len() == count,
+                        "modal focus {} must have a unique 2..6 event Tab ring", entry.id);
+        let mut expected_allowed = overlay.event_slots.iter().copied()
+            .filter(|slot| scene.event_map.get(*slot).and_then(|event| event._action.as_ref())
+                    .is_some_and(|action| overlay.close_actions.contains(action)))
+            .collect::<Vec<_>>();
+        expected_allowed.sort_unstable();
+        for (index, &slot) in entry.focus_event_slots.iter().enumerate() {
+            let event = scene.event_map.get(slot)
+                .with_context(|| format!("modal focus {} target slot {} is absent", entry.id, slot))?;
+            anyhow::ensure!(overlay.event_slots.contains(&slot)
+                            && event._action.as_ref().is_some_and(|action| overlay.close_actions.contains(action)),
+                            "modal focus {} target slot {} escapes the overlay close-event set", entry.id, slot);
+            anyhow::ensure!(entry.next_slots[index] == entry.focus_event_slots[(index + 1) % count]
+                            && entry.previous_slots[index] == entry.focus_event_slots[(index + count - 1) % count],
+                            "modal focus {} target slot {} has a noncanonical Tab ring edge", entry.id, slot);
+            let masks = event_tile_masks.get(slot).with_context(|| format!("modal focus {} target slot {} lacks tile mask", entry.id, slot))?;
+            anyhow::ensure!(masks.release == overlay.tile_mask,
+                            "modal focus {} target slot {} widened local tile scope", entry.id, slot);
+        }
+        anyhow::ensure!(entry.allowed_event_slots == expected_allowed,
+                        "modal focus {} allowed event set must equal its fixed Tab targets", entry.id);
+        let tile_mask = tile_mask(&entry.tile_ids, scene.render_schedules[0].tiles.len(), &format!("modal focus {}", entry.id))?;
+        anyhow::ensure!(tile_mask == overlay.tile_mask,
+                        "modal focus {} tile mask disagrees with overlay state plan", entry.id);
+        compiled.push(CompiledModalFocusSubgraphEntry {
+            id: entry.id.clone(), state_index: entry.state_index, restore_event_slot: entry.restore_event_slot,
+            focus_event_slots: entry.focus_event_slots.clone(), next_slots: entry.next_slots.clone(),
+            previous_slots: entry.previous_slots.clone(), allowed_event_slots: entry.allowed_event_slots.clone(),
+            tile_mask, current_index: 0,
+        });
+    }
+    println!("compiler modal focus: v1 entries={} fixed-tab-targets={} background-isolated no-packets",
+             compiled.len(), compiled.iter().map(|entry| entry.focus_event_slots.len()).sum::<usize>());
+    Ok(Some(CompiledModalFocusSubgraphPlan { entries: compiled }))
 }
 
 fn compiler_release_motion_tracks(scene: &Scene, event_tile_masks: &[EventTileMasks]) -> Result<Vec<CompiledReleaseTrack>> {
@@ -6773,7 +6948,7 @@ fn main() -> Result<()> {
                 }
                 WindowEvent::KeyboardInput { event, .. }
                     if event.state == ElementState::Pressed && matches!(event.logical_key, Key::Named(NamedKey::Tab)) => {
-                    host.focus_tab(host.modifiers.shift_key());
+                    if !host.modal_focus_tab(host.modifiers.shift_key()) { host.focus_tab(host.modifiers.shift_key()); }
                     host.window.request_redraw();
                 }
                 WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed && matches!(event.logical_key, Key::Named(NamedKey::ArrowUp)) => {
@@ -6801,7 +6976,7 @@ fn main() -> Result<()> {
                         host.keyboard_transition(key_index);
                         host.window.request_redraw();
                     } else if matches!(event.logical_key, Key::Named(NamedKey::Enter)) {
-                        if !host.activate_selected_list_row() { host.keyboard_command(KeyboardCommandKey::Enter); }
+                        if !host.modal_focus_activate() && !host.activate_selected_list_row() { host.keyboard_command(KeyboardCommandKey::Enter); }
                         host.window.request_redraw();
                     } else if matches!(event.logical_key, Key::Named(NamedKey::Escape)) {
                         if !host.dismiss_active_overlay_with_escape() {

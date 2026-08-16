@@ -35,6 +35,7 @@
    (material-overlay-state #:id deployment-overlay #:state overlay-visible #:initial 0
                            #:open-on overlay-open
                            #:close-on (overlay-confirm overlay-dismiss overlay-pin overlay-copy overlay-export)
+                           #:modal-focus (deployment-confirm deployment-dismiss menu-pin menu-copy menu-export)
      (material-dialog #:id deployment-dialog #:scrim-id deployment-scrim
                       #:title-id deployment-dialog-title #:body-id deployment-dialog-body
                       #:confirm-id deployment-confirm #:dismiss-id deployment-dismiss

@@ -118,15 +118,18 @@ page-2比例字体的glyph placement现使用共享typographic line top并仅应
 
 `overlay_state_plan v1` 进一步让受限dialog/menu成为可开关组件：`material-overlay-state` 在展开期冻结一个0/1 state slot、唯一open action、有限close action、所有quad/glyph/shadow alpha地址以及唯一local tile。初始关闭、open、Escape、scrim、confirm与menu item关闭均只走这张固定转换表；运行时没有创建overlay、自由定位、reflow或通用弹层管理器。`initial`、`offset`、`tile`和`disable`篡改在启动期拒绝，且普通静态overlay不受状态计划门禁影响。
 
+`modal_focus_subgraph v1` 将已打开overlay的键盘语义冻结为独立Scene计划：唯一open恢复event、2–6个字面声明顺序的Tab目标、canonical正/反向环、scrim pointer允许集与唯一local tile。打开后Tab/Shift+Tab只能访问该环，Enter只会激活当前固定close target，Escape沿既有close action关闭并恢复预声明open控制上下文；背景Focus Graph、列表与keyboard command路径不参与modal按键分发。该实现不搜索组件树，不做运行时focus discovery。
+
 ```bash
 bash tools/verify_navigation_selection_plan.sh
 bash tools/verify_material_dialog_menu_v1.sh
 bash tools/verify_material_icon_assets_v1.sh
 bash tools/verify_release_motion_v1.sh
 bash tools/verify_overlay_state_plan.sh
+bash tools/verify_modal_focus_subgraph_v1.sh
 ```
 
-真实X11/Vulkan证据包括[导航Overview→Systems](out/material-profile-navigation-v1.scene.json)、[dialog/menu截图](out/material-overlay-showcase-v1.png)、[overlay状态三端点对照](out/material-overlay-state-v1-comparison.png)、[icon审阅记录](out/material_icon_visual_review.txt)与[release motion审阅记录](out/release_motion_visual_review.txt)。`overlay_state_plan v1`的完整合同与交付记录见[ABI规范](OVERLAY_STATE_PLAN_ABI_V1.md)和[交付报告](OVERLAY_STATE_PLAN_V1_REPORT.md)。
+真实X11/Vulkan证据包括[导航Overview→Systems](out/material-profile-navigation-v1.scene.json)、[dialog/menu截图](out/material-overlay-showcase-v1.png)、[overlay状态三端点对照](out/material-overlay-state-v1-comparison.png)、[icon审阅记录](out/material_icon_visual_review.txt)与[release motion审阅记录](out/release_motion_visual_review.txt)。`overlay_state_plan v1`的完整合同与交付记录见[ABI规范](OVERLAY_STATE_PLAN_ABI_V1.md)和[交付报告](OVERLAY_STATE_PLAN_V1_REPORT.md)；modal焦点的固定状态机、攻击拒绝与真实键盘验证见[ABI规范](MODAL_FOCUS_SUBGRAPH_ABI_V1.md)和[交付报告](MODAL_FOCUS_SUBGRAPH_V1_REPORT.md)。
 
 ## 真实GPU组件性能矩阵 v1
 
@@ -176,7 +179,7 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `examples/log-browser.rkt` | 10,000条固定容量日志浏览器：four-column row、tail append、详情与长列表交互。 |
 | `examples/realtime-monitor.rkt` | 10,000条实时监控表格：数值data-register、可见性分流、状态色与比例字体chrome。 |
 | `examples/material-profile-dashboard.rkt` | Material Profile桌面示例：静态rail、navigation selection、closed-domain icon、small app bar、rounded/shadow card与fixed filled button。 |
-| `examples/material-overlay-showcase.rkt` | 可开关的受限Material dialog/menu示例：固定scrim、dialog、menu、closed-domain icon、open/close状态转换与release motion。 |
+| `examples/material-overlay-showcase.rkt` | 可开关的受限Material dialog/menu示例：固定scrim、dialog、menu、closed-domain icon、open/close状态转换、release motion与编译期modal Tab子图。 |
 | `tools/verify_log_browser.sh` | 真实X11/Vulkan日志工作流与log-browser ABI篡改回归。 |
 | `tools/verify_realtime_monitor.sh` | 实时监控表格的真实X11/Vulkan、glyph-domain篡改、可见性分流与键鼠回归。 |
 | `tools/verify_desktop_component_macros.sh` | 编译期组件宏与手写primitive Scene等价性回归。 |
@@ -193,6 +196,9 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/verify_overlay_state_plan.sh` | 受限dialog/menu的open、Escape、scrim、confirm/menu close、四类Scene篡改拒绝与真实X11/Vulkan回归。 |
 | `tools/verify_overlay_state_plan.py` | overlay状态的0/1转换、固定alpha地址、glyph/shadow范围、事件和tile结构oracle。 |
 | `tools/mutate_overlay_state_scene.py` | 生成initial、offset、tile和disable四类overlay状态攻击Scene。 |
+| `tools/verify_modal_focus_subgraph_v1.sh` | modal焦点的Racket/Rust、真实X11 Tab/Shift+Tab/Enter/Escape、背景隔离和四类篡改拒绝回归。 |
+| `tools/verify_modal_focus_subgraph_v1.py` | modal焦点恢复event、声明顺序Tab环、scrim允许集、背景隔离与local tile结构oracle。 |
+| `tools/mutate_modal_focus_subgraph_scene.py` | 生成Tab边、允许event、tile与disable四类modal焦点攻击Scene。 |
 | `tools/make_overlay_state_v1_comparison.py` | 将关闭、打开与Escape关闭的真实X11/Vulkan端点生成审阅对照板。 |
 | `tools/run_real_gpu_component_matrix_v1.sh` | 拒绝CPU Vulkan后采集Material dashboard/overlay compiler-selected GPU timestamp矩阵。 |
 | `tools/analyze_real_gpu_component_matrix_v1.py` | 审计真实GPU矩阵的适配器一致性、timestamp/self-consistency门禁并生成汇总与图表。 |
