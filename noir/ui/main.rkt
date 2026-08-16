@@ -4049,13 +4049,21 @@ scene-glyph-draw-packets
                           [line-scale (* font-scale
                                          (/ (* (second run-size) 0.72)
                                             (c-font-asset-plan-line-height asset)))]
-                          [baseline-y (+ (second run-pos)
-                                         (* (second run-size) 0.14)
-                                         (* line-scale (- (c-font-asset-plan-line-height asset)
-                                                          (c-font-asset-plan-pixel-size asset)
-                                                          (c-font-glyph-bearing-y font-glyph))))]
+                          ;; The run anchor is a shared lower-left NDC reference. fontc stores
+                          ;; Pillow's `bearing_y = -bbox.top`, while this shader interprets `pos`
+                          ;; as the glyph quad's lower-left corner. Therefore the glyph lower edge
+                          ;; is offset by `bbox.bottom = height - bearing_y`, exactly once. Earlier
+                          ;; variants either cancelled bearing (equal top edges) or omitted height
+                          ;; (moving whole glyphs above the line).
+                          [line-anchor-y (+ (second run-pos)
+                                            (* (second run-size) 0.14)
+                                            (* line-scale (- (c-font-asset-plan-line-height asset)
+                                                             (c-font-asset-plan-pixel-size asset))))]
                           [x (+ start-x (* prefix line-scale) (* (c-font-glyph-bearing-x font-glyph) line-scale))]
-                          [y (+ baseline-y (* (c-font-glyph-bearing-y font-glyph) line-scale))])
+                          [y (- line-anchor-y
+                                (* (- (c-font-glyph-height font-glyph)
+                                      (c-font-glyph-bearing-y font-glyph))
+                                   line-scale))])
                      (values (list x y)
                              (list (* (c-font-glyph-width font-glyph) line-scale)
                                    (* (c-font-glyph-height font-glyph) line-scale))))]

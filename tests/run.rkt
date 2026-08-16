@@ -105,6 +105,18 @@
 (define material-rounded-json (hash-ref material-scene-json 'rounded_surface_plan))
 (check-equal? (hash-ref material-rounded-json 'abi_schema) "noir-rounded-surface-plan-v1")
 (check-true (>= (length (hash-ref material-rounded-json 'surfaces)) 6))
+;; `GlyphPlacementInstance.ndc_pos` is the WGSL quad lower-left corner. In the
+;; static `Service health` fixture all non-space glyphs are non-descenders, so their
+;; lower edges (not their tops) must share one baseline despite x-height differences.
+(define material-summary-title-glyphs
+  (filter (lambda (placement) (eq? (glyph-placement-node placement) 'material-summary-title))
+          (scene-glyph-placement-plan material-profile-app-scene)))
+(define material-summary-baselines
+  (for/list ([placement (in-list material-summary-title-glyphs)]
+             #:unless (= (glyph-placement-glyph-index placement) 7))
+    (second (glyph-placement-ndc-pos placement))))
+(for ([baseline (in-list (rest material-summary-baselines))])
+  (check-within baseline (first material-summary-baselines) 1e-10))
 
 ;; Static repeater oracle: the datum table produces four distinct base card subtrees. Its
 ;; collection cardinality enters every existing static resource plan; no runtime list/key exists.

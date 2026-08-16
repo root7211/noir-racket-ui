@@ -94,6 +94,8 @@ bash tools/verify_material_profile_v1.sh
 
 该入口覆盖Racket全量回归、primitive-only Scene oracle、未声明active destination/错误destination数量/theme-profile混用三类宏展开拒绝、Rust 1.87/wgpu 30 build、真实X11/Vulkan渲染与按钮交互。规范、token映射、性能边界和官方资料见[Material Profile v1](MATERIAL_PROFILE_V1.md)及[交付报告](MATERIAL_PROFILE_V1_REPORT.md)；真实输出见[Material Profile截图](out/material-profile-dashboard-v1.png)。
 
+page-2比例字体的glyph placement现使用共享typographic line top并仅应用一次manifest bearing：小写x-height、ascender和descender不再被强行顶边对齐。该修复不修改atlas、glyph ID、GPU ABI或运行时写入路径；详细数学、结构oracle、真实验证与前后对照见[Font Baseline Fix v1报告](FONT_BASELINE_FIX_V1_REPORT.md)及[真实帧对照](out/material-profile-baseline-before-after.png)。
+
 ## 桌面组件宏 v1
 
 Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`detail-panel`是**编译期语法压缩**，而不是运行时组件对象。宏展开后只剩已有的`column`、`stack`、`text`和`button`，并保留调用者明确给出的detail、button和label ID。因此已有state slot、font placement、event map、tile和worklist无需增加组件分支。
@@ -141,6 +143,7 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/mutate_rounded_surface_scene.py` | 生成radius、offset、geometry和disable四类精确Scene攻击样本。 |
 | `tools/verify_material_profile_v1.sh` | Material Profile v1的静态Scene oracle、宏输入拒绝、Rust构建与真实X11/Vulkan交互回归。 |
 | `tools/verify_material_profile_v1.py` | Material Profile v1的primitive-only lowering、fixed canvas、rounded metadata、action/state/glyph结构oracle。 |
+| `tools/make_font_baseline_comparison.py` | 从修复前后真实X11/Vulkan帧生成page-2小写baseline对照图。 |
 | `tools/make_visual_language_v2_comparison.py` | 从同分辨率真实帧确定性生成视觉v1/v2前后对照图。 |
 | `tools/make_rounded_surface_v3_comparison.py` | 从同分辨率真实帧确定性生成rounded surface v2/v3前后对照图。 |
 | `tools/verify_tabular_body_font.sh` | 受限tabular正文face的确定性、闭域、固定advance与语料覆盖回归。 |
