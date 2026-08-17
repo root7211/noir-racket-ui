@@ -179,7 +179,7 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `examples/log-browser.rkt` | 10,000条固定容量日志浏览器：four-column row、tail append、详情与长列表交互。 |
 | `examples/realtime-monitor.rkt` | 10,000条实时监控表格：数值data-register、可见性分流、状态色与比例字体chrome。 |
 | `examples/material-profile-dashboard.rkt` | Material Profile桌面示例：静态rail、navigation selection、closed-domain icon、small app bar、rounded/shadow card与fixed filled button。 |
-| `examples/material-overlay-showcase.rkt` | 可开关的受限Material dialog/menu示例：固定scrim、dialog、menu、closed-domain icon、open/close状态转换、release motion与编译期modal Tab子图。 |
+| `examples/material-overlay-showcase.rkt` | 可开关的受限Material dialog/menu示例：固定scrim、dialog、menu、closed-domain icon、open/close状态转换、release motion、编译期modal Tab子图与预分配的圆角focus-ring。 |
 | `tools/verify_log_browser.sh` | 真实X11/Vulkan日志工作流与log-browser ABI篡改回归。 |
 | `tools/verify_realtime_monitor.sh` | 实时监控表格的真实X11/Vulkan、glyph-domain篡改、可见性分流与键鼠回归。 |
 | `tools/verify_desktop_component_macros.sh` | 编译期组件宏与手写primitive Scene等价性回归。 |
@@ -199,6 +199,11 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/verify_modal_focus_subgraph_v1.sh` | modal焦点的Racket/Rust、真实X11 Tab/Shift+Tab/Enter/Escape、背景隔离和四类篡改拒绝回归。 |
 | `tools/verify_modal_focus_subgraph_v1.py` | modal焦点恢复event、声明顺序Tab环、scrim允许集、背景隔离与local tile结构oracle。 |
 | `tools/mutate_modal_focus_subgraph_scene.py` | 生成Tab边、允许event、tile与disable四类modal焦点攻击Scene。 |
+| `tools/verify_modal_focus_visual_plan_v1.sh` | modal focus visual v1的一键Racket/Rust、Scene oracle、真实X11/Vulkan截图、Tab/Shift+Tab/Enter/Escape、四类篡改拒绝与rounded双应用兼容回归。 |
+| `tools/verify_modal_focus_visual_plan_v1.py` | 固定focus-ring条目、event slot、44-byte源地址、halo几何、SDF配方与tile范围的Scene结构oracle。 |
+| `tools/mutate_modal_focus_visual_scene.py` | 生成source、geometry、tile和disable四类focus视觉攻击Scene。 |
+| `MODAL_FOCUS_VISUAL_PLAN_ABI_V1.md` | 预分配modal focus ring的Scene ABI、启动期proof、GPU metadata与固定alpha写集规范。 |
+| `MODAL_FOCUS_VISUAL_PLAN_V1_REPORT.md` | focus视觉交付结果、真实X11/Vulkan截图证据、篡改拒绝与兼容回归报告。 |
 | `tools/make_overlay_state_v1_comparison.py` | 将关闭、打开与Escape关闭的真实X11/Vulkan端点生成审阅对照板。 |
 | `tools/run_real_gpu_component_matrix_v1.sh` | 拒绝CPU Vulkan后采集Material dashboard/overlay compiler-selected GPU timestamp矩阵。 |
 | `tools/analyze_real_gpu_component_matrix_v1.py` | 审计真实GPU矩阵的适配器一致性、timestamp/self-consistency门禁并生成汇总与图表。 |

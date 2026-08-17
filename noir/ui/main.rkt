@@ -59,6 +59,8 @@ scene-glyph-draw-packets
          scene-overlay-state-plan
          scene-modal-focus-subgraph-plan
          scene-modal-focus-subgraph-required?
+         scene-modal-focus-visual-plan
+         scene-modal-focus-visual-required?
          (struct-out navigation-selection-entry)
          (struct-out navigation-selection-plan)
          (struct-out shadow-surface)
@@ -66,6 +68,8 @@ scene-glyph-draw-packets
          (struct-out overlay-state-entry)
          (struct-out modal-focus-subgraph-entry)
          (struct-out modal-focus-subgraph-plan)
+         (struct-out modal-focus-visual-entry)
+         (struct-out modal-focus-visual-plan)
          (struct-out virtual-list-plan)
          (struct-out log-browser-plan)
          (struct-out font-asset-plan)
@@ -157,6 +161,10 @@ scene-glyph-draw-packets
 ;; It has no runtime tree traversal, focus discovery or geometry query.
 (define modal-focus-subgraph-abi-schema "noir-modal-focus-subgraph-v1")
 (define modal-focus-subgraph-abi-revision 1)
+;; Focus visual is a parallel immutable ring table. It references only admitted
+;; modal Event Map slots and never adds runtime focus discovery or geometry work.
+(define modal-focus-visual-plan-abi-schema "noir-modal-focus-visual-plan-v1")
+(define modal-focus-visual-plan-abi-revision 1)
 
 (define (abi-contracts->jsexpr)
   (hash 'virtual_list_plan
@@ -200,12 +208,15 @@ scene-glyph-draw-packets
               'revision overlay-state-plan-abi-revision)
         'modal_focus_subgraph
         (hash 'schema modal-focus-subgraph-abi-schema
-              'revision modal-focus-subgraph-abi-revision)))
+              'revision modal-focus-subgraph-abi-revision)
+        'modal_focus_visual_plan
+        (hash 'schema modal-focus-visual-plan-abi-schema
+              'revision modal-focus-visual-plan-abi-revision)))
 
 (struct ui-node (tag id props children source) #:transparent)
 ;; Scene 以静态树和增量执行计划共同组成。state/actions 由 `noir-app`
 ;; 的扩展语法生成；普通 `(ui ...)` 保持空状态表，仍可独立使用。
-(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan navigation-selection-plan overlay-state-plan overlay-state-required? modal-focus-subgraph-plan modal-focus-subgraph-required?) #:transparent)
+(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan navigation-selection-plan overlay-state-plan overlay-state-required? modal-focus-subgraph-plan modal-focus-subgraph-required? modal-focus-visual-plan modal-focus-visual-required?) #:transparent)
 ;; state-slot 的 index 是所有 runtime state read/write 的唯一地址；id/initial 只保留为启动期 proof 与可审计导出。
 (struct state-slot (index id initial) #:transparent)
 ;; action-slot 与 state-slot 一样为 macro expansion 生成的 dense canonical address。
@@ -316,6 +327,10 @@ scene-glyph-draw-packets
 ;; external opener to re-focus after close; focus-event-slots form a cyclic Tab ring.
 (struct modal-focus-subgraph-entry (id state state-index restore-event-slot focus-event-slots next-slots previous-slots allowed-event-slots tile-ids) #:transparent)
 (struct modal-focus-subgraph-plan (entries) #:transparent)
+;; Each focus ring is an immutable rounded-outline recipe around one fixed modal
+;; event target. Host execution toggles only the ring's preallocated alpha field.
+(struct modal-focus-visual-entry (id focus-event-slot source-instance-offset x y width height radius-px thickness-px color tile-ids) #:transparent)
+(struct modal-focus-visual-plan (entries) #:transparent)
 
 (define (value->jsexpr v)
   (cond
@@ -947,6 +962,24 @@ scene-glyph-draw-packets
                      'allowed_event_slots (modal-focus-subgraph-entry-allowed-event-slots entry)
                      'tile_ids (modal-focus-subgraph-entry-tile-ids entry))))))
 
+(define (modal-focus-visual-plan->jsexpr plan)
+  (and plan
+       (hash 'abi_schema modal-focus-visual-plan-abi-schema
+             'abi_revision modal-focus-visual-plan-abi-revision
+             'entries
+             (for/list ([entry (in-list (modal-focus-visual-plan-entries plan))])
+               (hash 'id (symbol->string (modal-focus-visual-entry-id entry))
+                     'focus_event_slot (modal-focus-visual-entry-focus-event-slot entry)
+                     'source_instance_offset (modal-focus-visual-entry-source-instance-offset entry)
+                     'x (modal-focus-visual-entry-x entry)
+                     'y (modal-focus-visual-entry-y entry)
+                     'width (modal-focus-visual-entry-width entry)
+                     'height (modal-focus-visual-entry-height entry)
+                     'radius_px (modal-focus-visual-entry-radius-px entry)
+                     'thickness_px (modal-focus-visual-entry-thickness-px entry)
+                     'color (modal-focus-visual-entry-color entry)
+                     'tile_ids (modal-focus-visual-entry-tile-ids entry))))))
+
 (define (navigation-selection-plan->jsexpr plan)
   (and plan
        (hash 'abi_schema navigation-selection-plan-abi-schema
@@ -1014,6 +1047,8 @@ scene-glyph-draw-packets
         'overlay_state_required (scene-overlay-state-required? s)
         'modal_focus_subgraph_plan (modal-focus-subgraph-plan->jsexpr (scene-modal-focus-subgraph-plan s))
         'modal_focus_subgraph_required (scene-modal-focus-subgraph-required? s)
+        'modal_focus_visual_plan (modal-focus-visual-plan->jsexpr (scene-modal-focus-visual-plan s))
+        'modal_focus_visual_required (scene-modal-focus-visual-required? s)
         'text_field_visuals (text-field-visuals->jsexpr s)))
   (if build-attestation
       (hash-set base 'build_attestation (value->jsexpr build-attestation))
@@ -1111,6 +1146,10 @@ scene-glyph-draw-packets
   ;; not runtime-discovered focusable nodes.
   (struct c-modal-focus-subgraph-entry (id state state-index restore-event-slot focus-event-slots next-slots previous-slots allowed-event-slots tile-ids) #:transparent)
   (struct c-modal-focus-subgraph-plan (entries) #:transparent)
+  ;; Focus visual rings are compiled from admitted modal event targets. Their
+  ;; geometry is expanded by a fixed halo; no runtime rect or radius lookup exists.
+  (struct c-modal-focus-visual-entry (id focus-event-slot source-instance-offset x y width height radius-px thickness-px color tile-ids) #:transparent)
+  (struct c-modal-focus-visual-plan (entries) #:transparent)
   ;; Application-only spec: list and detail glyph addresses are resolved after layout.
   (struct c-log-browser-spec (id list-id detail-id append-updates source) #:transparent)
   (struct c-log-browser-plan (id list-id append-batch-id append-updates detail-node-id detail-glyph-offsets detail-tile-ids row-color-offsets levels packet-worklist-index) #:transparent)
@@ -6562,6 +6601,60 @@ scene-glyph-draw-packets
                                                    ',(c-modal-focus-subgraph-entry-allowed-event-slots entry)
                                                    ',(c-modal-focus-subgraph-entry-tile-ids entry)))))))
 
+  ;; Every focus target receives one preallocated rounded-outline quad. The target
+  ;; geometry, source instance witness and tile union have all become stable before
+  ;; this pass runs. Runtime may only select one emitted alpha endpoint.
+  (define (compile-modal-focus-visual-plan modal-plan events)
+    (if (not modal-plan)
+        #f
+        (let ([event-by-slot (for/hash ([event (in-list events)])
+                               (values (c-event-slot event) event))]
+              [halo-px 3.0]
+              [thickness-px 2.0]
+              [focus-color '(0.36 0.72 1.0 1.0)])
+          (c-modal-focus-visual-plan
+           (append-map
+            (lambda (modal)
+              (for/list ([slot (in-list (c-modal-focus-subgraph-entry-focus-event-slots modal))])
+                (define event (hash-ref event-by-slot slot
+                                        (lambda ()
+                                          (raise-syntax-error 'modal-focus-visual-plan
+                                                              "focus slot is missing from the fixed Event Map" #f))))
+                (define x (- (c-event-x event) halo-px))
+                (define y (- (c-event-y event) halo-px))
+                (define width (+ (c-event-width event) (* 2.0 halo-px)))
+                (define height (+ (c-event-height event) (* 2.0 halo-px)))
+                (define radius (min 12.0 (/ (min width height) 2.0)))
+                (unless (and (> (c-event-instance-offset event) 0)
+                             (zero? (modulo (c-event-instance-offset event) quad-instance-bytes))
+                             (> width 0.0) (> height 0.0) (> radius 0.0))
+                  (raise-syntax-error 'modal-focus-visual-plan
+                                      "focus ring requires a fixed non-root event surface with positive geometry" #f))
+                (c-modal-focus-visual-entry
+                 (string->symbol (format "~a$focus-ring" (c-event-node-id event)))
+                 slot
+                 (c-event-instance-offset event)
+                 x y width height radius thickness-px focus-color
+                 (c-modal-focus-subgraph-entry-tile-ids modal))))
+            (c-modal-focus-subgraph-plan-entries modal-plan))))))
+
+  (define (modal-focus-visual-plan->datum plan)
+    (if (not plan)
+        '#f
+        `(modal-focus-visual-plan
+          (list ,@(for/list ([entry (in-list (c-modal-focus-visual-plan-entries plan))])
+                     `(modal-focus-visual-entry ',(c-modal-focus-visual-entry-id entry)
+                                                 ,(c-modal-focus-visual-entry-focus-event-slot entry)
+                                                 ,(c-modal-focus-visual-entry-source-instance-offset entry)
+                                                 ,(c-modal-focus-visual-entry-x entry)
+                                                 ,(c-modal-focus-visual-entry-y entry)
+                                                 ,(c-modal-focus-visual-entry-width entry)
+                                                 ,(c-modal-focus-visual-entry-height entry)
+                                                 ,(c-modal-focus-visual-entry-radius-px entry)
+                                                 ,(c-modal-focus-visual-entry-thickness-px entry)
+                                                 ',(c-modal-focus-visual-entry-color entry)
+                                                 ',(c-modal-focus-visual-entry-tile-ids entry)))))))
+
   (define (overlay-state-plan->datum plan)
     (if (not plan)
         '#f
@@ -7096,8 +7189,9 @@ scene-glyph-draw-packets
                     [SHADOW-SURFACES (datum-stx stx (shadow-surface-plan->datum shadow-surfaces))]
                     [NAVIGATION-SELECTION (datum-stx stx '#f)]
                    [OVERLAY-STATE (datum-stx stx '#f)]
-                   [MODAL-FOCUS-SUBGRAPH (datum-stx stx '#f)])
-       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE #f MODAL-FOCUS-SUBGRAPH #f))]
+                   [MODAL-FOCUS-SUBGRAPH (datum-stx stx '#f)]
+                   [MODAL-FOCUS-VISUAL (datum-stx stx '#f)])
+       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE #f MODAL-FOCUS-SUBGRAPH #f MODAL-FOCUS-VISUAL #f))]
     [(_ root:expr extra:expr ...)
      (raise-syntax-error 'ui "expects exactly one root layout node" stx)]))
 
@@ -7241,6 +7335,8 @@ scene-glyph-draw-packets
        (compile-overlay-state-plan root-node layouts glyph-placements states actions events render-schedules action-indexes))
      (define modal-focus-subgraph-plan
        (compile-modal-focus-subgraph-plan root-node overlay-state-plan events))
+     (define modal-focus-visual-plan
+       (compile-modal-focus-visual-plan modal-focus-subgraph-plan events))
      (with-syntax ([ROOT (datum-stx stx (node->datum root-node))]
                    [STATIC (datum-stx stx (- total dynamic))]
                    [DYNAMIC (datum-stx stx dynamic)]
@@ -7283,7 +7379,9 @@ scene-glyph-draw-packets
                      [OVERLAY-STATE (datum-stx stx (overlay-state-plan->datum overlay-state-plan))]
                      [OVERLAY-STATE-REQUIRED (datum-stx stx (and overlay-state-plan #t))]
                      [MODAL-FOCUS-SUBGRAPH (datum-stx stx (modal-focus-subgraph-plan->datum modal-focus-subgraph-plan))]
-                     [MODAL-FOCUS-REQUIRED (datum-stx stx (and modal-focus-subgraph-plan #t))])
+                     [MODAL-FOCUS-REQUIRED (datum-stx stx (and modal-focus-subgraph-plan #t))]
+                     [MODAL-FOCUS-VISUAL (datum-stx stx (modal-focus-visual-plan->datum modal-focus-visual-plan))]
+                     [MODAL-FOCUS-VISUAL-REQUIRED (datum-stx stx (and modal-focus-visual-plan #t))])
        #'(begin
-           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE OVERLAY-STATE-REQUIRED MODAL-FOCUS-SUBGRAPH MODAL-FOCUS-REQUIRED))
+           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE OVERLAY-STATE-REQUIRED MODAL-FOCUS-SUBGRAPH MODAL-FOCUS-REQUIRED MODAL-FOCUS-VISUAL MODAL-FOCUS-VISUAL-REQUIRED))
            (provide app-scene)))]))

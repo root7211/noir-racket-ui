@@ -1,0 +1,572 @@
+compiler ABI contracts: virtual-list=noir-virtual-list-plan-v1@1 row-activation=noir-row-activation-plan-v1@1 scrollbar=noir-scrollbar-plan-v1@1 list-navigation=noir-list-navigation-plan-v1@1 log-browser=noir-log-browser-plan-v1@1 font-asset=noir-font-asset-plan-v1@1 font-placement=noir-font-placement-plan-v1@1 dynamic-font-cell=noir-dynamic-font-cell-plan-v1@1 visual-language=noir-visual-language-plan-v1@1 rounded-surface=noir-rounded-surface-plan-v1@1 shadow-surface=noir-shadow-surface-plan-v1@1 navigation-selection=noir-navigation-selection-plan-v1@1 modal-focus=noir-modal-focus-subgraph-v1@1 modal-focus-visual=noir-modal-focus-visual-plan-v1@1 frozen
+compiler visual language: preset=desktop-wide canvas=1280x720 margin=32 static-proof=layout-contained
+compiler ABI contracts: virtual-list=noir-virtual-list-plan-v1@1 row-activation=noir-row-activation-plan-v1@1 scrollbar=noir-scrollbar-plan-v1@1 list-navigation=noir-list-navigation-plan-v1@1 log-browser=noir-log-browser-plan-v1@1 font-asset=noir-font-asset-plan-v1@1 font-placement=noir-font-placement-plan-v1@1 dynamic-font-cell=noir-dynamic-font-cell-plan-v1@1 visual-language=noir-visual-language-plan-v1@1 rounded-surface=noir-rounded-surface-plan-v1@1 shadow-surface=noir-shadow-surface-plan-v1@1 navigation-selection=noir-navigation-selection-plan-v1@1 modal-focus=noir-modal-focus-subgraph-v1@1 modal-focus-visual=noir-modal-focus-visual-plan-v1@1 frozen
+compiler visual language: preset=desktop-wide canvas=1280x720 margin=32 static-proof=layout-contained
+compiler rounded surfaces: v1 surfaces=9 metadata-slots=37 aa-width=1px immutable-instance-slots
+compiler shadow surfaces: v1 layers=6 elevated-sources=3 immutable-shadow-instances=1pass
+compiler build attestation: source=fnv1a64:c370e7ffea4da86b compiler_abi=noir-racket-ui-abi-v2 scene_abi=noir-scene-json-v2
+compiler font asset: face=noir-desktop-sans-18 page=2 glyphs=102 atlas=512x512 r8 activation=registered-inactive manifest=/home/ubuntu/noir_review/noir-racket-ui-statistical-analysis/assets/fontc/noir-desktop-sans-18/manifest.json atlas=/home/ubuntu/noir_review/noir-racket-ui-statistical-analysis/assets/fontc/noir-desktop-sans-18/atlas.r8
+compiler font placement proof: active-page2-glyphs=230 registered-font-assets=1 mode=static-proportional-v1
+compiler visual language: preset=desktop-wide canvas=1280x720 margin=32 static-proof=layout-contained
+compiler state slots: 1 fixed value address(es), lexical ABI
+compiler action slots: 6 fixed action address(es), lexical ABI
+compiler release motion: tracks=7 recipe=80ms-ease-out fixed-fields=pos+color
+compiler visual language: preset=desktop-wide canvas=1280x720 margin=32 static-proof=layout-contained
+compiler packet worklists: all-packets#0=[0, 1, 2, 3, 4, 5, 6, 7, 8]; dynamic-packets#1=[]; no-packets#2=[]
+compiler navigation selection: disabled destinations=0
+compiler action tile selection: 6 action mask(s), 7 event transient mask(s), fixed-mask=u64
+compiler focus graph: no focusable fields
+compiler keyboard map: no editable focus fields
+compiler frame coalescing: 14 verified batch(es), 7 event batch pair(s)
+compiler text resources: 14 static shaped run(s), 0 dynamic text-run action(s)
+compiler overlay state: v1 entries=1 fixed-alpha-lanes=146 no-packets
+compiler modal focus: v1 entries=1 fixed-tab-targets=5 background-isolated no-packets
+compiler modal focus visual: v1 entries=5 preallocated-outline-quads=5 halo=3px thickness=2px no-runtime-geometry
+compiler modal focus GPU resources: ring-quads=5 metadata=5 alpha-initial=0
+compiler overlay state initial endpoint: entries=1 hidden=1
+compiler glyph placement resources: 230 placement instance(s), 4 page-aware packet(s), ABI=48 bytes
+compiler tile glyph culling: 1 scissor tile(s), 6 submitted subrange(s), 202 glyph instance(s)
+compiler resident packet worklist table: lists=3 payload_bytes=160 stride_bytes=256 hot_path_uploads=0
+compiler resident packet worklist table: lists=3 payload_bytes=160 stride_bytes=256 hot_path_uploads=0
+packet-activity-differential: selected=Scalar reference=Scalar packets=9 activity+indirect=equal
+font-atlas-upload: face=noir-desktop-sans-18 page=2 bytes=262144 sha256=cefe9a2dca8a41c0079a09db642619c411ef1b25b511b9bda567d9dbf1e3766d renderer=registered-inactive manifest=/home/ubuntu/noir_review/noir-racket-ui-statistical-analysis/assets/fontc/noir-desktop-sans-18/manifest.json atlas=/home/ubuntu/noir_review/noir-racket-ui-statistical-analysis/assets/fontc/noir-desktop-sans-18/atlas.r8
+compiler subgroup packets: 9 width-32 packet(s), vertex-subgroup-supported=false; packet draw fallback is always ABI-equivalent
+compiler packet activity: gpu-driven-indirect=true variant=Scalar adapter-subgroup=true wgsl-subgroup=false fixed activity-word/indirect-command ABI
+compiler timestamp query: supported=true
+packet-activity-dispatch worklist=all-packets index=0 packets=[0, 1, 2, 3, 4, 5, 6, 7, 8] workgroups=9 workgroup_size=32 output=activity+indirect
+glyph-direct-draw full packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw full packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw full packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw full packet=1 page=2 placements=[83..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw full packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw full packet=2 page=2 placements=[142..174) lanes=32 reason=page2-static-v1
+glyph-direct-draw full packet=2 page=2 placements=[174..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw full packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw full packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+noir-winit-host: 37 quad instances, 230 glyph placement(s), 4 packet(s), profile=noir-static-cost-v1
+event-map hover: slot 0 / open-overlay-button
+render-request-enqueue hover: mask=0x0000000000000001 strategy=None worklist=2
+coalesced-batch execute: coalesced-press-open-overlay-button refs=[Transient(6), Transient(13)] worklist_slots=[2, 2]
+coalesced-batch task-worklist-slot: task=Transient(6) index=2
+coalesced-batch task-worklist-slot: task=Transient(13) index=2
+coalesced-winner transient pressed-open-overlay-button: [396..404)
+coalesced-winner transient pressed-open-overlay-button: [412..428)
+coalesced-batch composite-worklist: batch=coalesced-press-open-overlay-button slot=2 members=[] packets=[]
+render-request-coalesce coalesced-press-open-overlay-button: mask=0x0000000000000001 strategy=None worklist=2
+coalesced-batch execute: coalesced-activate-open-overlay-button refs=[Transient(20), Action(4)] worklist_slots=[2, 2]
+coalesced-batch task-worklist-slot: task=Transient(20) index=2
+coalesced-winner transient release-open-overlay-button: [396..404) motion=scheduled
+release-motion start: id=release-open-overlay-button event-slot=0 duration-ms=80 tile-mask=0x0000000000000001
+coalesced-winner transient release-open-overlay-button: [412..428) motion=scheduled
+coalesced-batch task-worklist-slot: task=Action(4) index=2
+event-map dispatch: overlay-open
+state-slot write: action=overlay-open state=overlay-visible index=0 op=set value=1
+coalesced-batch composite-worklist: batch=coalesced-activate-open-overlay-button slot=2 members=[] packets=[]
+compiler strategy dispatch: batch=coalesced-activate-open-overlay-button strategy=coalesced worklist=2
+render-request-enqueue coalesced-activate-open-overlay-button: mask=0x0000000000000001 strategy=Some(Coalesced) worklist=2
+render-request-enqueue overlay-state: mask=0x0000000000000001 strategy=None worklist=2
+modal-focus: overlay=deployment-overlay transition=open focus-event-slot=3 focus-ring=Some(0) alpha-patches=1 tile-mask=0x0000000000000001
+overlay-state: id=deployment-overlay action=overlay-open visible=true quad-alpha-patches=26 glyph-alpha-patches=120 tile-mask=0x0000000000000001 worklist=no-packets
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+release-motion complete: id=release-open-overlay-button event-slot=0 frames=bounded
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+render-request-coalesce modal-focus-ring-tab: mask=0x0000000000000001 strategy=None worklist=2
+modal-focus: overlay=deployment-overlay key=tab from-event-slot=3 to-event-slot=2 rings=0=>1 alpha-patches=2 allowed=[1, 2, 3, 4, 5, 6] tile-mask=0x0000000000000001
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+coalesced-batch execute: coalesced-activate-deployment-scrim$target refs=[Transient(16), Action(2)] worklist_slots=[2, 2]
+coalesced-batch task-worklist-slot: task=Transient(16) index=2
+coalesced-winner transient release-deployment-scrim$target: [616..624) motion=scheduled
+release-motion start: id=release-deployment-scrim$target event-slot=1 duration-ms=80 tile-mask=0x0000000000000001
+coalesced-winner transient release-deployment-scrim$target: [632..648) motion=scheduled
+coalesced-batch task-worklist-slot: task=Action(2) index=2
+event-map dispatch: overlay-dismiss
+state-slot write: action=overlay-dismiss state=overlay-visible index=0 op=set value=0
+coalesced-batch composite-worklist: batch=coalesced-activate-deployment-scrim$target slot=2 members=[] packets=[]
+compiler strategy dispatch: batch=coalesced-activate-deployment-scrim$target strategy=coalesced worklist=2
+render-request-enqueue coalesced-activate-deployment-scrim$target: mask=0x0000000000000001 strategy=Some(Coalesced) worklist=2
+render-request-enqueue overlay-state: mask=0x0000000000000001 strategy=None worklist=2
+modal-focus: overlay=deployment-overlay transition=close restore-event-slot=0 focus-ring-alpha-clears=5 background-isolated=false
+overlay-state: id=deployment-overlay action=overlay-dismiss visible=false quad-alpha-patches=26 glyph-alpha-patches=120 tile-mask=0x0000000000000001 worklist=no-packets
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+release-motion complete: id=release-deployment-scrim$target event-slot=1 frames=bounded
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+coalesced-batch execute: coalesced-press-open-overlay-button refs=[Transient(6), Transient(13)] worklist_slots=[2, 2]
+coalesced-batch task-worklist-slot: task=Transient(6) index=2
+coalesced-batch task-worklist-slot: task=Transient(13) index=2
+coalesced-winner transient pressed-open-overlay-button: [396..404)
+coalesced-winner transient pressed-open-overlay-button: [412..428)
+coalesced-batch composite-worklist: batch=coalesced-press-open-overlay-button slot=2 members=[] packets=[]
+render-request-coalesce coalesced-press-open-overlay-button: mask=0x0000000000000001 strategy=None worklist=2
+coalesced-batch execute: coalesced-activate-open-overlay-button refs=[Transient(20), Action(4)] worklist_slots=[2, 2]
+coalesced-batch task-worklist-slot: task=Transient(20) index=2
+coalesced-winner transient release-open-overlay-button: [396..404) motion=scheduled
+release-motion start: id=release-open-overlay-button event-slot=0 duration-ms=80 tile-mask=0x0000000000000001
+coalesced-winner transient release-open-overlay-button: [412..428) motion=scheduled
+coalesced-batch task-worklist-slot: task=Action(4) index=2
+event-map dispatch: overlay-open
+state-slot write: action=overlay-open state=overlay-visible index=0 op=set value=1
+coalesced-batch composite-worklist: batch=coalesced-activate-open-overlay-button slot=2 members=[] packets=[]
+compiler strategy dispatch: batch=coalesced-activate-open-overlay-button strategy=coalesced worklist=2
+render-request-enqueue coalesced-activate-open-overlay-button: mask=0x0000000000000001 strategy=Some(Coalesced) worklist=2
+render-request-enqueue overlay-state: mask=0x0000000000000001 strategy=None worklist=2
+modal-focus: overlay=deployment-overlay transition=open focus-event-slot=3 focus-ring=Some(0) alpha-patches=1 tile-mask=0x0000000000000001
+overlay-state: id=deployment-overlay action=overlay-open visible=true quad-alpha-patches=26 glyph-alpha-patches=120 tile-mask=0x0000000000000001 worklist=no-packets
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+release-motion complete: id=release-open-overlay-button event-slot=0 frames=bounded
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+render-request-coalesce modal-focus-ring-tab: mask=0x0000000000000001 strategy=None worklist=2
+modal-focus: overlay=deployment-overlay key=tab from-event-slot=3 to-event-slot=2 rings=0=>1 alpha-patches=2 allowed=[1, 2, 3, 4, 5, 6] tile-mask=0x0000000000000001
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue modal-focus-ring-tab: mask=0x0000000000000001 strategy=None worklist=2
+modal-focus: overlay=deployment-overlay key=tab from-event-slot=2 to-event-slot=4 rings=1=>2 alpha-patches=2 allowed=[1, 2, 3, 4, 5, 6] tile-mask=0x0000000000000001
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue modal-focus-ring-tab: mask=0x0000000000000001 strategy=None worklist=2
+modal-focus: overlay=deployment-overlay key=tab from-event-slot=4 to-event-slot=5 rings=2=>3 alpha-patches=2 allowed=[1, 2, 3, 4, 5, 6] tile-mask=0x0000000000000001
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue modal-focus-ring-tab: mask=0x0000000000000001 strategy=None worklist=2
+modal-focus: overlay=deployment-overlay key=tab from-event-slot=5 to-event-slot=6 rings=3=>4 alpha-patches=2 allowed=[1, 2, 3, 4, 5, 6] tile-mask=0x0000000000000001
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue modal-focus-ring-tab: mask=0x0000000000000001 strategy=None worklist=2
+modal-focus: overlay=deployment-overlay key=tab from-event-slot=6 to-event-slot=3 rings=4=>0 alpha-patches=2 allowed=[1, 2, 3, 4, 5, 6] tile-mask=0x0000000000000001
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue modal-focus-ring-tab: mask=0x0000000000000001 strategy=None worklist=2
+modal-focus: overlay=deployment-overlay key=shift-tab from-event-slot=3 to-event-slot=6 rings=0=>4 alpha-patches=2 allowed=[1, 2, 3, 4, 5, 6] tile-mask=0x0000000000000001
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+coalesced-batch execute: coalesced-activate-menu-export$target refs=[Transient(18), Action(3)] worklist_slots=[2, 2]
+coalesced-batch task-worklist-slot: task=Transient(18) index=2
+coalesced-winner transient release-menu-export$target: [1496..1504) motion=scheduled
+release-motion start: id=release-menu-export$target event-slot=6 duration-ms=80 tile-mask=0x0000000000000001
+coalesced-winner transient release-menu-export$target: [1512..1528) motion=scheduled
+coalesced-batch task-worklist-slot: task=Action(3) index=2
+event-map dispatch: overlay-export
+state-slot write: action=overlay-export state=overlay-visible index=0 op=set value=0
+coalesced-batch composite-worklist: batch=coalesced-activate-menu-export$target slot=2 members=[] packets=[]
+compiler strategy dispatch: batch=coalesced-activate-menu-export$target strategy=coalesced worklist=2
+render-request-enqueue coalesced-activate-menu-export$target: mask=0x0000000000000001 strategy=Some(Coalesced) worklist=2
+render-request-enqueue overlay-state: mask=0x0000000000000001 strategy=None worklist=2
+modal-focus: overlay=deployment-overlay transition=close restore-event-slot=0 focus-ring-alpha-clears=5 background-isolated=false
+overlay-state: id=deployment-overlay action=overlay-export visible=false quad-alpha-patches=26 glyph-alpha-patches=120 tile-mask=0x0000000000000001 worklist=no-packets
+modal-focus: overlay=deployment-overlay key=enter event-slot=6 close-transition=true
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=0 page=2 placements=[0..19) lanes=19 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[19..51) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[51..83) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[83..89) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=1 page=2 placements=[97..110) lanes=27 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[110..142) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[142..158) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=2 page=2 placements=[178..190) lanes=16 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[190..222) lanes=32 reason=page2-static-v1
+glyph-direct-draw tile=0 packet=3 page=2 placements=[222..230) lanes=8 reason=page2-static-v1
+release-motion complete: id=release-menu-export$target event-slot=6 frames=bounded
+render-request-enqueue release-motion: mask=0x0000000000000001 strategy=None worklist=2

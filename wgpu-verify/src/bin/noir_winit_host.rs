@@ -56,6 +56,11 @@ const OVERLAY_STATE_PLAN_ABI_SCHEMA: &str = "noir-overlay-state-plan-v1";
 const OVERLAY_STATE_PLAN_ABI_REVISION: u32 = 1;
 const MODAL_FOCUS_SUBGRAPH_ABI_SCHEMA: &str = "noir-modal-focus-subgraph-v1";
 const MODAL_FOCUS_SUBGRAPH_ABI_REVISION: u32 = 1;
+const MODAL_FOCUS_VISUAL_PLAN_ABI_SCHEMA: &str = "noir-modal-focus-visual-plan-v1";
+const MODAL_FOCUS_VISUAL_PLAN_ABI_REVISION: u32 = 1;
+const FOCUS_RING_HALO_PX: f32 = 3.0;
+const FOCUS_RING_THICKNESS_PX: f32 = 2.0;
+const FOCUS_RING_COLOR: [f32; 4] = [0.36, 0.72, 1.0, 1.0];
 
 #[derive(Debug, Deserialize)]
 struct Scene {
@@ -113,6 +118,10 @@ struct Scene {
     modal_focus_subgraph_plan: Option<ModalFocusSubgraphPlan>,
     #[serde(default)]
     modal_focus_subgraph_required: bool,
+    #[serde(deserialize_with = "deserialize_modal_focus_visual_plan_option")]
+    modal_focus_visual_plan: Option<ModalFocusVisualPlan>,
+    #[serde(default)]
+    modal_focus_visual_required: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -133,6 +142,7 @@ struct AbiContracts {
     navigation_selection_plan: AbiContract,
     overlay_state_plan: AbiContract,
     modal_focus_subgraph: AbiContract,
+    modal_focus_visual_plan: AbiContract,
 }
 
 #[derive(Debug, Deserialize)]
@@ -315,12 +325,54 @@ where D: Deserializer<'de> {
     }
 }
 
+// Every entry is one independently addressable outline quad. Its source offset is
+// a reverse witness into the frozen Event Map; host never discovers focus geometry.
+#[derive(Clone, Debug, Deserialize)]
+struct ModalFocusVisualEntry {
+    id: String,
+    focus_event_slot: usize,
+    source_instance_offset: usize,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    radius_px: f32,
+    thickness_px: f32,
+    color: [f32; 4],
+    tile_ids: Vec<usize>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct ModalFocusVisualPlan {
+    abi_schema: String,
+    abi_revision: u32,
+    entries: Vec<ModalFocusVisualEntry>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ModalFocusVisualPlanWire { Plan(ModalFocusVisualPlan), Disabled(bool) }
+fn deserialize_modal_focus_visual_plan_option<'de, D>(deserializer: D) -> std::result::Result<Option<ModalFocusVisualPlan>, D::Error>
+where D: Deserializer<'de> {
+    match ModalFocusVisualPlanWire::deserialize(deserializer)? {
+        ModalFocusVisualPlanWire::Plan(plan) => Ok(Some(plan)),
+        ModalFocusVisualPlanWire::Disabled(false) => Ok(None),
+        ModalFocusVisualPlanWire::Disabled(true) => Err(serde::de::Error::custom("modal_focus_visual_plan may be an object or false, never true")),
+    }
+}
+
 // The shadow shader samples a source-shaped SDF inside a larger immutable quad.
 // `[radius, blur, source_width, source_height]` is deliberately 16 bytes like
 // rounded metadata, but indexed by shadow layer rather than UI instance slot.
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct GpuShadowSurfaceMeta { radius_px: f32, blur_px: f32, source_width_px: f32, source_height_px: f32 }
+
+// The focus outline shader consumes one immutable recipe per preallocated ring.
+// Alpha remains exclusively in the independently patchable QuadInstance color lane.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct GpuFocusRingMeta { radius_px: f32, thickness_px: f32, width_px: f32, height_px: f32 }
 
 #[derive(Debug, Deserialize)]
 struct BuildAttestation {
@@ -702,6 +754,30 @@ struct CompiledModalFocusSubgraphEntry {
 
 #[derive(Clone, Debug)]
 struct CompiledModalFocusSubgraphPlan { entries: Vec<CompiledModalFocusSubgraphEntry> }
+
+#[derive(Clone, Debug)]
+struct CompiledModalFocusVisualEntry {
+    id: String,
+    modal_entry_index: usize,
+    focus_event_slot: usize,
+    source_instance_offset: usize,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    radius_px: f32,
+    thickness_px: f32,
+    color: [f32; 4],
+    tile_mask: u64,
+}
+
+#[derive(Clone, Debug)]
+struct CompiledModalFocusVisualPlan {
+    entries: Vec<CompiledModalFocusVisualEntry>,
+    // Event Map slot -> focus-ring buffer slot. The keyboard hot path indexes this
+    // table directly after the compiler has proved the closed Tab subgraph.
+    ring_for_event_slot: Vec<Option<usize>>,
+}
 
 #[derive(Clone, Debug, Deserialize)]
 struct LogAppendUpdate { index: usize, value: String }
@@ -1750,6 +1826,12 @@ struct Host {
     shadow_instance_count: u32,
     shadow_instances: Vec<QuadInstance>,
     _shadow_surface_buffer: wgpu::Buffer,
+    focus_ring_pipeline: wgpu::RenderPipeline,
+    focus_ring_bind_group: wgpu::BindGroup,
+    focus_ring_instance_buffer: wgpu::Buffer,
+    focus_ring_instance_count: u32,
+    focus_ring_instances: Vec<QuadInstance>,
+    _focus_ring_meta_buffer: wgpu::Buffer,
     text_pipeline: wgpu::RenderPipeline,
     glyph_bind_group: wgpu::BindGroup,
     blit_pipeline: wgpu::RenderPipeline,
@@ -1794,6 +1876,7 @@ struct Host {
     navigation_selection_plan: Option<CompiledNavigationSelectionPlan>,
     overlay_state_plan: Option<CompiledOverlayStatePlan>,
     modal_focus_subgraph_plan: Option<CompiledModalFocusSubgraphPlan>,
+    modal_focus_visual_plan: Option<CompiledModalFocusVisualPlan>,
     log_browser_plans: Vec<CompiledLogBrowserPlan>,
     log_levels: Vec<Vec<LogLevel>>,
     // Registered v1 fontc atlases. They deliberately remain separate from legacy
@@ -1944,6 +2027,8 @@ impl Host {
         let mut placements = placement_instances(&scene)?;
         let overlay_state_plan = compiler_overlay_state_plan(&scene, &state_slot_ids, &action_slot_ids, &action_tile_masks, &packet_worklists, &instances, &placements)?;
         let modal_focus_subgraph_plan = compiler_modal_focus_subgraph_plan(&scene, &state_slot_ids, &overlay_state_plan, &event_tile_masks)?;
+        let modal_focus_visual_plan = compiler_modal_focus_visual_plan(&scene, &overlay_state_plan, &modal_focus_subgraph_plan, &event_tile_masks, &instances)?;
+        let (focus_ring_instances, focus_ring_metadata) = make_focus_ring_gpu_instances(&modal_focus_visual_plan, visual_canvas);
         if let Some(plan) = &overlay_state_plan {
             for entry in &plan.entries {
                 if state_slot_values[entry.state_index] == 0 {
@@ -1983,12 +2068,22 @@ impl Host {
         });
         let (shadow_surface_layout, shadow_surface_buffer, shadow_surface_bind_group) =
             make_shadow_surface_resources(&device, &shadow_surface_metadata);
+        let focus_ring_instance_count = focus_ring_instances.len() as u32;
+        let focus_ring_instance_upload = if focus_ring_instances.is_empty() { vec![QuadInstance::zeroed()] } else { focus_ring_instances.clone() };
+        let focus_ring_instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("noir-preallocated-focus-ring-instance-buffer"),
+            contents: bytemuck::cast_slice(&focus_ring_instance_upload),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+        let (focus_ring_layout, focus_ring_meta_buffer, focus_ring_bind_group) =
+            make_focus_ring_resources(&device, &focus_ring_metadata);
 
         let font_atlases = make_registered_font_atlases(&device, &queue, &verified_font_assets)?;
         let dynamic_font_cell_atlas = make_dynamic_font_cell_atlas(&device, &queue, verified_dynamic_font_cells.as_ref())?;
         let (glyph_bind_group, text_pipeline) = make_text_resources(&device, &queue, format, &glyph_buffer, &font_atlases, dynamic_font_cell_atlas.as_ref(), verified_dynamic_font_cells.as_ref())?;
         let static_pipeline = make_static_pipeline(&device, format, &rounded_surface_layout);
         let shadow_pipeline = make_shadow_pipeline(&device, format, &shadow_surface_layout);
+        let focus_ring_pipeline = make_focus_ring_pipeline(&device, format, &focus_ring_layout);
         let gpu_timer = if timestamp_supported { Some(make_gpu_timestamp_timer(&device, queue.get_timestamp_period())) } else { None };
         println!("compiler subgroup packets: {} width-32 packet(s), vertex-subgroup-supported={subgroup_vertex_supported}; packet draw fallback is always ABI-equivalent", subgroup_packets.len());
         println!("compiler packet activity: gpu-driven-indirect={} variant={:?} adapter-subgroup={} wgsl-subgroup={} fixed activity-word/indirect-command ABI", packet_activity.is_some(), packet_activity_variant, subgroup_adapter_supported, subgroup_wgsl_supported);
@@ -1997,8 +2092,8 @@ impl Host {
         let initial_instances = instances.clone();
         let initial_glyph_bytes = glyph_bytes.clone();
         let virtual_list_count = virtual_lists.len();
-        let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, canvas_width: visual_canvas.width, canvas_height: visual_canvas.height, canvas_margin: visual_canvas.margin, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, rounded_surface_bind_group, _rounded_surface_buffer: rounded_surface_buffer, shadow_pipeline, shadow_surface_bind_group, shadow_instance_buffer, shadow_instance_count, shadow_instances: shadow_instance_upload, _shadow_surface_buffer: shadow_surface_buffer, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group,
- cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, release_tracks, active_release_tracks: Vec::new(), virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, navigation_selection_plan, overlay_state_plan, modal_focus_subgraph_plan, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
+        let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, canvas_width: visual_canvas.width, canvas_height: visual_canvas.height, canvas_margin: visual_canvas.margin, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, rounded_surface_bind_group, _rounded_surface_buffer: rounded_surface_buffer, shadow_pipeline, shadow_surface_bind_group, shadow_instance_buffer, shadow_instance_count, shadow_instances: shadow_instance_upload, _shadow_surface_buffer: shadow_surface_buffer, focus_ring_pipeline, focus_ring_bind_group, focus_ring_instance_buffer, focus_ring_instance_count, focus_ring_instances, _focus_ring_meta_buffer: focus_ring_meta_buffer, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group,
+ cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, release_tracks, active_release_tracks: Vec::new(), virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, navigation_selection_plan, overlay_state_plan, modal_focus_subgraph_plan, modal_focus_visual_plan, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
         host.sync_focus_visuals();
         host.execute_scene_data_update_batches()?;
         host.redraw_canvas_full();
@@ -2091,6 +2186,35 @@ impl Host {
         if lane == 1 { self.instances[slot].pos[1] = value; }
         if lane == 7 { self.instances[slot].color[3] = value; }
         self.queue.write_buffer(&self.instance_buffer, offset, bytemuck::bytes_of(&value));
+    }
+
+    // Focus-ring quad indices are compiler emitted and validated at startup. The
+    // runtime patch is therefore exactly one four-byte write into a separate buffer.
+    fn patch_focus_ring_alpha(&mut self, ring_index: usize, value: f32) {
+        let ring = self.focus_ring_instances.get_mut(ring_index)
+            .expect("compiler focus ring index is admitted at startup");
+        if (ring.color[3] - value).abs() <= f32::EPSILON { return; }
+        ring.color[3] = value;
+        let offset = (ring_index * std::mem::size_of::<QuadInstance>() + 28) as u64;
+        self.queue.write_buffer(&self.focus_ring_instance_buffer, offset, bytemuck::bytes_of(&value));
+    }
+
+    fn focus_ring_index_for_event(&self, event_slot: usize) -> Option<usize> {
+        self.modal_focus_visual_plan.as_ref()?.ring_for_event_slot.get(event_slot).and_then(|ring| *ring)
+    }
+
+    fn set_focus_ring_for_event(&mut self, event_slot: usize, value: f32) -> Option<usize> {
+        let ring_index = self.focus_ring_index_for_event(event_slot)?;
+        self.patch_focus_ring_alpha(ring_index, value);
+        Some(ring_index)
+    }
+
+    // Overlay close is a finite preallocated write set. No element lookup or focus
+    // discovery occurs: all resident ring alpha lanes are restored to the hidden endpoint.
+    fn clear_all_focus_rings(&mut self) -> usize {
+        let count = self.focus_ring_instances.len();
+        for ring_index in 0..count { self.patch_focus_ring_alpha(ring_index, 0.0); }
+        count
     }
 
     fn sync_focus_visuals(&mut self) -> u64 {
@@ -2500,29 +2624,48 @@ impl Host {
     }
 
     fn modal_focus_overlay_transition(&mut self, overlay_id: &str, visible: bool) {
-        let Some(plan) = self.modal_focus_subgraph_plan.as_mut() else { return; };
-        let Some(entry) = plan.entries.iter_mut().find(|entry| entry.id == overlay_id) else { return; };
-        if visible {
-            entry.current_index = 0;
-            println!("modal-focus: overlay={} transition=open focus-event-slot={} tile-mask=0x{:016x}",
-                     entry.id, entry.focus_event_slots[entry.current_index], entry.tile_mask);
+        let transition = {
+            let Some(plan) = self.modal_focus_subgraph_plan.as_mut() else { return; };
+            let Some(entry) = plan.entries.iter_mut().find(|entry| entry.id == overlay_id) else { return; };
+            if visible {
+                entry.current_index = 0;
+                (entry.id.clone(), Some(entry.focus_event_slots[entry.current_index]), entry.restore_event_slot, entry.tile_mask)
+            } else {
+                (entry.id.clone(), None, entry.restore_event_slot, entry.tile_mask)
+            }
+        };
+        let (id, focus_event_slot, restore_event_slot, tile_mask) = transition;
+        if let Some(slot) = focus_event_slot {
+            let ring_index = self.set_focus_ring_for_event(slot, 1.0);
+            println!("modal-focus: overlay={} transition=open focus-event-slot={} focus-ring={:?} alpha-patches=1 tile-mask=0x{:016x}",
+                     id, slot, ring_index, tile_mask);
         } else {
-            println!("modal-focus: overlay={} transition=close restore-event-slot={} background-isolated=false",
-                     entry.id, entry.restore_event_slot);
+            let cleared = self.clear_all_focus_rings();
+            println!("modal-focus: overlay={} transition=close restore-event-slot={} focus-ring-alpha-clears={} background-isolated=false",
+                     id, restore_event_slot, cleared);
         }
     }
 
     fn modal_focus_tab(&mut self, backward: bool) -> bool {
-        let Some(plan) = self.modal_focus_subgraph_plan.as_mut() else { return false; };
-        let Some(entry) = plan.entries.iter_mut().find(|entry| self.state_slot_values.get(entry.state_index).copied() == Some(1)) else { return false; };
-        let current_slot = entry.focus_event_slots[entry.current_index];
-        let next_slot = if backward { entry.previous_slots[entry.current_index] } else { entry.next_slots[entry.current_index] };
-        let next_index = entry.focus_event_slots.iter().position(|slot| *slot == next_slot)
-            .expect("compiler modal focus ring has admitted next slot");
-        entry.current_index = next_index;
-        println!("modal-focus: overlay={} key={} from-event-slot={} to-event-slot={} allowed={:?} tile-mask=0x{:016x}",
-                 entry.id, if backward { "shift-tab" } else { "tab" }, current_slot, next_slot,
-                 entry.allowed_event_slots, entry.tile_mask);
+        let transition = {
+            let Some(plan) = self.modal_focus_subgraph_plan.as_mut() else { return false; };
+            let Some(entry) = plan.entries.iter_mut().find(|entry| self.state_slot_values.get(entry.state_index).copied() == Some(1)) else { return false; };
+            let current_slot = entry.focus_event_slots[entry.current_index];
+            let next_slot = if backward { entry.previous_slots[entry.current_index] } else { entry.next_slots[entry.current_index] };
+            let next_index = entry.focus_event_slots.iter().position(|slot| *slot == next_slot)
+                .expect("compiler modal focus ring has admitted next slot");
+            entry.current_index = next_index;
+            (entry.id.clone(), current_slot, next_slot, entry.allowed_event_slots.clone(), entry.tile_mask)
+        };
+        let (id, current_slot, next_slot, allowed_event_slots, tile_mask) = transition;
+        let old_ring = self.set_focus_ring_for_event(current_slot, 0.0)
+            .expect("admitted modal focus target has a preallocated focus ring");
+        let new_ring = self.set_focus_ring_for_event(next_slot, 1.0)
+            .expect("admitted modal focus target has a preallocated focus ring");
+        self.enqueue_render(RenderRequest::no_packets(tile_mask), "modal-focus-ring-tab");
+        println!("modal-focus: overlay={} key={} from-event-slot={} to-event-slot={} rings={}=>{} alpha-patches=2 allowed={:?} tile-mask=0x{:016x}",
+                 id, if backward { "shift-tab" } else { "tab" }, current_slot, next_slot,
+                 old_ring, new_ring, allowed_event_slots, tile_mask);
         true
     }
 
@@ -2899,6 +3042,10 @@ impl Host {
         self.instances.clone_from(&self.initial_instances);
         self.queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(&self.instances));
         self.queue.write_buffer(&self.glyph_buffer, 0, &self.initial_glyph_bytes);
+        self.clear_all_focus_rings();
+        if let Some(plan) = self.modal_focus_subgraph_plan.as_mut() {
+            for entry in &mut plan.entries { entry.current_index = 0; }
+        }
         self.canvas_dirty = false;
     }
 
@@ -2941,6 +3088,22 @@ impl Host {
         pass.draw(0..6, 0..self.shadow_instance_count);
     }
 
+    // The alpha lanes are patched only by the fixed modal-focus transition table.
+    // This pass is isolated from static rounded surfaces so each ring receives its
+    // own SDF outline metadata indexed from zero rather than UI instance offsets.
+    fn draw_focus_rings<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>, tile_mask: Option<u64>) {
+        if self.focus_ring_instance_count == 0 { return; }
+        let Some(plan) = self.modal_focus_visual_plan.as_ref() else { return; };
+        if let Some(mask) = tile_mask {
+            if !plan.entries.iter().any(|entry| entry.tile_mask & mask != 0) { return; }
+        }
+        pass.set_pipeline(&self.focus_ring_pipeline);
+        pass.set_bind_group(0, &self.focus_ring_bind_group, &[]);
+        pass.set_vertex_buffer(0, self.unit_quad.slice(..));
+        pass.set_vertex_buffer(1, self.focus_ring_instance_buffer.slice(..));
+        pass.draw(0..6, 0..self.focus_ring_instance_count);
+    }
+
     // Slot 0 is the compiler-reserved root canvas quad. It must establish the
     // opaque background before shadow layers, otherwise the root would erase the
     // entire shadow pass. Remaining slots preserve the compiler's frozen DFS order.
@@ -2967,6 +3130,7 @@ impl Host {
         if measure_gpu { if let Some(timer)=self.gpu_timer.as_ref() { encoder.write_timestamp(&timer.query_set, 0); } }
         { let mut pass=encoder.begin_render_pass(&wgpu::RenderPassDescriptor{label:Some("noir-full-replay-canvas-pass"),color_attachments:&[Some(wgpu::RenderPassColorAttachment{view:&self.canvas_view,resolve_target:None,depth_slice:None,ops:wgpu::Operations{load:wgpu::LoadOp::Clear(wgpu::Color{r:0.008,g:0.012,b:0.025,a:1.0}),store:wgpu::StoreOp::Store}})],depth_stencil_attachment:None,timestamp_writes:None,occlusion_query_set: None, multiview_mask: None});
             self.draw_full_static_with_shadows(&mut pass);
+            self.draw_focus_rings(&mut pass, None);
             self.draw_all_glyph_packets(&mut pass);
         }
         if measure_gpu { if let Some(timer)=self.gpu_timer.as_ref() {
@@ -2984,7 +3148,7 @@ impl Host {
         let mut encoder=self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor{label:Some("noir-full-canvas")});
         self.encode_packet_activity(&mut encoder, 0);
         { let mut pass=encoder.begin_render_pass(&wgpu::RenderPassDescriptor{label:Some("noir-full-canvas-pass"),color_attachments:&[Some(wgpu::RenderPassColorAttachment{view:&self.canvas_view,resolve_target:None,depth_slice:None,ops:wgpu::Operations{load:wgpu::LoadOp::Clear(wgpu::Color{r:0.008,g:0.012,b:0.025,a:1.0}),store:wgpu::StoreOp::Store}})],depth_stencil_attachment:None,timestamp_writes:None,occlusion_query_set: None, multiview_mask: None});
-          self.draw_full_static_with_shadows(&mut pass); self.draw_all_glyph_packets(&mut pass); }
+          self.draw_full_static_with_shadows(&mut pass); self.draw_focus_rings(&mut pass, None); self.draw_all_glyph_packets(&mut pass); }
         self.queue.submit(Some(encoder.finish())); self.canvas_dirty=false;
     }
     fn redraw_selected_tiles(&mut self, request: RenderRequest, measure_gpu: bool, cpu_started: Option<Instant>) -> (SubmittedTileStats, Option<f64>, Option<u128>) {
@@ -3011,6 +3175,7 @@ impl Host {
               pass.set_pipeline(&self.static_pipeline); pass.set_bind_group(0, &self.rounded_surface_bind_group, &[]); pass.set_vertex_buffer(0,self.unit_quad.slice(..)); pass.set_vertex_buffer(1,self.clear_buffer.slice(..)); pass.draw(0..6,0..1);
               self.draw_shadow_surfaces(&mut pass);
               self.draw_ranges(&mut pass,tile.draw_ranges.iter());
+              self.draw_focus_rings(&mut pass, Some(1u64 << tile_index));
               self.draw_tile_glyph_packets(&mut pass, tile_index, &tile.glyph_packet_ranges,
                                            request.packet_worklist_index == RenderRequest::NO_PACKETS);
           } }
@@ -4198,6 +4363,58 @@ fn make_shadow_pipeline(device:&wgpu::Device, format:wgpu::TextureFormat, shadow
  device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{label:Some("noir-shadow-pipeline"),layout:Some(&layout),vertex:wgpu::VertexState{module:&shader,entry_point:Some("vs_main"),buffers:&[Some(unit_layout()),Some(static_instance_layout())],compilation_options:Default::default()},fragment:Some(wgpu::FragmentState{module:&shader,entry_point:Some("fs_main"),targets:&[Some(wgpu::ColorTargetState{format,blend:Some(wgpu::BlendState::ALPHA_BLENDING),write_mask:wgpu::ColorWrites::ALL})],compilation_options:Default::default()}),primitive:wgpu::PrimitiveState::default(),depth_stencil:None,multisample:wgpu::MultisampleState::default(),multiview_mask:None,cache:None})
 }
 
+fn make_focus_ring_resources(device: &wgpu::Device, metadata: &[GpuFocusRingMeta]) -> (wgpu::BindGroupLayout, wgpu::Buffer, wgpu::BindGroup) {
+    // A disabled Scene needs a nonzero storage binding even though no focus-ring draw is issued.
+    let upload = if metadata.is_empty() { vec![GpuFocusRingMeta::zeroed()] } else { metadata.to_vec() };
+    let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("noir-focus-ring-layout"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None },
+            count: None,
+        }],
+    });
+    let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("noir-focus-ring-metadata"),
+        contents: bytemuck::cast_slice(&upload),
+        usage: wgpu::BufferUsages::STORAGE,
+    });
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("noir-focus-ring-bind-group"),
+        layout: &layout,
+        entries: &[wgpu::BindGroupEntry { binding: 0, resource: buffer.as_entire_binding() }],
+    });
+    (layout, buffer, bind_group)
+}
+
+fn make_focus_ring_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat, focus_ring_layout: &wgpu::BindGroupLayout) -> wgpu::RenderPipeline {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("noir-focus-ring-sdf"),
+        source: wgpu::ShaderSource::Wgsl(include_str!("../host_focus_ring.wgsl").into()),
+    });
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("noir-focus-ring-pipeline-layout"),
+        bind_group_layouts: &[Some(focus_ring_layout)],
+        immediate_size: 0,
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("noir-focus-ring-pipeline"),
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module: &shader, entry_point: Some("vs_main"),
+            buffers: &[Some(unit_layout()), Some(static_instance_layout())], compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader, entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState { format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(), depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(), multiview_mask: None, cache: None,
+    })
+}
+
 fn make_static_pipeline(device:&wgpu::Device, format:wgpu::TextureFormat, rounded_surface_layout: &wgpu::BindGroupLayout)->wgpu::RenderPipeline{
  let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor{label:Some("noir-static-quad"),source:wgpu::ShaderSource::Wgsl(include_str!("../host_quad.wgsl").into())}); let layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{label:Some("noir-static-layout"),bind_group_layouts:&[Some(rounded_surface_layout)],immediate_size:0});
  device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{label:Some("noir-static-pipeline"),layout:Some(&layout),vertex:wgpu::VertexState{module:&shader,entry_point:Some("vs_main"),buffers:&[Some(unit_layout()),Some(static_instance_layout())],compilation_options:Default::default()},fragment:Some(wgpu::FragmentState{module:&shader,entry_point:Some("fs_main"),targets:&[Some(wgpu::ColorTargetState{format,blend:Some(wgpu::BlendState::ALPHA_BLENDING),write_mask:wgpu::ColorWrites::ALL})],compilation_options:Default::default()}),primitive:wgpu::PrimitiveState::default(),depth_stencil:None,multisample:wgpu::MultisampleState::default(),multiview_mask:None,cache:None})
@@ -4790,7 +5007,12 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
                     "unsupported modal_focus_subgraph ABI {}@{}; expected {}@{}",
                     scene.abi_contracts.modal_focus_subgraph.schema, scene.abi_contracts.modal_focus_subgraph.revision,
                     MODAL_FOCUS_SUBGRAPH_ABI_SCHEMA, MODAL_FOCUS_SUBGRAPH_ABI_REVISION);
-    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} rounded-surface={}@{} shadow-surface={}@{} navigation-selection={}@{} modal-focus={}@{} frozen",
+    anyhow::ensure!(scene.abi_contracts.modal_focus_visual_plan.schema == MODAL_FOCUS_VISUAL_PLAN_ABI_SCHEMA
+                    && scene.abi_contracts.modal_focus_visual_plan.revision == MODAL_FOCUS_VISUAL_PLAN_ABI_REVISION,
+                    "unsupported modal_focus_visual_plan ABI {}@{}; expected {}@{}",
+                    scene.abi_contracts.modal_focus_visual_plan.schema, scene.abi_contracts.modal_focus_visual_plan.revision,
+                    MODAL_FOCUS_VISUAL_PLAN_ABI_SCHEMA, MODAL_FOCUS_VISUAL_PLAN_ABI_REVISION);
+    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} rounded-surface={}@{} shadow-surface={}@{} navigation-selection={}@{} modal-focus={}@{} modal-focus-visual={}@{} frozen",
              scene.abi_contracts.virtual_list_plan.schema, scene.abi_contracts.virtual_list_plan.revision,
              scene.abi_contracts.row_activation_plan.schema, scene.abi_contracts.row_activation_plan.revision,
              scene.abi_contracts.scrollbar_plan.schema, scene.abi_contracts.scrollbar_plan.revision,
@@ -4803,7 +5025,8 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
              scene.abi_contracts.rounded_surface_plan.schema, scene.abi_contracts.rounded_surface_plan.revision,
              scene.abi_contracts.shadow_surface_plan.schema, scene.abi_contracts.shadow_surface_plan.revision,
              scene.abi_contracts.navigation_selection_plan.schema, scene.abi_contracts.navigation_selection_plan.revision,
-             scene.abi_contracts.modal_focus_subgraph.schema, scene.abi_contracts.modal_focus_subgraph.revision);
+             scene.abi_contracts.modal_focus_subgraph.schema, scene.abi_contracts.modal_focus_subgraph.revision,
+             scene.abi_contracts.modal_focus_visual_plan.schema, scene.abi_contracts.modal_focus_visual_plan.revision);
     Ok(())
 }
 
@@ -5570,6 +5793,124 @@ fn compiler_modal_focus_subgraph_plan(
     println!("compiler modal focus: v1 entries={} fixed-tab-targets={} background-isolated no-packets",
              compiled.len(), compiled.iter().map(|entry| entry.focus_event_slots.len()).sum::<usize>());
     Ok(Some(CompiledModalFocusSubgraphPlan { entries: compiled }))
+}
+
+fn compiler_modal_focus_visual_plan(
+    scene: &Scene,
+    overlay_state_plan: &Option<CompiledOverlayStatePlan>,
+    modal_focus_subgraph_plan: &Option<CompiledModalFocusSubgraphPlan>,
+    event_tile_masks: &[EventTileMasks],
+    instances: &[QuadInstance],
+) -> Result<Option<CompiledModalFocusVisualPlan>> {
+    let Some(plan) = &scene.modal_focus_visual_plan else {
+        anyhow::ensure!(!scene.modal_focus_visual_required,
+                        "Scene marked modal_focus_visual_required may not disable modal_focus_visual_plan v1");
+        println!("compiler modal focus visual: disabled entries=0");
+        return Ok(None);
+    };
+    anyhow::ensure!(plan.abi_schema == MODAL_FOCUS_VISUAL_PLAN_ABI_SCHEMA && plan.abi_revision == MODAL_FOCUS_VISUAL_PLAN_ABI_REVISION,
+                    "modal focus visual has unsupported ABI {}@{}", plan.abi_schema, plan.abi_revision);
+    let overlay_plan = overlay_state_plan.as_ref().context("modal focus visual requires an admitted overlay_state_plan")?;
+    let modal_plan = modal_focus_subgraph_plan.as_ref().context("modal focus visual requires an admitted modal_focus_subgraph_plan")?;
+    anyhow::ensure!(!plan.entries.is_empty(), "modal focus visual plan may not be empty");
+    let expected_count = modal_plan.entries.iter().map(|entry| entry.focus_event_slots.len()).sum::<usize>();
+    anyhow::ensure!(plan.entries.len() == expected_count,
+                    "modal focus visual entry count {} disagrees with fixed Tab target count {}", plan.entries.len(), expected_count);
+    let mut seen_ids = HashSet::new();
+    let mut ring_for_event_slot = vec![None; scene.event_map.len()];
+    let mut compiled = Vec::with_capacity(plan.entries.len());
+    for entry in &plan.entries {
+        anyhow::ensure!(seen_ids.insert(entry.id.as_str()), "modal focus visual has duplicate ring id {}", entry.id);
+        let event = scene.event_map.get(entry.focus_event_slot)
+            .with_context(|| format!("modal focus visual {} references absent event slot {}", entry.id, entry.focus_event_slot))?;
+        anyhow::ensure!(event.slot == entry.focus_event_slot,
+                        "modal focus visual {} event slot is not its canonical Event Map address", entry.id);
+        anyhow::ensure!(entry.source_instance_offset > 0
+                        && entry.source_instance_offset % std::mem::size_of::<QuadInstance>() == 0
+                        && entry.source_instance_offset / std::mem::size_of::<QuadInstance>() < instances.len()
+                        && entry.source_instance_offset == event.instance_offset,
+                        "modal focus visual {} has invalid source instance offset", entry.id);
+        anyhow::ensure!(entry.id == format!("{}$focus-ring", event.node),
+                        "modal focus visual {} is not canonically named for Event Map target {}", entry.id, event.node);
+        anyhow::ensure!(entry.x.is_finite() && entry.y.is_finite() && entry.width.is_finite() && entry.height.is_finite()
+                        && entry.radius_px.is_finite() && entry.thickness_px.is_finite()
+                        && entry.width > 0.0 && entry.height > 0.0 && entry.radius_px > 0.0 && entry.thickness_px > 0.0
+                        && entry.radius_px <= entry.width.min(entry.height) * 0.5,
+                        "modal focus visual {} has non-finite or invalid ring geometry", entry.id);
+        let expected_x = event.x - FOCUS_RING_HALO_PX;
+        let expected_y = event.y - FOCUS_RING_HALO_PX;
+        let expected_width = event.width + FOCUS_RING_HALO_PX * 2.0;
+        let expected_height = event.height + FOCUS_RING_HALO_PX * 2.0;
+        let expected_radius = 12.0f32.min(expected_width.min(expected_height) * 0.5);
+        anyhow::ensure!((entry.x - expected_x).abs() <= 1e-4
+                        && (entry.y - expected_y).abs() <= 1e-4
+                        && (entry.width - expected_width).abs() <= 1e-4
+                        && (entry.height - expected_height).abs() <= 1e-4
+                        && (entry.radius_px - expected_radius).abs() <= 1e-4
+                        && (entry.thickness_px - FOCUS_RING_THICKNESS_PX).abs() <= 1e-4
+                        && entry.color.iter().zip(FOCUS_RING_COLOR).all(|(actual, expected)| (*actual - expected).abs() <= 1e-6),
+                        "modal focus visual {} violates the fixed halo/outline/color recipe", entry.id);
+        let modal_entry_index = modal_plan.entries.iter().position(|modal| modal.focus_event_slots.contains(&entry.focus_event_slot))
+            .with_context(|| format!("modal focus visual {} target slot {} is outside the admitted Tab subgraph", entry.id, entry.focus_event_slot))?;
+        let modal = &modal_plan.entries[modal_entry_index];
+        let overlay = overlay_plan.entries.iter().find(|candidate| candidate.id == modal.id)
+            .with_context(|| format!("modal focus visual {} lacks paired overlay entry {}", entry.id, modal.id))?;
+        let tile_mask = tile_mask(&entry.tile_ids, scene.render_schedules[0].tiles.len(), &format!("modal focus visual {}", entry.id))?;
+        let event_mask = event_tile_masks.get(entry.focus_event_slot)
+            .with_context(|| format!("modal focus visual {} target slot lacks an event tile mask", entry.id))?;
+        anyhow::ensure!(tile_mask != 0 && tile_mask == modal.tile_mask && tile_mask == overlay.tile_mask && event_mask.release == tile_mask,
+                        "modal focus visual {} widened or mismatched its fixed local tile scope", entry.id);
+        anyhow::ensure!(ring_for_event_slot[entry.focus_event_slot].replace(compiled.len()).is_none(),
+                        "modal focus visual has multiple rings for Event Map slot {}", entry.focus_event_slot);
+        compiled.push(CompiledModalFocusVisualEntry {
+            id: entry.id.clone(), modal_entry_index, focus_event_slot: entry.focus_event_slot,
+            source_instance_offset: entry.source_instance_offset, x: entry.x, y: entry.y,
+            width: entry.width, height: entry.height, radius_px: entry.radius_px,
+            thickness_px: entry.thickness_px, color: entry.color, tile_mask,
+        });
+    }
+    for modal in &modal_plan.entries {
+        for &slot in &modal.focus_event_slots {
+            anyhow::ensure!(ring_for_event_slot.get(slot).and_then(|ring| *ring).is_some(),
+                            "modal focus visual plan lacks a ring for fixed Tab target slot {}", slot);
+        }
+    }
+    println!("compiler modal focus visual: v1 entries={} preallocated-outline-quads={} halo={}px thickness={}px no-runtime-geometry",
+             compiled.len(), compiled.len(), FOCUS_RING_HALO_PX, FOCUS_RING_THICKNESS_PX);
+    Ok(Some(CompiledModalFocusVisualPlan { entries: compiled, ring_for_event_slot }))
+}
+
+fn make_focus_ring_gpu_instances(
+    plan: &Option<CompiledModalFocusVisualPlan>,
+    canvas: VerifiedVisualCanvas,
+) -> (Vec<QuadInstance>, Vec<GpuFocusRingMeta>) {
+    let Some(plan) = plan else { return (Vec::new(), Vec::new()); };
+    let canvas_width = canvas.width as f32;
+    let canvas_height = canvas.height as f32;
+    let mut instances = Vec::with_capacity(plan.entries.len());
+    let mut metadata = Vec::with_capacity(plan.entries.len());
+    for entry in &plan.entries {
+        let ndc_pos = [2.0 * entry.x / canvas_width - 1.0,
+                       1.0 - 2.0 * (entry.y + entry.height) / canvas_height];
+        let ndc_size = [2.0 * entry.width / canvas_width,
+                        2.0 * entry.height / canvas_height];
+        instances.push(QuadInstance {
+            pos: ndc_pos,
+            size: ndc_size,
+            color: [entry.color[0], entry.color[1], entry.color[2], 0.0],
+            glyph_word_offset: 0,
+            glyph_enabled: 0,
+            glyph_count: 0,
+        });
+        metadata.push(GpuFocusRingMeta {
+            radius_px: entry.radius_px,
+            thickness_px: entry.thickness_px,
+            width_px: entry.width,
+            height_px: entry.height,
+        });
+    }
+    println!("compiler modal focus GPU resources: ring-quads={} metadata={} alpha-initial=0", instances.len(), metadata.len());
+    (instances, metadata)
 }
 
 fn compiler_release_motion_tracks(scene: &Scene, event_tile_masks: &[EventTileMasks]) -> Result<Vec<CompiledReleaseTrack>> {
