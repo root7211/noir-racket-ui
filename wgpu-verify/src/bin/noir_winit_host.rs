@@ -58,6 +58,8 @@ const MODAL_FOCUS_SUBGRAPH_ABI_SCHEMA: &str = "noir-modal-focus-subgraph-v1";
 const MODAL_FOCUS_SUBGRAPH_ABI_REVISION: u32 = 1;
 const MODAL_FOCUS_VISUAL_PLAN_ABI_SCHEMA: &str = "noir-modal-focus-visual-plan-v1";
 const MODAL_FOCUS_VISUAL_PLAN_ABI_REVISION: u32 = 1;
+const MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_SCHEMA: &str = "noir-material-observability-workbench-plan-v1";
+const MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_REVISION: u32 = 1;
 const FOCUS_RING_HALO_PX: f32 = 3.0;
 const FOCUS_RING_THICKNESS_PX: f32 = 2.0;
 const FOCUS_RING_COLOR: [f32; 4] = [0.36, 0.72, 1.0, 1.0];
@@ -122,6 +124,10 @@ struct Scene {
     modal_focus_visual_plan: Option<ModalFocusVisualPlan>,
     #[serde(default)]
     modal_focus_visual_required: bool,
+    #[serde(deserialize_with = "deserialize_material_observability_workbench_plan_option")]
+    material_observability_workbench_plan: Option<MaterialObservabilityWorkbenchPlan>,
+    #[serde(default)]
+    material_observability_workbench_required: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -143,6 +149,7 @@ struct AbiContracts {
     overlay_state_plan: AbiContract,
     modal_focus_subgraph: AbiContract,
     modal_focus_visual_plan: AbiContract,
+    material_observability_workbench_plan: AbiContract,
 }
 
 #[derive(Debug, Deserialize)]
@@ -358,6 +365,47 @@ where D: Deserializer<'de> {
         ModalFocusVisualPlanWire::Plan(plan) => Ok(Some(plan)),
         ModalFocusVisualPlanWire::Disabled(false) => Ok(None),
         ModalFocusVisualPlanWire::Disabled(true) => Err(serde::de::Error::custom("modal_focus_visual_plan may be an object or false, never true")),
+    }
+}
+
+// A workbench is a closed composition of one Material rail and three resident
+// static view endpoints. Its wire fields are pointer lists, never runtime IDs.
+#[derive(Clone, Debug, Deserialize)]
+struct MaterialObservabilityWorkbenchView {
+    destination_id: String,
+    event_slot: usize,
+    target_value: i64,
+    view_root_id: String,
+    node_ids: Vec<String>,
+    instance_offsets: Vec<usize>,
+    instance_alphas: Vec<f32>,
+    glyph_slots: Vec<usize>,
+    event_slots: Vec<usize>,
+    tile_ids: Vec<usize>,
+}
+#[derive(Clone, Debug, Deserialize)]
+struct MaterialObservabilityWorkbenchPlan {
+    abi_schema: String,
+    abi_revision: u32,
+    id: String,
+    rail_id: String,
+    state: String,
+    state_index: usize,
+    systems_list_id: String,
+    systems_view_id: String,
+    initial_view: String,
+    initial_value: i64,
+    views: Vec<MaterialObservabilityWorkbenchView>,
+}
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum MaterialObservabilityWorkbenchPlanWire { Plan(MaterialObservabilityWorkbenchPlan), Disabled(bool) }
+fn deserialize_material_observability_workbench_plan_option<'de, D>(deserializer: D) -> std::result::Result<Option<MaterialObservabilityWorkbenchPlan>, D::Error>
+where D: Deserializer<'de> {
+    match MaterialObservabilityWorkbenchPlanWire::deserialize(deserializer)? {
+        MaterialObservabilityWorkbenchPlanWire::Plan(plan) => Ok(Some(plan)),
+        MaterialObservabilityWorkbenchPlanWire::Disabled(false) => Ok(None),
+        MaterialObservabilityWorkbenchPlanWire::Disabled(true) => Err(serde::de::Error::custom("material_observability_workbench_plan may be an object or false, never true")),
     }
 }
 
@@ -777,6 +825,34 @@ struct CompiledModalFocusVisualPlan {
     // Event Map slot -> focus-ring buffer slot. The keyboard hot path indexes this
     // table directly after the compiler has proved the closed Tab subgraph.
     ring_for_event_slot: Vec<Option<usize>>,
+}
+
+#[derive(Clone, Debug)]
+struct CompiledMaterialObservabilityWorkbenchView {
+    destination_id: String,
+    event_slot: usize,
+    target_value: i64,
+    view_root_id: String,
+    instance_offsets: Vec<usize>,
+    instance_alphas: Vec<f32>,
+    glyph_slots: Vec<usize>,
+    event_slots: Vec<usize>,
+    shadow_indices: Vec<usize>,
+    shadow_alphas: Vec<f32>,
+    tile_mask: u64,
+}
+#[derive(Clone, Debug)]
+struct CompiledMaterialObservabilityWorkbenchPlan {
+    id: String,
+    rail_id: String,
+    state_index: usize,
+    systems_list_index: usize,
+    systems_view_index: usize,
+    selected_index: usize,
+    views: Vec<CompiledMaterialObservabilityWorkbenchView>,
+    // Event Map slot -> view index. Global rail/overlay events retain None and are
+    // intentionally outside the view gate.
+    view_for_event_slot: Vec<Option<usize>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1877,6 +1953,7 @@ struct Host {
     overlay_state_plan: Option<CompiledOverlayStatePlan>,
     modal_focus_subgraph_plan: Option<CompiledModalFocusSubgraphPlan>,
     modal_focus_visual_plan: Option<CompiledModalFocusVisualPlan>,
+    material_observability_workbench_plan: Option<CompiledMaterialObservabilityWorkbenchPlan>,
     log_browser_plans: Vec<CompiledLogBrowserPlan>,
     log_levels: Vec<Vec<LogLevel>>,
     // Registered v1 fontc atlases. They deliberately remain separate from legacy
@@ -2028,6 +2105,12 @@ impl Host {
         let overlay_state_plan = compiler_overlay_state_plan(&scene, &state_slot_ids, &action_slot_ids, &action_tile_masks, &packet_worklists, &instances, &placements)?;
         let modal_focus_subgraph_plan = compiler_modal_focus_subgraph_plan(&scene, &state_slot_ids, &overlay_state_plan, &event_tile_masks)?;
         let modal_focus_visual_plan = compiler_modal_focus_visual_plan(&scene, &overlay_state_plan, &modal_focus_subgraph_plan, &event_tile_masks, &instances)?;
+        let material_observability_workbench_plan = compiler_material_observability_workbench_plan(
+            &scene, &state_slot_ids, &navigation_selection_plan, &virtual_lists, &log_browser_plans, &instances, &placements,
+        )?;
+        apply_material_observability_workbench_initial_visibility(
+            &material_observability_workbench_plan, &mut instances, &mut placements, &mut shadow_instances, &queue, &instance_buffer,
+        );
         let (focus_ring_instances, focus_ring_metadata) = make_focus_ring_gpu_instances(&modal_focus_visual_plan, visual_canvas);
         if let Some(plan) = &overlay_state_plan {
             for entry in &plan.entries {
@@ -2093,7 +2176,7 @@ impl Host {
         let initial_glyph_bytes = glyph_bytes.clone();
         let virtual_list_count = virtual_lists.len();
         let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, canvas_width: visual_canvas.width, canvas_height: visual_canvas.height, canvas_margin: visual_canvas.margin, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, rounded_surface_bind_group, _rounded_surface_buffer: rounded_surface_buffer, shadow_pipeline, shadow_surface_bind_group, shadow_instance_buffer, shadow_instance_count, shadow_instances: shadow_instance_upload, _shadow_surface_buffer: shadow_surface_buffer, focus_ring_pipeline, focus_ring_bind_group, focus_ring_instance_buffer, focus_ring_instance_count, focus_ring_instances, _focus_ring_meta_buffer: focus_ring_meta_buffer, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group,
- cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, release_tracks, active_release_tracks: Vec::new(), virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, navigation_selection_plan, overlay_state_plan, modal_focus_subgraph_plan, modal_focus_visual_plan, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
+ cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, release_tracks, active_release_tracks: Vec::new(), virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, navigation_selection_plan, overlay_state_plan, modal_focus_subgraph_plan, modal_focus_visual_plan, material_observability_workbench_plan, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
         host.sync_focus_visuals();
         host.execute_scene_data_update_batches()?;
         host.redraw_canvas_full();
@@ -2136,9 +2219,19 @@ impl Host {
         true
     }
 
+    fn material_observability_workbench_event_enabled(&self, event_slot: usize) -> bool {
+        let Some(plan) = &self.material_observability_workbench_plan else { return true; };
+        match plan.view_for_event_slot.get(event_slot).and_then(|entry| *entry) {
+            Some(view_index) => plan.selected_index == view_index,
+            None => true,
+        }
+    }
+
     fn hit_test(&self, point: [f32; 2]) -> Option<usize> {
         self.scene.event_map.iter().enumerate()
-            .filter(|(index, e)| self.overlay_event_enabled(*index) && point[0] >= e.x && point[0] < e.x + e.width && point[1] >= e.y && point[1] < e.y + e.height)
+            .filter(|(index, e)| self.overlay_event_enabled(*index)
+                    && self.material_observability_workbench_event_enabled(e.slot)
+                    && point[0] >= e.x && point[0] < e.x + e.width && point[1] >= e.y && point[1] < e.y + e.height)
             .max_by_key(|(_, e)| e.slot).map(|(i,_)| i)
     }
     fn patch_color(&mut self, index: usize, color: [f32;4]) { let e=&self.scene.event_map[index]; self.instances[e.instance_offset/44].color=color; self.queue.write_buffer(&self.instance_buffer, e.instance_offset as u64 + 16, bytemuck::cast_slice(&color)); }
@@ -2694,6 +2787,38 @@ impl Host {
         self.apply_overlay_state(event_slot)
     }
 
+    fn apply_material_observability_workbench_view_selection(&mut self, previous_index: usize, next_index: usize) -> u64 {
+        let Some(plan_snapshot) = self.material_observability_workbench_plan.clone() else { return 0; };
+        if plan_snapshot.selected_index == next_index { return 0; }
+        let previous = plan_snapshot.views.get(previous_index)
+            .expect("navigation-selected workbench previous view is compiler admitted");
+        let next = plan_snapshot.views.get(next_index)
+            .expect("navigation-selected workbench next view is compiler admitted");
+        for &offset in &previous.instance_offsets { self.patch_instance_f32((offset + 28) as u64, 0.0); }
+        for &slot in &previous.glyph_slots { self.patch_placement_alpha(slot, 0.0); }
+        for &shadow_index in &previous.shadow_indices {
+            self.shadow_instances[shadow_index].color[3] = 0.0;
+            self.queue.write_buffer(&self.shadow_instance_buffer, (shadow_index * std::mem::size_of::<QuadInstance>() + 28) as u64, bytemuck::bytes_of(&0.0f32));
+        }
+        for (&offset, &alpha) in next.instance_offsets.iter().zip(next.instance_alphas.iter()) {
+            self.patch_instance_f32((offset + 28) as u64, alpha);
+        }
+        for &slot in &next.glyph_slots { self.patch_placement_alpha(slot, 1.0); }
+        for (&shadow_index, &alpha) in next.shadow_indices.iter().zip(next.shadow_alphas.iter()) {
+            self.shadow_instances[shadow_index].color[3] = alpha;
+            self.queue.write_buffer(&self.shadow_instance_buffer, (shadow_index * std::mem::size_of::<QuadInstance>() + 28) as u64, bytemuck::bytes_of(&alpha));
+        }
+        let mask = previous.tile_mask | next.tile_mask;
+        let instance_patches = previous.instance_offsets.len() + next.instance_offsets.len();
+        let glyph_patches = previous.glyph_slots.len() + next.glyph_slots.len();
+        let shadow_patches = previous.shadow_indices.len() + next.shadow_indices.len();
+        self.material_observability_workbench_plan.as_mut()
+            .expect("cloned workbench plan remains resident").selected_index = next_index;
+        println!("material-workbench view-switch: old={} new={} instance-alpha-patches={} glyph-alpha-patches={} shadow-alpha-patches={} tile-mask=0x{:016x}",
+                 previous.destination_id, next.destination_id, instance_patches, glyph_patches, shadow_patches, mask);
+        mask
+    }
+
     fn apply_navigation_selection(&mut self, event_slot: usize) -> bool {
         let Some(plan_snapshot) = self.navigation_selection_plan.clone() else { return false; };
         let Some(next_index) = plan_snapshot.destinations.iter().position(|destination| destination.event_slot == event_slot) else { return false; };
@@ -2715,7 +2840,8 @@ impl Host {
             self.instances[slot].color = color;
             self.queue.write_buffer(&self.instance_buffer, (destination.instance_offset + 16) as u64, bytemuck::cast_slice(&color));
         }
-        let selection_mask = previous.tile_mask | next.tile_mask;
+        let workbench_mask = self.apply_material_observability_workbench_view_selection(previous_index, next_index);
+        let selection_mask = previous.tile_mask | next.tile_mask | workbench_mask;
         if let Some(request) = self.pending_render.last_mut() {
             if request.packet_worklist_index == RenderRequest::NO_PACKETS && request.scroll_list_index.is_none() {
                 request.tile_mask |= selection_mask;
@@ -2727,8 +2853,8 @@ impl Host {
             self.enqueue_render(RenderRequest::no_packets(selection_mask), "navigation-selection");
         }
         self.navigation_selection_plan.as_mut().expect("cloned navigation selection remains resident").selected_index = next_index;
-        println!("navigation-selection: rail={} old={} new={} state-slot={} target={} color-patches=2 tile-mask=0x{:016x} worklist=no-packets",
-                 plan_snapshot.rail_id, previous.id, next.id, plan_snapshot.state_index, next.target_value, selection_mask);
+        println!("navigation-selection: rail={} old={} new={} state-slot={} target={} color-patches=2 workbench-mask=0x{:016x} tile-mask=0x{:016x} worklist=no-packets",
+                 plan_snapshot.rail_id, previous.id, next.id, plan_snapshot.state_index, next.target_value, workbench_mask, selection_mask);
         true
     }
 
@@ -3398,6 +3524,17 @@ impl Host {
         None
     }
 
+    fn material_observability_workbench_list_input_admitted(&self, list_index: usize) -> bool {
+        let Some(plan) = &self.material_observability_workbench_plan else { return true; };
+        let admitted = plan.selected_index == plan.systems_view_index && list_index == plan.systems_list_index;
+        if !admitted {
+            println!("material-workbench list-input-gated: active-view={} systems-view={} requested-list={} systems-list={}",
+                     plan.views[plan.selected_index].destination_id, plan.views[plan.systems_view_index].destination_id,
+                     list_index, plan.systems_list_index);
+        }
+        admitted
+    }
+
     fn patch_list_row_color(&mut self, list_index: usize, logical: usize) {
         let interaction = self.list_interactions[list_index].clone();
         let (list_id, viewport, visible_rows, physical_slots) = {
@@ -3418,6 +3555,7 @@ impl Host {
     }
 
     fn set_list_hover_from_cursor(&mut self) -> bool {
+        if !self.material_observability_workbench_list_input_admitted(0) { return false; }
         let next = self.list_row_at_cursor();
         let mut consumed = false;
         for index in 0..self.list_interactions.len() {
@@ -3432,6 +3570,7 @@ impl Host {
     }
 
     fn select_list_logical(&mut self, index: usize, logical: usize) -> bool {
+        if !self.material_observability_workbench_list_input_admitted(index) { return false; }
         let interaction = &self.list_interactions[index];
         if logical < interaction.minimum_logical_row || logical > interaction.maximum_logical_row { return false; }
         let old = self.list_selected_rows[index];
@@ -3466,6 +3605,7 @@ impl Host {
         for plan in self.row_activation_plans.clone() {
             let list_id = self.virtual_lists[plan.list_index].id.clone();
             if requested_list_id.is_some_and(|requested| requested != list_id) { continue; }
+            if !self.material_observability_workbench_list_input_admitted(plan.list_index) { continue; }
             let Some(logical) = self.list_selected_rows[plan.list_index] else { continue; };
             let physical = logical % self.virtual_lists[plan.list_index].physical_slots;
             println!("row-activation: list={} logical={} physical={} action-slot={} batch={} action-tile-mask=0x{:016x} worklist={}",
@@ -3501,6 +3641,7 @@ impl Host {
     fn navigate_list_selection(&mut self, direction: i32) -> bool {
         if self.list_interactions.is_empty() { return false; }
         let index = 0usize;
+        if !self.material_observability_workbench_list_input_admitted(index) { return false; }
         let interaction = &self.list_interactions[index];
         let current = self.list_selected_rows[index].unwrap_or(interaction.minimum_logical_row);
         let target = if direction < 0 { current.saturating_sub(1).max(interaction.minimum_logical_row) } else { (current + 1).min(interaction.maximum_logical_row) };
@@ -3522,6 +3663,7 @@ impl Host {
 
     fn execute_list_navigation(&mut self, key: ListNavigationKey) -> bool {
         let Some(plan) = self.list_navigation_plans.first().cloned() else { return false; };
+        if !self.material_observability_workbench_list_input_admitted(plan.list_index) { return false; }
         let current = self.virtual_lists[plan.list_index].current_viewport_slot;
         let target = match key {
             ListNavigationKey::PageUp => current.saturating_sub(plan.page_step),
@@ -3545,6 +3687,7 @@ impl Host {
     fn scroll_virtual_list(&mut self, direction: i32) {
         if direction == 0 { return; }
         for list_index in 0..self.virtual_lists.len() {
+            if !self.material_observability_workbench_list_input_admitted(list_index) { continue; }
             let current = self.virtual_lists[list_index].current_viewport_slot;
             let max_scroll = self.virtual_lists[list_index].logical_capacity - self.virtual_lists[list_index].visible_rows;
             let target = if direction > 0 { (current + 1).min(max_scroll) } else { current.saturating_sub(1) };
@@ -5012,7 +5155,12 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
                     "unsupported modal_focus_visual_plan ABI {}@{}; expected {}@{}",
                     scene.abi_contracts.modal_focus_visual_plan.schema, scene.abi_contracts.modal_focus_visual_plan.revision,
                     MODAL_FOCUS_VISUAL_PLAN_ABI_SCHEMA, MODAL_FOCUS_VISUAL_PLAN_ABI_REVISION);
-    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} rounded-surface={}@{} shadow-surface={}@{} navigation-selection={}@{} modal-focus={}@{} modal-focus-visual={}@{} frozen",
+    anyhow::ensure!(scene.abi_contracts.material_observability_workbench_plan.schema == MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_SCHEMA
+                    && scene.abi_contracts.material_observability_workbench_plan.revision == MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_REVISION,
+                    "unsupported material_observability_workbench_plan ABI {}@{}; expected {}@{}",
+                    scene.abi_contracts.material_observability_workbench_plan.schema, scene.abi_contracts.material_observability_workbench_plan.revision,
+                    MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_SCHEMA, MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_REVISION);
+    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} rounded-surface={}@{} shadow-surface={}@{} navigation-selection={}@{} modal-focus={}@{} modal-focus-visual={}@{} workbench={}@{} frozen",
              scene.abi_contracts.virtual_list_plan.schema, scene.abi_contracts.virtual_list_plan.revision,
              scene.abi_contracts.row_activation_plan.schema, scene.abi_contracts.row_activation_plan.revision,
              scene.abi_contracts.scrollbar_plan.schema, scene.abi_contracts.scrollbar_plan.revision,
@@ -5026,7 +5174,8 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
              scene.abi_contracts.shadow_surface_plan.schema, scene.abi_contracts.shadow_surface_plan.revision,
              scene.abi_contracts.navigation_selection_plan.schema, scene.abi_contracts.navigation_selection_plan.revision,
              scene.abi_contracts.modal_focus_subgraph.schema, scene.abi_contracts.modal_focus_subgraph.revision,
-             scene.abi_contracts.modal_focus_visual_plan.schema, scene.abi_contracts.modal_focus_visual_plan.revision);
+             scene.abi_contracts.modal_focus_visual_plan.schema, scene.abi_contracts.modal_focus_visual_plan.revision,
+             scene.abi_contracts.material_observability_workbench_plan.schema, scene.abi_contracts.material_observability_workbench_plan.revision);
     Ok(())
 }
 
@@ -5638,6 +5787,188 @@ fn compiler_navigation_selection_plan(
              plan.rail_id, plan.state, plan.state_index, compiled.len(), plan.initial_destination,
              compiled.iter().map(|entry| entry.tile_mask).collect::<Vec<_>>());
     Ok(Some(CompiledNavigationSelectionPlan { rail_id: plan.rail_id.clone(), state_index: plan.state_index, destinations: compiled, selected_index }))
+}
+
+fn compiler_material_observability_workbench_plan(
+    scene: &Scene,
+    state_slot_ids: &[String],
+    navigation_selection_plan: &Option<CompiledNavigationSelectionPlan>,
+    virtual_lists: &[CompiledVirtualListPlan],
+    log_browser_plans: &[CompiledLogBrowserPlan],
+    instances: &[QuadInstance],
+    placements: &[GlyphPlacementInstance],
+) -> Result<Option<CompiledMaterialObservabilityWorkbenchPlan>> {
+    let Some(plan) = &scene.material_observability_workbench_plan else {
+        anyhow::ensure!(!scene.material_observability_workbench_required,
+                        "Scene marked material_observability_workbench_required may not disable material_observability_workbench_plan v1");
+        println!("compiler material workbench: disabled views=0");
+        return Ok(None);
+    };
+    anyhow::ensure!(plan.abi_schema == MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_SCHEMA
+                    && plan.abi_revision == MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_REVISION,
+                    "material workbench has unsupported ABI {}@{}", plan.abi_schema, plan.abi_revision);
+    anyhow::ensure!(scene.material_observability_workbench_required,
+                    "material workbench plan may not be present without its explicit required marker");
+    anyhow::ensure!(plan.views.len() == 3, "material workbench {} must have exactly three fixed view endpoints", plan.id);
+    anyhow::ensure!(plan.state_index < state_slot_ids.len() && state_slot_ids[plan.state_index] == plan.state,
+                    "material workbench {} has invalid State Slot witness", plan.id);
+    let state_slot = scene.state_slots.get(plan.state_index)
+        .with_context(|| format!("material workbench {} State Slot is absent", plan.id))?;
+    anyhow::ensure!(state_slot.id == plan.state && state_slot.initial == plan.initial_value,
+                    "material workbench {} initial State Slot endpoint disagrees", plan.id);
+    let navigation = navigation_selection_plan.as_ref().context("material workbench requires admitted navigation_selection_plan")?;
+    anyhow::ensure!(navigation.rail_id == plan.rail_id && navigation.state_index == plan.state_index
+                    && navigation.destinations.len() == plan.views.len() && navigation.selected_index == plan.initial_value as usize,
+                    "material workbench {} rail/state endpoint disagrees with navigation selection plan", plan.id);
+    anyhow::ensure!(scene.render_schedules.len() == 1, "material workbench requires one fixed render schedule");
+    let tiles = &scene.render_schedules[0].tiles;
+    let canvas = &scene.visual_language_plan.canvas;
+    let layout_by_offset = scene.layout_plan.iter().map(|layout| (layout._instance_offset, layout)).collect::<HashMap<_, _>>();
+    let mut seen_view_ids = HashSet::new();
+    let mut seen_destinations = HashSet::new();
+    let mut seen_offsets = HashSet::new();
+    let mut seen_glyph_slots = HashSet::new();
+    let mut seen_event_slots = HashSet::new();
+    let mut seen_shadow_indices = HashSet::new();
+    let mut view_for_event_slot = vec![None; scene.event_map.len()];
+    let mut compiled = Vec::with_capacity(plan.views.len());
+    for (index, view) in plan.views.iter().enumerate() {
+        anyhow::ensure!(view.target_value == index as i64
+                        && seen_view_ids.insert(view.view_root_id.as_str())
+                        && seen_destinations.insert(view.destination_id.as_str()),
+                        "material workbench {} has duplicate or noncanonical view endpoint", plan.id);
+        anyhow::ensure!(view.node_ids.first().map(String::as_str) == Some(view.view_root_id.as_str())
+                        && view.node_ids.get(1..).is_some_and(|tail| tail.windows(2).all(|pair| pair[0] < pair[1]))
+                        && scene.layout_plan.iter().any(|layout| layout.id == view.view_root_id && layout.tag == "stack"),
+                        "material workbench view {} has invalid canonical static subtree witness", view.view_root_id);
+        let node_set = view.node_ids.iter().collect::<HashSet<_>>();
+        let mut expected_offsets = scene.layout_plan.iter().filter(|layout| node_set.contains(&layout.id))
+            .map(|layout| layout._instance_offset).collect::<Vec<_>>();
+        expected_offsets.sort_unstable(); expected_offsets.dedup();
+        anyhow::ensure!(view.instance_offsets == expected_offsets && view.instance_offsets.len() == view.instance_alphas.len()
+                        && view.instance_offsets.iter().all(|offset| *offset > 0 && *offset % std::mem::size_of::<QuadInstance>() == 0
+                                                           && *offset / std::mem::size_of::<QuadInstance>() < instances.len()),
+                        "material workbench view {} instance address set is not its canonical subtree", view.view_root_id);
+        let expected_alphas = view.instance_offsets.iter().map(|offset| layout_by_offset[offset].color[3]).collect::<Vec<_>>();
+        anyhow::ensure!(view.instance_alphas.iter().zip(expected_alphas.iter()).all(|(actual, expected)| actual.is_finite() && (*actual - *expected).abs() <= 1e-6),
+                        "material workbench view {} instance alpha endpoint disagrees with layout", view.view_root_id);
+        let mut expected_glyph_slots = scene.glyph_placement_plan.iter().filter(|placement| node_set.contains(&placement.node))
+            .map(|placement| placement.slot).collect::<Vec<_>>();
+        expected_glyph_slots.sort_unstable(); expected_glyph_slots.dedup();
+        anyhow::ensure!(view.glyph_slots == expected_glyph_slots && !view.glyph_slots.is_empty()
+                        && view.glyph_slots.iter().all(|slot| *slot < placements.len()),
+                        "material workbench view {} glyph address set is not its canonical subtree", view.view_root_id);
+        let mut expected_event_slots = scene.event_map.iter().filter(|event| node_set.contains(&event.node))
+            .map(|event| event.slot).collect::<Vec<_>>();
+        expected_event_slots.sort_unstable(); expected_event_slots.dedup();
+        anyhow::ensure!(view.event_slots == expected_event_slots
+                        && view.event_slots.iter().all(|slot| *slot < scene.event_map.len() && scene.event_map[*slot].slot == *slot),
+                        "material workbench view {} Event Map set is not its canonical subtree", view.view_root_id);
+        let mut expected_tile_ids = Vec::new();
+        for (tile_index, tile) in tiles.iter().enumerate() {
+            let intersects = scene.layout_plan.iter().filter(|layout| node_set.contains(&layout.id)).any(|layout| {
+                let x = (layout.ndc_pos[0] + 1.0) * canvas.width * 0.5;
+                let y = (1.0 - layout.ndc_pos[1] - layout.ndc_size[1]) * canvas.height * 0.5;
+                let width = layout.ndc_size[0] * canvas.width * 0.5;
+                let height = layout.ndc_size[1] * canvas.height * 0.5;
+                x < tile.x + tile.width && tile.x < x + width && y < tile.y + tile.height && tile.y < y + height
+            });
+            if intersects { expected_tile_ids.push(tile_index); }
+        }
+        anyhow::ensure!(view.tile_ids == expected_tile_ids && !view.tile_ids.is_empty(),
+                        "material workbench view {} tile scope is not its canonical static subtree union", view.view_root_id);
+        let tile_mask = tile_mask(&view.tile_ids, tiles.len(), &format!("material workbench view {}", view.view_root_id))?;
+        let shadow_indices = scene.shadow_surface_plan.as_ref().map(|shadow_plan| {
+            shadow_plan.layers.iter().enumerate()
+                .filter_map(|(shadow_index, layer)| view.instance_offsets.contains(&layer.source_instance_offset).then_some(shadow_index))
+                .collect::<Vec<_>>()
+        }).unwrap_or_default();
+        anyhow::ensure!(shadow_indices.windows(2).all(|pair| pair[0] < pair[1]),
+                        "material workbench view {} shadow layer set is not canonical", view.view_root_id);
+        let shadow_alphas = scene.shadow_surface_plan.as_ref().map(|shadow_plan| {
+            shadow_indices.iter().map(|index| shadow_plan.layers[*index].opacity).collect::<Vec<_>>()
+        }).unwrap_or_default();
+        anyhow::ensure!(shadow_alphas.iter().all(|alpha| alpha.is_finite() && (0.0..=1.0).contains(alpha)),
+                        "material workbench view {} shadow alpha endpoint is invalid", view.view_root_id);
+        let navigation_destination = navigation.destinations.get(index).context("material workbench navigation endpoint is absent")?;
+        anyhow::ensure!(navigation_destination.id == view.destination_id
+                        && navigation_destination.event_slot == view.event_slot
+                        && navigation_destination.target_value == view.target_value,
+                        "material workbench view {} does not pair to the canonical rail destination", view.view_root_id);
+        for &offset in &view.instance_offsets { anyhow::ensure!(seen_offsets.insert(offset), "material workbench view {} aliases another view instance offset", view.view_root_id); }
+        for &slot in &view.glyph_slots { anyhow::ensure!(seen_glyph_slots.insert(slot), "material workbench view {} aliases another view glyph slot", view.view_root_id); }
+        for &slot in &view.event_slots {
+            anyhow::ensure!(seen_event_slots.insert(slot) && view_for_event_slot[slot].replace(index).is_none(),
+                            "material workbench view {} aliases another view Event Map slot", view.view_root_id);
+        }
+        for &shadow_index in &shadow_indices {
+            anyhow::ensure!(seen_shadow_indices.insert(shadow_index),
+                            "material workbench view {} aliases another view shadow layer", view.view_root_id);
+        }
+        compiled.push(CompiledMaterialObservabilityWorkbenchView {
+            destination_id: view.destination_id.clone(), event_slot: view.event_slot, target_value: view.target_value,
+            view_root_id: view.view_root_id.clone(), instance_offsets: view.instance_offsets.clone(),
+            instance_alphas: view.instance_alphas.clone(), glyph_slots: view.glyph_slots.clone(),
+            event_slots: view.event_slots.clone(), shadow_indices, shadow_alphas, tile_mask,
+        });
+    }
+    anyhow::ensure!(compiled.get(plan.initial_value as usize).is_some_and(|view| view.destination_id == plan.initial_view),
+                    "material workbench {} initial destination/value disagree", plan.id);
+    let systems_view_index = compiled.iter().position(|view| view.view_root_id == plan.systems_view_id)
+        .with_context(|| format!("material workbench {} systems_view_id {} is not one of its fixed views", plan.id, plan.systems_view_id))?;
+    let systems_view_wire = &plan.views[systems_view_index];
+    anyhow::ensure!(systems_view_wire.node_ids.iter().any(|node| node == &plan.systems_list_id),
+                    "material workbench {} systems list {} is not owned by its systems view", plan.id, plan.systems_list_id);
+    anyhow::ensure!(virtual_lists.len() == 1 && log_browser_plans.len() == 1,
+                    "material workbench {} requires exactly one virtual list and one log-browser plan", plan.id);
+    let systems_list_index = virtual_lists.iter().position(|list| list.id == plan.systems_list_id)
+        .with_context(|| format!("material workbench {} systems list {} is absent", plan.id, plan.systems_list_id))?;
+    anyhow::ensure!(virtual_lists[systems_list_index].logical_capacity == 10_000
+                    && virtual_lists[systems_list_index].physical_slots == 4
+                    && log_browser_plans[0].list_index == systems_list_index,
+                    "material workbench {} Systems arena must remain the admitted 10000x4 log viewport", plan.id);
+    println!("compiler material workbench: v1 id={} rail={} views=3 selected={} systems-view={} fixed-alpha-lanes={} glyph-alpha-lanes={} no-runtime-routing",
+             plan.id, plan.rail_id, plan.initial_view, plan.systems_view_id,
+             compiled.iter().map(|view| view.instance_offsets.len()).sum::<usize>(),
+             compiled.iter().map(|view| view.glyph_slots.len()).sum::<usize>());
+    Ok(Some(CompiledMaterialObservabilityWorkbenchPlan {
+        id: plan.id.clone(), rail_id: plan.rail_id.clone(), state_index: plan.state_index,
+        systems_list_index, systems_view_index, selected_index: plan.initial_value as usize,
+        views: compiled, view_for_event_slot,
+    }))
+}
+
+fn apply_material_observability_workbench_initial_visibility(
+    plan: &Option<CompiledMaterialObservabilityWorkbenchPlan>,
+    instances: &mut [QuadInstance],
+    placements: &mut [GlyphPlacementInstance],
+    shadow_instances: &mut [QuadInstance],
+    queue: &wgpu::Queue,
+    instance_buffer: &wgpu::Buffer,
+) {
+    let Some(plan) = plan else { return; };
+    let mut hidden_instance_lanes = 0usize;
+    let mut hidden_glyph_lanes = 0usize;
+    let mut hidden_shadow_lanes = 0usize;
+    for (index, view) in plan.views.iter().enumerate() {
+        if index == plan.selected_index { continue; }
+        for &offset in &view.instance_offsets {
+            let slot = offset / std::mem::size_of::<QuadInstance>();
+            instances[slot].color[3] = 0.0;
+            queue.write_buffer(instance_buffer, (offset + 28) as u64, bytemuck::bytes_of(&0.0f32));
+            hidden_instance_lanes += 1;
+        }
+        for &slot in &view.glyph_slots {
+            placements[slot].alpha = 0.0;
+            hidden_glyph_lanes += 1;
+        }
+        for &shadow_index in &view.shadow_indices {
+            shadow_instances[shadow_index].color[3] = 0.0;
+            hidden_shadow_lanes += 1;
+        }
+    }
+    println!("material workbench initial alpha: selected={} hidden-instance-lanes={} hidden-glyph-lanes={} hidden-shadow-lanes={}",
+             plan.views[plan.selected_index].destination_id, hidden_instance_lanes, hidden_glyph_lanes, hidden_shadow_lanes);
 }
 
 fn compiler_overlay_state_plan(

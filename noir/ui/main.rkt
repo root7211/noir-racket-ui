@@ -61,6 +61,8 @@ scene-glyph-draw-packets
          scene-modal-focus-subgraph-required?
          scene-modal-focus-visual-plan
          scene-modal-focus-visual-required?
+         scene-material-observability-workbench-plan
+         scene-material-observability-workbench-required?
          (struct-out navigation-selection-entry)
          (struct-out navigation-selection-plan)
          (struct-out shadow-surface)
@@ -70,6 +72,8 @@ scene-glyph-draw-packets
          (struct-out modal-focus-subgraph-plan)
          (struct-out modal-focus-visual-entry)
          (struct-out modal-focus-visual-plan)
+         (struct-out material-observability-workbench-view)
+         (struct-out material-observability-workbench-plan)
          (struct-out virtual-list-plan)
          (struct-out log-browser-plan)
          (struct-out font-asset-plan)
@@ -165,6 +169,10 @@ scene-glyph-draw-packets
 ;; modal Event Map slots and never adds runtime focus discovery or geometry work.
 (define modal-focus-visual-plan-abi-schema "noir-modal-focus-visual-plan-v1")
 (define modal-focus-visual-plan-abi-revision 1)
+;; The workbench plan composes a fixed Material rail and three resident view endpoints.
+;; It never introduces runtime routing, layout or component discovery.
+(define material-observability-workbench-plan-abi-schema "noir-material-observability-workbench-plan-v1")
+(define material-observability-workbench-plan-abi-revision 1)
 
 (define (abi-contracts->jsexpr)
   (hash 'virtual_list_plan
@@ -211,12 +219,15 @@ scene-glyph-draw-packets
               'revision modal-focus-subgraph-abi-revision)
         'modal_focus_visual_plan
         (hash 'schema modal-focus-visual-plan-abi-schema
-              'revision modal-focus-visual-plan-abi-revision)))
+              'revision modal-focus-visual-plan-abi-revision)
+        'material_observability_workbench_plan
+        (hash 'schema material-observability-workbench-plan-abi-schema
+              'revision material-observability-workbench-plan-abi-revision)))
 
 (struct ui-node (tag id props children source) #:transparent)
 ;; Scene 以静态树和增量执行计划共同组成。state/actions 由 `noir-app`
 ;; 的扩展语法生成；普通 `(ui ...)` 保持空状态表，仍可独立使用。
-(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan navigation-selection-plan overlay-state-plan overlay-state-required? modal-focus-subgraph-plan modal-focus-subgraph-required? modal-focus-visual-plan modal-focus-visual-required?) #:transparent)
+(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan navigation-selection-plan overlay-state-plan overlay-state-required? modal-focus-subgraph-plan modal-focus-subgraph-required? modal-focus-visual-plan modal-focus-visual-required? material-observability-workbench-plan material-observability-workbench-required?) #:transparent)
 ;; state-slot 的 index 是所有 runtime state read/write 的唯一地址；id/initial 只保留为启动期 proof 与可审计导出。
 (struct state-slot (index id initial) #:transparent)
 ;; action-slot 与 state-slot 一样为 macro expansion 生成的 dense canonical address。
@@ -331,6 +342,10 @@ scene-glyph-draw-packets
 ;; event target. Host execution toggles only the ring's preallocated alpha field.
 (struct modal-focus-visual-entry (id focus-event-slot source-instance-offset x y width height radius-px thickness-px color tile-ids) #:transparent)
 (struct modal-focus-visual-plan (entries) #:transparent)
+;; Workbench views are all resident static subtrees. `instance-alphas` restores each
+;; view's compiler-selected base endpoint after a prior view was hidden.
+(struct material-observability-workbench-view (destination-id event-slot target-value view-root-id node-ids instance-offsets instance-alphas glyph-slots event-slots tile-ids) #:transparent)
+(struct material-observability-workbench-plan (id rail-id state state-index systems-list-id systems-view-id initial-view initial-value views) #:transparent)
 
 (define (value->jsexpr v)
   (cond
@@ -980,6 +995,31 @@ scene-glyph-draw-packets
                      'color (modal-focus-visual-entry-color entry)
                      'tile_ids (modal-focus-visual-entry-tile-ids entry))))))
 
+(define (material-observability-workbench-plan->jsexpr plan)
+  (and plan
+       (hash 'abi_schema material-observability-workbench-plan-abi-schema
+             'abi_revision material-observability-workbench-plan-abi-revision
+             'id (symbol->string (material-observability-workbench-plan-id plan))
+             'rail_id (symbol->string (material-observability-workbench-plan-rail-id plan))
+             'state (symbol->string (material-observability-workbench-plan-state plan))
+             'state_index (material-observability-workbench-plan-state-index plan)
+             'systems_list_id (symbol->string (material-observability-workbench-plan-systems-list-id plan))
+             'systems_view_id (symbol->string (material-observability-workbench-plan-systems-view-id plan))
+             'initial_view (symbol->string (material-observability-workbench-plan-initial-view plan))
+             'initial_value (material-observability-workbench-plan-initial-value plan)
+             'views
+             (for/list ([view (in-list (material-observability-workbench-plan-views plan))])
+               (hash 'destination_id (symbol->string (material-observability-workbench-view-destination-id view))
+                     'event_slot (material-observability-workbench-view-event-slot view)
+                     'target_value (material-observability-workbench-view-target-value view)
+                     'view_root_id (symbol->string (material-observability-workbench-view-view-root-id view))
+                     'node_ids (map symbol->string (material-observability-workbench-view-node-ids view))
+                     'instance_offsets (material-observability-workbench-view-instance-offsets view)
+                     'instance_alphas (material-observability-workbench-view-instance-alphas view)
+                     'glyph_slots (material-observability-workbench-view-glyph-slots view)
+                     'event_slots (material-observability-workbench-view-event-slots view)
+                     'tile_ids (material-observability-workbench-view-tile-ids view))))))
+
 (define (navigation-selection-plan->jsexpr plan)
   (and plan
        (hash 'abi_schema navigation-selection-plan-abi-schema
@@ -1049,6 +1089,8 @@ scene-glyph-draw-packets
         'modal_focus_subgraph_required (scene-modal-focus-subgraph-required? s)
         'modal_focus_visual_plan (modal-focus-visual-plan->jsexpr (scene-modal-focus-visual-plan s))
         'modal_focus_visual_required (scene-modal-focus-visual-required? s)
+        'material_observability_workbench_plan (material-observability-workbench-plan->jsexpr (scene-material-observability-workbench-plan s))
+        'material_observability_workbench_required (scene-material-observability-workbench-required? s)
         'text_field_visuals (text-field-visuals->jsexpr s)))
   (if build-attestation
       (hash-set base 'build_attestation (value->jsexpr build-attestation))
@@ -1153,6 +1195,11 @@ scene-glyph-draw-packets
   ;; Application-only spec: list and detail glyph addresses are resolved after layout.
   (struct c-log-browser-spec (id list-id detail-id append-updates source) #:transparent)
   (struct c-log-browser-plan (id list-id append-batch-id append-updates detail-node-id detail-glyph-offsets detail-tile-ids row-color-offsets levels packet-worklist-index) #:transparent)
+  ;; One workbench is a closed composition of the single admitted Material rail and
+  ;; three resident static view subtrees. It never owns a runtime route stack.
+  (struct c-material-observability-workbench-spec (id rail-id systems-list-id destinations view-root-ids source) #:transparent)
+  (struct c-material-observability-workbench-view (destination-id event-slot target-value view-root-id node-ids instance-offsets instance-alphas glyph-slots event-slots tile-ids) #:transparent)
+  (struct c-material-observability-workbench-plan (id rail-id state state-index systems-list-id systems-view-id initial-view initial-value views) #:transparent)
   (struct c-font-asset-spec (manifest-path atlas-path source) #:transparent)
   (struct c-font-glyph (glyph-id codepoint character x y width height advance bearing-x bearing-y) #:transparent)
 (struct c-font-asset-plan (face-id manifest-path atlas-path font-sha256 atlas-sha256 atlas-width atlas-height atlas-channels pixel-size line-height glyph-domain-first glyph-domain-count atlas-page activation glyphs) #:transparent)
@@ -4438,7 +4485,7 @@ scene-glyph-draw-packets
     (define (active-clip-rect clip-stack)
       (for/fold ([rect (viewport-rect)]) ([clip-id (in-list clip-stack)])
         (or (rect-intersection rect (layout-rect (hash-ref layout-by-id clip-id)))
-            (raise-syntax-error 'noir "nested clip stack has empty intersection"))))
+            (raise-syntax-error 'noir (format "nested clip stack has empty intersection at ~a" clip-id)))))
     (define (clip-stack-id clip-stack)
       (if (null? clip-stack) 'root
           (string->symbol (string-join (map symbol->string (reverse clip-stack)) ">"))))
@@ -5040,12 +5087,17 @@ scene-glyph-draw-packets
                         (list x iy (- ix x) ih)
                         (list iright iy (- right iright) ih))))))
 
-  (define (partition-composite candidate visible)
+  (define (partition-composite candidate visible [resident-node-ids (set)])
     (define base (composite-effective-rect candidate))
     (define occluders
       (filter (lambda (upper)
                 (define upper-rect (composite-effective-rect upper))
                 (and base upper-rect
+                     ;; Resident workbench endpoints may be alpha-switched at runtime.
+                     ;; They must neither occlude nor be eliminated by one another during
+                     ;; compile-time coverage partitioning.
+                     (not (set-member? resident-node-ids (c-composite-node-id candidate)))
+                     (not (set-member? resident-node-ids (c-composite-node-id upper)))
                      (c-composite-opaque? upper)
                      (> (c-composite-z-layer upper) (c-composite-z-layer candidate))
                      (rect-intersection upper-rect base)))
@@ -5071,9 +5123,10 @@ scene-glyph-draw-packets
                      'fragment-budget-exceeded
                      'none)))
 
-  (define (coverage-partition composites)
-    ;; alpha 永不进入 occluders；被完全覆盖的节点自然得到空 fragment list。
-    (define partitions (map (lambda (candidate) (partition-composite candidate composites)) composites))
+  (define (coverage-partition composites [resident-node-ids (set)])
+    ;; Alpha endpoints and resident workbench views never enter occluders; the latter
+    ;; must retain their tile draw ranges even while initially hidden by alpha.
+    (define partitions (map (lambda (candidate) (partition-composite candidate composites resident-node-ids)) composites))
     (values (append-map c-partition-composites partitions)
             (ormap (lambda (partition) (eq? (c-partition-fallback-reason partition) 'fragment-budget-exceeded))
                    partitions)))
@@ -5211,7 +5264,7 @@ scene-glyph-draw-packets
             (raise-syntax-error 'noir "glyph tile range includes a glyph outside the tile" (c-node-source root))))
       )
     (void)))
-  (define (attach-tile-draw-ranges tile composites placements packets)
+  (define (attach-tile-draw-ranges tile composites placements packets [resident-node-ids (set)])
     (define visible
       (sort (filter (lambda (composite)
                       (layout-intersects-tile? (c-composite-layout composite) tile))
@@ -5220,7 +5273,7 @@ scene-glyph-draw-packets
               (or (< (c-composite-z-layer left) (c-composite-z-layer right))
                   (and (= (c-composite-z-layer left) (c-composite-z-layer right))
                        (< (c-composite-slot left) (c-composite-slot right)))))))
-    (define-values (fragments budget-exceeded?) (coverage-partition visible))
+    (define-values (fragments budget-exceeded?) (coverage-partition visible resident-node-ids))
     (when (null? fragments)
       (raise-syntax-error 'noir "compiled scissor tile has no visible fragment after coverage partitioning"))
     (define-values (strategy costs fallback-reason)
@@ -5255,7 +5308,7 @@ scene-glyph-draw-packets
                  ',(c-draw-range-blend-mode range)
                  ,(c-draw-range-opaque? range)))
 
-  (define (compile-render-schedules root layouts events tracks plans placements packets tasks)
+  (define (compile-render-schedules root layouts events tracks plans placements packets tasks [resident-node-ids (set)])
     (define composites (compile-composites root layouts))
     (if (null? plans)
         '()
@@ -5319,7 +5372,7 @@ scene-glyph-draw-packets
                 [coverage (/ covered-area (viewport-area))]
                [full? (>= coverage full-redraw-threshold)]
                [raw-final-tiles (if full? (list (c-render-tile 0.0 0.0 (canvas-width) (canvas-height) '(full-frame) '() '() 'full-redraw-threshold 'full-tile-redraw (hash 'fragment 1e30 'complete-lower-range 1e30 'full-tile-redraw 230400.0))) tiles)]
-               [final-tiles (map (lambda (tile) (attach-tile-draw-ranges tile composites placements packets)) raw-final-tiles)])
+               [final-tiles (map (lambda (tile) (attach-tile-draw-ranges tile composites placements packets resident-node-ids)) raw-final-tiles)])
           (assert-glyph-tile-culling! final-tiles placements packets root)
           (list (c-render-schedule
                  'concurrent-frame
@@ -5927,7 +5980,8 @@ scene-glyph-draw-packets
                 (lambda (schedule)
                   (for/list ([tile (in-list (c-render-schedule-tiles schedule))]
                              [tile-id (in-naturals)]
-                             #:when (or (member id (c-render-tile-nodes tile))
+                             #:when (or (c-render-schedule-full-redraw? schedule)
+                                        (member id (c-render-tile-nodes tile))
                                         (member thumb-id (c-render-tile-nodes tile))))
                     tile-id))
                 render-schedules))
@@ -6213,6 +6267,26 @@ scene-glyph-draw-packets
                             (map cons indices values) form)]
         [_ (raise-syntax-error 'log-browser "expected (log-browser #:id id #:for list #:detail text-id #:append ((index UPPERCASE_RECORD) ...+))" form)])))
 
+  (define (parse-material-observability-workbench-forms forms)
+    (for/list ([form (in-list forms)])
+      (syntax-parse form
+        #:datum-literals (material-observability-workbench)
+        [(material-observability-workbench #:id id:id #:rail rail-id:id #:systems-list systems-list-id:id
+                                           #:views ((destination-id:id view-root-id:id) ...))
+         (define destinations (map syntax-e (syntax->list #'(destination-id ...))))
+         (define view-root-ids (map syntax-e (syntax->list #'(view-root-id ...))))
+         (unless (= (length destinations) 3)
+           (raise-syntax-error 'material-observability-workbench "v1 requires exactly three declared rail/view endpoints" form))
+         (unless (and (= (length destinations) (length (remove-duplicates destinations)))
+                      (= (length view-root-ids) (length (remove-duplicates view-root-ids))))
+           (raise-syntax-error 'material-observability-workbench "destination IDs and view root IDs must each be unique" form))
+         (c-material-observability-workbench-spec (syntax-e #'id) (syntax-e #'rail-id)
+                                                   (syntax-e #'systems-list-id)
+                                                   destinations view-root-ids form)]
+        [_ (raise-syntax-error 'material-observability-workbench
+                               "expected (material-observability-workbench #:id id #:rail rail #:systems-list virtual-list #:views ((destination view-root) (destination view-root) (destination view-root)))"
+                               form)])))
+
   (define (compile-log-browser-plans specs root layouts glyph-placements virtual-list-plans render-schedules)
     (define list-by-id (for/hash ([plan (in-list virtual-list-plans)])
                          (values (c-virtual-list-plan-id plan) plan)))
@@ -6342,6 +6416,159 @@ scene-glyph-draw-packets
 
   (define (list-navigation-plans->datum plans)
     `(list ,@(map list-navigation-plan->datum plans)))
+
+  (define (compile-material-observability-workbench-plan specs root layouts glyph-placements events
+                                                          virtual-list-plans log-browser-plans
+                                                          navigation-selection-plan render-schedules)
+    (cond
+      [(null? specs) #f]
+      [(pair? (cdr specs))
+       (raise-syntax-error 'material-observability-workbench
+                           "v1 permits exactly one workbench declaration per Scene"
+                           (c-material-observability-workbench-spec-source (car specs)))]
+      [else
+       (define spec (car specs))
+       (unless navigation-selection-plan
+         (raise-syntax-error 'material-observability-workbench
+                             "requires one admitted navigation-selection-plan Material rail"
+                             (c-material-observability-workbench-spec-source spec)))
+       (unless (eq? (c-material-observability-workbench-spec-rail-id spec)
+                    (c-navigation-selection-plan-rail-id navigation-selection-plan))
+         (raise-syntax-error 'material-observability-workbench
+                             "#:rail must name the unique admitted Material navigation rail"
+                             (c-material-observability-workbench-spec-source spec)))
+       (define navigation-destinations (c-navigation-selection-plan-destinations navigation-selection-plan))
+       (define declared-destinations (c-material-observability-workbench-spec-destinations spec))
+       (unless (equal? declared-destinations (map c-navigation-selection-entry-destination-id navigation-destinations))
+         (raise-syntax-error 'material-observability-workbench
+                             "#:views destinations must exactly preserve the Material rail declaration order"
+                             (c-material-observability-workbench-spec-source spec)))
+       (define node-by-id (for/hash ([node (in-list (walk-nodes root))]) (values (c-node-id node) node)))
+       (define layout-by-id (for/hash ([layout (in-list layouts)]) (values (c-layout-id layout) layout)))
+       (define event-by-node (for/hash ([event (in-list events)]) (values (c-event-node-id event) event)))
+       (define tiles (c-render-schedule-tiles (car render-schedules)))
+       (define view-records
+         (for/list ([destination (in-list navigation-destinations)]
+                    [view-root-id (in-list (c-material-observability-workbench-spec-view-root-ids spec))])
+           (define view-node
+             (hash-ref node-by-id view-root-id
+                       (lambda () (raise-syntax-error 'material-observability-workbench
+                                                      "view root must name a static stack in the unique root layout"
+                                                      (c-material-observability-workbench-spec-source spec)))))
+           (unless (eq? (c-node-tag view-node) 'stack)
+             (raise-syntax-error 'material-observability-workbench
+                                 "every view root must be a static stack"
+                                 (c-material-observability-workbench-spec-source spec)))
+           (define view-node-ids (list->set (map c-node-id (walk-nodes view-node))))
+           (define view-layouts
+             (filter (lambda (layout) (set-member? view-node-ids (c-layout-id layout))) layouts))
+           (define instance-offsets (sort (remove-duplicates (map c-layout-instance-offset view-layouts)) <))
+           (define instance-alphas
+             (for/list ([offset (in-list instance-offsets)])
+               (define layout (findf (lambda (candidate) (= (c-layout-instance-offset candidate) offset)) view-layouts))
+               (fourth (c-layout-color layout))))
+           (define glyph-slots
+             (sort (remove-duplicates
+                    (for/list ([placement (in-list glyph-placements)]
+                               #:when (set-member? view-node-ids (c-glyph-placement-node-id placement)))
+                      (c-glyph-placement-slot placement)))
+                   <))
+           (define event-slots
+             (sort (for/list ([event (in-list events)]
+                              #:when (set-member? view-node-ids (c-event-node-id event)))
+                     (c-event-slot event))
+                   <))
+           (define tile-ids
+             (sort (remove-duplicates
+                    (for/list ([tile (in-list tiles)] [tile-id (in-naturals)]
+                               #:when (ormap (lambda (layout)
+                                               (rect-intersection (layout-rect layout) (tile-rect tile)))
+                                             view-layouts))
+                      tile-id))
+                   <))
+           (define event
+             (hash-ref event-by-node (c-navigation-selection-entry-event-node-id destination)
+                       (lambda () (raise-syntax-error 'material-observability-workbench
+                                                      "rail destination lacks its fixed Event Map address"
+                                                      (c-material-observability-workbench-spec-source spec)))))
+           ;; action-slot-index is distinct from the Event Map address. The fixed event
+           ;; witness is resolved from the navigation destination's event node.
+           (unless (and (pair? instance-offsets) (pair? glyph-slots) (pair? tile-ids))
+             (raise-syntax-error 'material-observability-workbench
+                                 "each static view must own nonempty quad, glyph and tile resources"
+                                 (c-material-observability-workbench-spec-source spec)))
+           (c-material-observability-workbench-view
+            (c-navigation-selection-entry-destination-id destination)
+            (c-event-slot event)
+            (c-navigation-selection-entry-target-value destination)
+            view-root-id (cons view-root-id (sort (remove view-root-id (set->list view-node-ids)) symbol<?)) instance-offsets instance-alphas glyph-slots event-slots tile-ids)))
+       ;; No destination view may alias another view's alpha address or event target.
+       (define (disjoint? accessor)
+         (define all (append-map accessor view-records))
+         (= (length all) (length (remove-duplicates all))))
+       (unless (and (disjoint? c-material-observability-workbench-view-instance-offsets)
+                    (disjoint? c-material-observability-workbench-view-glyph-slots)
+                    (disjoint? c-material-observability-workbench-view-event-slots))
+         (raise-syntax-error 'material-observability-workbench
+                             "view resource sets must be pairwise disjoint compiler addresses"
+                             (c-material-observability-workbench-spec-source spec)))
+       (define systems-list-id (c-material-observability-workbench-spec-systems-list-id spec))
+       (define systems-list
+         (findf (lambda (plan) (eq? (c-virtual-list-plan-id plan) systems-list-id)) virtual-list-plans))
+       (unless (and systems-list (= (length virtual-list-plans) 1)
+                    (= (length log-browser-plans) 1)
+                    (eq? (c-log-browser-plan-list-id (car log-browser-plans)) systems-list-id))
+         (raise-syntax-error 'material-observability-workbench
+                             "v1 requires exactly one compact virtual list paired with exactly one log-browser plan"
+                             (c-material-observability-workbench-spec-source spec)))
+       (define systems-view
+         (findf (lambda (view)
+                  (define root-node (hash-ref node-by-id (c-material-observability-workbench-view-view-root-id view)))
+                  (member systems-list-id (map c-node-id (walk-nodes root-node))))
+                view-records))
+       (unless systems-view
+         (raise-syntax-error 'material-observability-workbench
+                             "#:systems-list must be owned by exactly one declared workbench view"
+                             (c-material-observability-workbench-spec-source spec)))
+       (define initial-value (c-navigation-selection-plan-initial-value navigation-selection-plan))
+       (define initial-view (c-navigation-selection-plan-initial-destination navigation-selection-plan))
+       (unless (and (eq? initial-view (c-material-observability-workbench-view-destination-id (list-ref view-records initial-value)))
+                    (= initial-value (c-material-observability-workbench-view-target-value (list-ref view-records initial-value))))
+         (raise-syntax-error 'material-observability-workbench
+                             "navigation initial endpoint and workbench initial view disagree"
+                             (c-material-observability-workbench-spec-source spec)))
+       (c-material-observability-workbench-plan
+        (c-material-observability-workbench-spec-id spec)
+        (c-navigation-selection-plan-rail-id navigation-selection-plan)
+        (c-navigation-selection-plan-state navigation-selection-plan)
+        (c-navigation-selection-plan-state-index navigation-selection-plan)
+        systems-list-id (c-material-observability-workbench-view-view-root-id systems-view)
+        initial-view initial-value view-records)]))
+
+  (define (material-observability-workbench-plan->datum plan)
+    (if (not plan)
+        '#f
+        `(material-observability-workbench-plan
+          ',(c-material-observability-workbench-plan-id plan)
+          ',(c-material-observability-workbench-plan-rail-id plan)
+          ',(c-material-observability-workbench-plan-state plan)
+          ,(c-material-observability-workbench-plan-state-index plan)
+          ',(c-material-observability-workbench-plan-systems-list-id plan)
+          ',(c-material-observability-workbench-plan-systems-view-id plan)
+          ',(c-material-observability-workbench-plan-initial-view plan)
+          ,(c-material-observability-workbench-plan-initial-value plan)
+          (list ,@(for/list ([view (in-list (c-material-observability-workbench-plan-views plan))])
+                     `(material-observability-workbench-view
+                       ',(c-material-observability-workbench-view-destination-id view)
+                       ,(c-material-observability-workbench-view-event-slot view)
+                       ,(c-material-observability-workbench-view-target-value view)
+                       ',(c-material-observability-workbench-view-view-root-id view)
+                       ',(c-material-observability-workbench-view-node-ids view)
+                       ',(c-material-observability-workbench-view-instance-offsets view)
+                       ',(c-material-observability-workbench-view-instance-alphas view)
+                       ',(c-material-observability-workbench-view-glyph-slots view)
+                       ',(c-material-observability-workbench-view-event-slots view)
+                       ',(c-material-observability-workbench-view-tile-ids view)))))))
 
   (define (compile-navigation-selection-plan root layouts states actions action-indexes schedule)
     (define rails
@@ -7126,7 +7353,6 @@ scene-glyph-draw-packets
     ;; 的 syntax context，展开产物中的 ui-node/hash/action-plan 会变成未绑定标识符。
     (datum->syntax #'ui-node datum source source)))
 
-
 ;; ------------------------------ User macros ------------------------------
 
 (define-syntax (ui stx)
@@ -7191,7 +7417,7 @@ scene-glyph-draw-packets
                    [OVERLAY-STATE (datum-stx stx '#f)]
                    [MODAL-FOCUS-SUBGRAPH (datum-stx stx '#f)]
                    [MODAL-FOCUS-VISUAL (datum-stx stx '#f)])
-       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE #f MODAL-FOCUS-SUBGRAPH #f MODAL-FOCUS-VISUAL #f))]
+       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE #f MODAL-FOCUS-SUBGRAPH #f MODAL-FOCUS-VISUAL #f #f #f))]
     [(_ root:expr extra:expr ...)
      (raise-syntax-error 'ui "expects exactly one root layout node" stx)]))
 
@@ -7205,6 +7431,8 @@ scene-glyph-draw-packets
      (define command-table-forms (filter (lambda (form) (eq? (form-head-symbol form) 'command-table)) forms))
      (define list-navigation-forms (filter (lambda (form) (eq? (form-head-symbol form) 'list-navigation)) forms))
      (define log-browser-forms (filter (lambda (form) (eq? (form-head-symbol form) 'log-browser)) forms))
+     (define material-observability-workbench-forms
+       (filter (lambda (form) (eq? (form-head-symbol form) 'material-observability-workbench)) forms))
      (define font-asset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'font-asset)) forms))
      (define dynamic-font-cell-asset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'dynamic-font-cell-asset)) forms))
      (define theme-forms (filter (lambda (form) (eq? (form-head-symbol form) 'theme)) forms))
@@ -7212,7 +7440,7 @@ scene-glyph-draw-packets
      (define visual-preset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'visual-preset)) forms))
      (define layout-forms
        (filter (lambda (form)
-                 (not (memq (form-head-symbol form) '(state action commit-group command-table list-navigation log-browser font-asset dynamic-font-cell-asset theme material-profile visual-preset))))
+                 (not (memq (form-head-symbol form) '(state action commit-group command-table list-navigation log-browser material-observability-workbench font-asset dynamic-font-cell-asset theme material-profile visual-preset))))
                forms))
      (unless (= (length state-forms) 1)
        (raise-syntax-error 'noir-app "expects exactly one (state ...) form" stx))
@@ -7247,6 +7475,8 @@ scene-glyph-draw-packets
      (define command-specs (parse-command-table-forms command-table-forms (list->set (map c-action-id actions))))
      (define list-navigation-specs (parse-list-navigation-forms list-navigation-forms))
      (define log-browser-specs (parse-log-browser-forms log-browser-forms))
+     (define material-observability-workbench-specs
+       (parse-material-observability-workbench-forms material-observability-workbench-forms))
      (define font-asset-specs (parse-font-asset-forms font-asset-forms))
      (define font-assets (compile-font-asset-plans font-asset-specs))
      (define dynamic-font-cell-asset
@@ -7263,6 +7493,20 @@ scene-glyph-draw-packets
          (parse-node (car layout-forms) (set))))
      (define-values (total dynamic budget updates)
        (with-static-font-assets font-assets (lambda () (compile-scene root-node))))
+     ;; A workbench has three overlapping resident endpoints. Mark their complete
+     ;; subtrees before tile partitioning so static occlusion cannot erase a view that
+     ;; starts with alpha=0 but becomes visible through a later rail transition.
+     (define material-observability-resident-node-ids
+       (for*/fold ([ids (set)]) ([spec (in-list material-observability-workbench-specs)]
+                                 [view-root-id (in-list (c-material-observability-workbench-spec-view-root-ids spec))])
+         (define view-root
+           (findf (lambda (node) (eq? (c-node-id node) view-root-id)) (walk-nodes root-node)))
+         (unless view-root
+           (raise-syntax-error 'material-observability-workbench
+                               "view root must exist before render schedule lowering"
+                               (c-material-observability-workbench-spec-source spec)))
+         (for/fold ([next ids]) ([node (in-list (walk-nodes view-root))])
+           (set-add next (c-node-id node)))))
      (define layouts
        (parameterize ([current-static-visual-preset static-visual-preset])
          (with-static-font-assets font-assets (lambda () (compile-layout-plan root-node)))))
@@ -7292,7 +7536,7 @@ scene-glyph-draw-packets
      (define raw-schedule (compile-frame-schedule events tracks raw-plans))
      (define render-schedules
        (parameterize ([current-static-visual-preset static-visual-preset])
-         (compile-render-schedules root-node layouts events tracks raw-plans glyph-placements glyph-packets raw-schedule)))
+         (compile-render-schedules root-node layouts events tracks raw-plans glyph-placements glyph-packets raw-schedule material-observability-resident-node-ids)))
      (define-values (plans schedule)
        (compile-action-aware-tile-selection root-node layouts events raw-plans raw-schedule render-schedules))
      (define virtual-list-plans
@@ -7337,6 +7581,10 @@ scene-glyph-draw-packets
        (compile-modal-focus-subgraph-plan root-node overlay-state-plan events))
      (define modal-focus-visual-plan
        (compile-modal-focus-visual-plan modal-focus-subgraph-plan events))
+     (define material-observability-workbench-plan
+       (compile-material-observability-workbench-plan
+        material-observability-workbench-specs root-node layouts glyph-placements events
+        virtual-list-plans log-browser-plans navigation-selection-plan render-schedules))
      (with-syntax ([ROOT (datum-stx stx (node->datum root-node))]
                    [STATIC (datum-stx stx (- total dynamic))]
                    [DYNAMIC (datum-stx stx dynamic)]
@@ -7381,7 +7629,9 @@ scene-glyph-draw-packets
                      [MODAL-FOCUS-SUBGRAPH (datum-stx stx (modal-focus-subgraph-plan->datum modal-focus-subgraph-plan))]
                      [MODAL-FOCUS-REQUIRED (datum-stx stx (and modal-focus-subgraph-plan #t))]
                      [MODAL-FOCUS-VISUAL (datum-stx stx (modal-focus-visual-plan->datum modal-focus-visual-plan))]
-                     [MODAL-FOCUS-VISUAL-REQUIRED (datum-stx stx (and modal-focus-visual-plan #t))])
+                     [MODAL-FOCUS-VISUAL-REQUIRED (datum-stx stx (and modal-focus-visual-plan #t))]
+                     [MATERIAL-OBSERVABILITY-WORKBENCH (datum-stx stx (material-observability-workbench-plan->datum material-observability-workbench-plan))]
+                     [MATERIAL-OBSERVABILITY-WORKBENCH-REQUIRED (datum-stx stx (and material-observability-workbench-plan #t))])
        #'(begin
-           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE OVERLAY-STATE-REQUIRED MODAL-FOCUS-SUBGRAPH MODAL-FOCUS-REQUIRED MODAL-FOCUS-VISUAL MODAL-FOCUS-VISUAL-REQUIRED))
+           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE OVERLAY-STATE-REQUIRED MODAL-FOCUS-SUBGRAPH MODAL-FOCUS-REQUIRED MODAL-FOCUS-VISUAL MODAL-FOCUS-VISUAL-REQUIRED MATERIAL-OBSERVABILITY-WORKBENCH MATERIAL-OBSERVABILITY-WORKBENCH-REQUIRED))
            (provide app-scene)))]))

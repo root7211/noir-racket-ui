@@ -120,6 +120,8 @@ page-2比例字体的glyph placement现使用共享typographic line top并仅应
 
 `modal_focus_subgraph v1` 将已打开overlay的键盘语义冻结为独立Scene计划：唯一open恢复event、2–6个字面声明顺序的Tab目标、canonical正/反向环、scrim pointer允许集与唯一local tile。打开后Tab/Shift+Tab只能访问该环，Enter只会激活当前固定close target，Escape沿既有close action关闭并恢复预声明open控制上下文；背景Focus Graph、列表与keyboard command路径不参与modal按键分发。该实现不搜索组件树，不做运行时focus discovery。
 
+`material_observability_workbench_plan v1` 是首个框架级闭合工作台整合：一个Material rail降低为三个常驻alpha端点，唯一Systems view复用已有10,000行/4物理槽数据arena，Overview与Alerts为静态端点；dialog/menu、modal焦点子图和独立圆角focus-ring同时驻留。启动期反向证明rail配对、静态子树、instance/glyph/event/shadow地址、tile范围与Systems列表归属；运行时rail切换仅写旧/新view的既定alpha地址并合并唯一local tile。隐藏的Systems端点还会在pointer、wheel、row选择与键盘列表导航前被明确门禁拒绝。
+
 ```bash
 bash tools/verify_navigation_selection_plan.sh
 bash tools/verify_material_dialog_menu_v1.sh
@@ -127,9 +129,10 @@ bash tools/verify_material_icon_assets_v1.sh
 bash tools/verify_release_motion_v1.sh
 bash tools/verify_overlay_state_plan.sh
 bash tools/verify_modal_focus_subgraph_v1.sh
+bash tools/verify_material_observability_workbench_plan_v1.sh
 ```
 
-真实X11/Vulkan证据包括[导航Overview→Systems](out/material-profile-navigation-v1.scene.json)、[dialog/menu截图](out/material-overlay-showcase-v1.png)、[overlay状态三端点对照](out/material-overlay-state-v1-comparison.png)、[icon审阅记录](out/material_icon_visual_review.txt)与[release motion审阅记录](out/release_motion_visual_review.txt)。`overlay_state_plan v1`的完整合同与交付记录见[ABI规范](OVERLAY_STATE_PLAN_ABI_V1.md)和[交付报告](OVERLAY_STATE_PLAN_V1_REPORT.md)；modal焦点的固定状态机、攻击拒绝与真实键盘验证见[ABI规范](MODAL_FOCUS_SUBGRAPH_ABI_V1.md)和[交付报告](MODAL_FOCUS_SUBGRAPH_V1_REPORT.md)。
+真实X11/Vulkan证据包括[导航Overview→Systems](out/material-profile-navigation-v1.scene.json)、[dialog/menu截图](out/material-overlay-showcase-v1.png)、[overlay状态三端点对照](out/material-overlay-state-v1-comparison.png)、[icon审阅记录](out/material_icon_visual_review.txt)、[release motion审阅记录](out/release_motion_visual_review.txt)与[workbench七端点截图](out/material-observability-workbench-evidence/)。`overlay_state_plan v1`的完整合同与交付记录见[ABI规范](OVERLAY_STATE_PLAN_ABI_V1.md)和[交付报告](OVERLAY_STATE_PLAN_V1_REPORT.md)；modal焦点的固定状态机、攻击拒绝与真实键盘验证见[ABI规范](MODAL_FOCUS_SUBGRAPH_ABI_V1.md)和[交付报告](MODAL_FOCUS_SUBGRAPH_V1_REPORT.md)；workbench跨计划ABI、真实X11/Vulkan证据和攻击拒绝见[ABI规范](MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_V1.md)和[交付报告](MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_V1_REPORT.md)。
 
 ## 真实GPU组件性能矩阵 v1
 
@@ -180,6 +183,7 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `examples/realtime-monitor.rkt` | 10,000条实时监控表格：数值data-register、可见性分流、状态色与比例字体chrome。 |
 | `examples/material-profile-dashboard.rkt` | Material Profile桌面示例：静态rail、navigation selection、closed-domain icon、small app bar、rounded/shadow card与fixed filled button。 |
 | `examples/material-overlay-showcase.rkt` | 可开关的受限Material dialog/menu示例：固定scrim、dialog、menu、closed-domain icon、open/close状态转换、release motion、编译期modal Tab子图与预分配的圆角focus-ring。 |
+| `examples/material-observability-workbench.rkt` | 框架级Material工作台：一个rail、三个常驻view端点、唯一10,000行Systems数据arena、detail panel、受限overlay与focus-ring。 |
 | `tools/verify_log_browser.sh` | 真实X11/Vulkan日志工作流与log-browser ABI篡改回归。 |
 | `tools/verify_realtime_monitor.sh` | 实时监控表格的真实X11/Vulkan、glyph-domain篡改、可见性分流与键鼠回归。 |
 | `tools/verify_desktop_component_macros.sh` | 编译期组件宏与手写primitive Scene等价性回归。 |
@@ -202,6 +206,11 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/verify_modal_focus_visual_plan_v1.sh` | modal focus visual v1的一键Racket/Rust、Scene oracle、真实X11/Vulkan截图、Tab/Shift+Tab/Enter/Escape、四类篡改拒绝与rounded双应用兼容回归。 |
 | `tools/verify_modal_focus_visual_plan_v1.py` | 固定focus-ring条目、event slot、44-byte源地址、halo几何、SDF配方与tile范围的Scene结构oracle。 |
 | `tools/mutate_modal_focus_visual_scene.py` | 生成source、geometry、tile和disable四类focus视觉攻击Scene。 |
+| `tools/verify_material_observability_workbench_plan_v1.sh` | workbench v1的一键语言/Scene/Rust/真实X11-Vulkan、focus-ring、四类篡改拒绝与rounded兼容回归。 |
+| `tools/verify_material_observability_workbench_plan_v1.py` | workbench三view端点、rail状态配对、唯一Systems数据arena、资源地址与overlay焦点组合结构oracle。 |
+| `tools/mutate_material_observability_workbench_scene.py` | 生成instance地址、子树见证、tile范围和required禁用四类workbench攻击Scene。 |
+| `MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_V1.md` | workbench跨计划Scene ABI、启动proof、固定alpha写集、input gate与非目标边界。 |
+| `MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_V1_REPORT.md` | workbench交付结果、真实X11/Vulkan截图、篡改拒绝与rounded兼容报告。 |
 | `MODAL_FOCUS_VISUAL_PLAN_ABI_V1.md` | 预分配modal focus ring的Scene ABI、启动期proof、GPU metadata与固定alpha写集规范。 |
 | `MODAL_FOCUS_VISUAL_PLAN_V1_REPORT.md` | focus视觉交付结果、真实X11/Vulkan截图证据、篡改拒绝与兼容回归报告。 |
 | `tools/make_overlay_state_v1_comparison.py` | 将关闭、打开与Escape关闭的真实X11/Vulkan端点生成审阅对照板。 |
