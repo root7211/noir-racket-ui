@@ -58,8 +58,8 @@ const MODAL_FOCUS_SUBGRAPH_ABI_SCHEMA: &str = "noir-modal-focus-subgraph-v1";
 const MODAL_FOCUS_SUBGRAPH_ABI_REVISION: u32 = 1;
 const MODAL_FOCUS_VISUAL_PLAN_ABI_SCHEMA: &str = "noir-modal-focus-visual-plan-v1";
 const MODAL_FOCUS_VISUAL_PLAN_ABI_REVISION: u32 = 1;
-const MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_SCHEMA: &str = "noir-material-observability-workbench-plan-v1";
-const MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_REVISION: u32 = 1;
+const MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_SCHEMA: &str = "noir-material-observability-workbench-plan-v2";
+const MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_REVISION: u32 = 2;
 const FOCUS_RING_HALO_PX: f32 = 3.0;
 const FOCUS_RING_THICKNESS_PX: f32 = 2.0;
 const FOCUS_RING_COLOR: [f32; 4] = [0.36, 0.72, 1.0, 1.0];
@@ -384,6 +384,25 @@ struct MaterialObservabilityWorkbenchView {
     tile_ids: Vec<usize>,
 }
 #[derive(Clone, Debug, Deserialize)]
+struct MaterialObservabilityWorkbenchDataView {
+    id: String,
+    list_id: String,
+    view_id: String,
+    list_index: usize,
+    logical_capacity: usize,
+    physical_slots: usize,
+    visible_rows: usize,
+    scrollbar_id: String,
+    navigation_id: String,
+    log_browser_id: String,
+    row_activation_action: String,
+    node_ids: Vec<String>,
+    instance_offsets: Vec<usize>,
+    glyph_slots: Vec<usize>,
+    event_slots: Vec<usize>,
+    tile_ids: Vec<usize>,
+}
+#[derive(Clone, Debug, Deserialize)]
 struct MaterialObservabilityWorkbenchPlan {
     abi_schema: String,
     abi_revision: u32,
@@ -391,11 +410,10 @@ struct MaterialObservabilityWorkbenchPlan {
     rail_id: String,
     state: String,
     state_index: usize,
-    systems_list_id: String,
-    systems_view_id: String,
     initial_view: String,
     initial_value: i64,
     views: Vec<MaterialObservabilityWorkbenchView>,
+    data_views: Vec<MaterialObservabilityWorkbenchDataView>,
 }
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -842,17 +860,25 @@ struct CompiledMaterialObservabilityWorkbenchView {
     tile_mask: u64,
 }
 #[derive(Clone, Debug)]
+struct CompiledMaterialObservabilityWorkbenchDataView {
+    id: String,
+    list_index: usize,
+    view_index: usize,
+    tile_mask: u64,
+}
+#[derive(Clone, Debug)]
 struct CompiledMaterialObservabilityWorkbenchPlan {
     id: String,
     rail_id: String,
     state_index: usize,
-    systems_list_index: usize,
-    systems_view_index: usize,
     selected_index: usize,
     views: Vec<CompiledMaterialObservabilityWorkbenchView>,
+    data_views: Vec<CompiledMaterialObservabilityWorkbenchDataView>,
     // Event Map slot -> view index. Global rail/overlay events retain None and are
     // intentionally outside the view gate.
     view_for_event_slot: Vec<Option<usize>>,
+    // Every virtual list is either owned by exactly one resident view or rejected at proof time.
+    owner_view_for_list: Vec<Option<usize>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -2106,7 +2132,7 @@ impl Host {
         let modal_focus_subgraph_plan = compiler_modal_focus_subgraph_plan(&scene, &state_slot_ids, &overlay_state_plan, &event_tile_masks)?;
         let modal_focus_visual_plan = compiler_modal_focus_visual_plan(&scene, &overlay_state_plan, &modal_focus_subgraph_plan, &event_tile_masks, &instances)?;
         let material_observability_workbench_plan = compiler_material_observability_workbench_plan(
-            &scene, &state_slot_ids, &navigation_selection_plan, &virtual_lists, &log_browser_plans, &instances, &placements,
+            &scene, &state_slot_ids, &navigation_selection_plan, &virtual_lists, &scrollbar_plans, &list_navigation_plans, &log_browser_plans, &instances, &placements,
         )?;
         apply_material_observability_workbench_initial_visibility(
             &material_observability_workbench_plan, &mut instances, &mut placements, &mut shadow_instances, &queue, &instance_buffer,
@@ -3510,6 +3536,7 @@ impl Host {
 
     fn list_row_at_cursor(&self) -> Option<(usize, usize)> {
         for interaction in &self.list_interactions {
+            if !self.material_observability_workbench_list_input_admitted(interaction.list_index) { continue; }
             let plan = &self.virtual_lists[interaction.list_index];
             let scissor = &plan.scroll_scissor;
             if self.cursor[0] >= scissor.x && self.cursor[0] < scissor.x + scissor.width
@@ -3526,11 +3553,12 @@ impl Host {
 
     fn material_observability_workbench_list_input_admitted(&self, list_index: usize) -> bool {
         let Some(plan) = &self.material_observability_workbench_plan else { return true; };
-        let admitted = plan.selected_index == plan.systems_view_index && list_index == plan.systems_list_index;
+        let owner_view_index = plan.owner_view_for_list.get(list_index).and_then(|entry| *entry);
+        let admitted = owner_view_index == Some(plan.selected_index);
         if !admitted {
-            println!("material-workbench list-input-gated: active-view={} systems-view={} requested-list={} systems-list={}",
-                     plan.views[plan.selected_index].destination_id, plan.views[plan.systems_view_index].destination_id,
-                     list_index, plan.systems_list_index);
+            let requested = owner_view_index.and_then(|index| plan.views.get(index)).map(|view| view.destination_id.as_str()).unwrap_or("unowned-list");
+            println!("material-workbench list-input-gated: active-view={} requested-list={} owner-view={}",
+                     plan.views[plan.selected_index].destination_id, list_index, requested);
         }
         admitted
     }
@@ -3555,7 +3583,6 @@ impl Host {
     }
 
     fn set_list_hover_from_cursor(&mut self) -> bool {
-        if !self.material_observability_workbench_list_input_admitted(0) { return false; }
         let next = self.list_row_at_cursor();
         let mut consumed = false;
         for index in 0..self.list_interactions.len() {
@@ -3639,9 +3666,7 @@ impl Host {
     }
 
     fn navigate_list_selection(&mut self, direction: i32) -> bool {
-        if self.list_interactions.is_empty() { return false; }
-        let index = 0usize;
-        if !self.material_observability_workbench_list_input_admitted(index) { return false; }
+        let Some(index) = (0..self.list_interactions.len()).find(|index| self.material_observability_workbench_list_input_admitted(*index)) else { return false; };
         let interaction = &self.list_interactions[index];
         let current = self.list_selected_rows[index].unwrap_or(interaction.minimum_logical_row);
         let target = if direction < 0 { current.saturating_sub(1).max(interaction.minimum_logical_row) } else { (current + 1).min(interaction.maximum_logical_row) };
@@ -3662,8 +3687,12 @@ impl Host {
     }
 
     fn execute_list_navigation(&mut self, key: ListNavigationKey) -> bool {
-        let Some(plan) = self.list_navigation_plans.first().cloned() else { return false; };
-        if !self.material_observability_workbench_list_input_admitted(plan.list_index) { return false; }
+        let Some(plan) = self.list_navigation_plans.iter().find(|candidate| self.material_observability_workbench_list_input_admitted(candidate.list_index)).cloned() else {
+            if let Some(workbench) = &self.material_observability_workbench_plan {
+                println!("material-workbench list-navigation-gated: active-view={} key={:?} no-owner-arena", workbench.views[workbench.selected_index].destination_id, key);
+            }
+            return false;
+        };
         let current = self.virtual_lists[plan.list_index].current_viewport_slot;
         let target = match key {
             ListNavigationKey::PageUp => current.saturating_sub(plan.page_step),
@@ -5794,13 +5823,15 @@ fn compiler_material_observability_workbench_plan(
     state_slot_ids: &[String],
     navigation_selection_plan: &Option<CompiledNavigationSelectionPlan>,
     virtual_lists: &[CompiledVirtualListPlan],
+    scrollbar_plans: &[CompiledScrollbarPlan],
+    list_navigation_plans: &[CompiledListNavigationPlan],
     log_browser_plans: &[CompiledLogBrowserPlan],
     instances: &[QuadInstance],
     placements: &[GlyphPlacementInstance],
 ) -> Result<Option<CompiledMaterialObservabilityWorkbenchPlan>> {
     let Some(plan) = &scene.material_observability_workbench_plan else {
         anyhow::ensure!(!scene.material_observability_workbench_required,
-                        "Scene marked material_observability_workbench_required may not disable material_observability_workbench_plan v1");
+                        "Scene marked material_observability_workbench_required may not disable material_observability_workbench_plan v2");
         println!("compiler material workbench: disabled views=0");
         return Ok(None);
     };
@@ -5914,27 +5945,100 @@ fn compiler_material_observability_workbench_plan(
     }
     anyhow::ensure!(compiled.get(plan.initial_value as usize).is_some_and(|view| view.destination_id == plan.initial_view),
                     "material workbench {} initial destination/value disagree", plan.id);
-    let systems_view_index = compiled.iter().position(|view| view.view_root_id == plan.systems_view_id)
-        .with_context(|| format!("material workbench {} systems_view_id {} is not one of its fixed views", plan.id, plan.systems_view_id))?;
-    let systems_view_wire = &plan.views[systems_view_index];
-    anyhow::ensure!(systems_view_wire.node_ids.iter().any(|node| node == &plan.systems_list_id),
-                    "material workbench {} systems list {} is not owned by its systems view", plan.id, plan.systems_list_id);
-    anyhow::ensure!(virtual_lists.len() == 1 && log_browser_plans.len() == 1,
-                    "material workbench {} requires exactly one virtual list and one log-browser plan", plan.id);
-    let systems_list_index = virtual_lists.iter().position(|list| list.id == plan.systems_list_id)
-        .with_context(|| format!("material workbench {} systems list {} is absent", plan.id, plan.systems_list_id))?;
-    anyhow::ensure!(virtual_lists[systems_list_index].logical_capacity == 10_000
-                    && virtual_lists[systems_list_index].physical_slots == 4
-                    && log_browser_plans[0].list_index == systems_list_index,
-                    "material workbench {} Systems arena must remain the admitted 10000x4 log viewport", plan.id);
-    println!("compiler material workbench: v1 id={} rail={} views=3 selected={} systems-view={} fixed-alpha-lanes={} glyph-alpha-lanes={} no-runtime-routing",
-             plan.id, plan.rail_id, plan.initial_view, plan.systems_view_id,
+    anyhow::ensure!(plan.data_views.len() == 2 && virtual_lists.len() == 2
+                    && scrollbar_plans.len() == 2 && list_navigation_plans.len() == 2
+                    && log_browser_plans.len() == 2 && scene.row_activation_plans.len() == 2,
+                    "material workbench {} v2 requires exact two-arena auxiliary plan coverage", plan.id);
+    let mut seen_data_ids = HashSet::new();
+    let mut seen_data_lists = HashSet::new();
+    let mut seen_data_views = HashSet::new();
+    let mut seen_data_offsets = HashSet::new();
+    let mut seen_data_glyph_slots = HashSet::new();
+    let mut seen_data_event_slots = HashSet::new();
+    let mut owner_view_for_list = vec![None; virtual_lists.len()];
+    let mut compiled_data_views = Vec::with_capacity(plan.data_views.len());
+    for (data_index, data_view) in plan.data_views.iter().enumerate() {
+        anyhow::ensure!(data_view.list_index == data_index
+                        && seen_data_ids.insert(data_view.id.as_str())
+                        && seen_data_lists.insert(data_view.list_id.as_str())
+                        && seen_data_views.insert(data_view.view_id.as_str()),
+                        "material workbench {} data view has duplicate or noncanonical fixed address", plan.id);
+        let list = virtual_lists.get(data_view.list_index)
+            .with_context(|| format!("material workbench {} data view {} list_index is absent", plan.id, data_view.id))?;
+        anyhow::ensure!(list.id == data_view.list_id
+                        && list.logical_capacity == data_view.logical_capacity
+                        && list.physical_slots == data_view.physical_slots
+                        && list.visible_rows == data_view.visible_rows
+                        && list.data_register_table.is_some(),
+                        "material workbench data view {} list capacity/physical-slot witness disagrees", data_view.id);
+        let view_index = compiled.iter().position(|view| view.view_root_id == data_view.view_id)
+            .with_context(|| format!("material workbench data view {} owner view {} is absent", data_view.id, data_view.view_id))?;
+        let owner_wire = &plan.views[view_index];
+        anyhow::ensure!(data_view.node_ids.first().map(String::as_str) == Some(data_view.list_id.as_str())
+                        && data_view.node_ids.get(1..).is_some_and(|tail| tail.windows(2).all(|pair| pair[0] < pair[1]))
+                        && data_view.node_ids.iter().all(|node| owner_wire.node_ids.iter().any(|owner| owner == node)),
+                        "material workbench data view {} has invalid canonical owner subtree witness", data_view.id);
+        let data_node_set = data_view.node_ids.iter().collect::<HashSet<_>>();
+        anyhow::ensure!(data_node_set.contains(&&data_view.list_id),
+                        "material workbench data view {} omits its list root from node witness", data_view.id);
+        let mut expected_offsets = scene.layout_plan.iter().filter(|layout| data_node_set.contains(&&layout.id))
+            .map(|layout| layout._instance_offset).collect::<Vec<_>>();
+        expected_offsets.sort_unstable(); expected_offsets.dedup();
+        anyhow::ensure!(data_view.instance_offsets == expected_offsets && !data_view.instance_offsets.is_empty()
+                        && data_view.instance_offsets.iter().all(|offset| compiled[view_index].instance_offsets.contains(offset)
+                                                           && *offset % std::mem::size_of::<QuadInstance>() == 0),
+                        "material workbench data view {} instance address set is not its canonical list subtree", data_view.id);
+        let mut expected_glyph_slots = scene.glyph_placement_plan.iter().filter(|placement| data_node_set.contains(&&placement.node))
+            .map(|placement| placement.slot).collect::<Vec<_>>();
+        expected_glyph_slots.sort_unstable(); expected_glyph_slots.dedup();
+        anyhow::ensure!(data_view.glyph_slots == expected_glyph_slots && !data_view.glyph_slots.is_empty()
+                        && data_view.glyph_slots.iter().all(|slot| compiled[view_index].glyph_slots.contains(slot)),
+                        "material workbench data view {} glyph set is not its canonical list subtree", data_view.id);
+        let mut expected_event_slots = scene.event_map.iter().filter(|event| data_node_set.contains(&&event.node))
+            .map(|event| event.slot).collect::<Vec<_>>();
+        expected_event_slots.sort_unstable(); expected_event_slots.dedup();
+        anyhow::ensure!(data_view.event_slots == expected_event_slots
+                        && data_view.event_slots.iter().all(|slot| compiled[view_index].event_slots.contains(slot)),
+                        "material workbench data view {} Event Map set is not its canonical list subtree", data_view.id);
+        let mut expected_tile_ids = Vec::new();
+        for (tile_index, tile) in tiles.iter().enumerate() {
+            let intersects = scene.layout_plan.iter().filter(|layout| data_node_set.contains(&&layout.id)).any(|layout| {
+                let x = (layout.ndc_pos[0] + 1.0) * canvas.width * 0.5;
+                let y = (1.0 - layout.ndc_pos[1] - layout.ndc_size[1]) * canvas.height * 0.5;
+                let width = layout.ndc_size[0] * canvas.width * 0.5;
+                let height = layout.ndc_size[1] * canvas.height * 0.5;
+                x < tile.x + tile.width && tile.x < x + width && y < tile.y + tile.height && tile.y < y + height
+            });
+            if intersects { expected_tile_ids.push(tile_index); }
+        }
+        anyhow::ensure!(data_view.tile_ids == expected_tile_ids && !data_view.tile_ids.is_empty(),
+                        "material workbench data view {} tile scope is not its canonical list subtree union", data_view.id);
+        let tile_mask = tile_mask(&data_view.tile_ids, tiles.len(), &format!("material workbench data view {}", data_view.id))?;
+        anyhow::ensure!(scrollbar_plans.iter().any(|scrollbar| scrollbar.id == data_view.scrollbar_id && scrollbar.list_index == data_view.list_index)
+                        && list_navigation_plans.iter().any(|navigation| navigation.id == data_view.navigation_id && navigation.list_index == data_view.list_index)
+                        && log_browser_plans.iter().any(|browser| browser.id == data_view.log_browser_id && browser.list_index == data_view.list_index)
+                        && scene.row_activation_plans.iter().any(|activation| activation.list_id == data_view.list_id && activation.action_id == data_view.row_activation_action),
+                        "material workbench data view {} auxiliary plan witness is not canonical", data_view.id);
+        for &offset in &data_view.instance_offsets { anyhow::ensure!(seen_data_offsets.insert(offset), "material workbench data view {} aliases another arena instance", data_view.id); }
+        for &slot in &data_view.glyph_slots { anyhow::ensure!(seen_data_glyph_slots.insert(slot), "material workbench data view {} aliases another arena glyph", data_view.id); }
+        for &slot in &data_view.event_slots { anyhow::ensure!(seen_data_event_slots.insert(slot), "material workbench data view {} aliases another arena Event Map slot", data_view.id); }
+        anyhow::ensure!(owner_view_for_list[data_view.list_index].replace(view_index).is_none(),
+                        "material workbench data view {} aliases another arena list index", data_view.id);
+        compiled_data_views.push(CompiledMaterialObservabilityWorkbenchDataView { id: data_view.id.clone(), list_index: data_view.list_index, view_index, tile_mask });
+    }
+    anyhow::ensure!(owner_view_for_list.iter().all(Option::is_some)
+                    && plan.data_views[0].logical_capacity == 10_000 && plan.data_views[0].physical_slots == 4
+                    && plan.data_views[1].logical_capacity == 2_048 && plan.data_views[1].physical_slots == 3,
+                    "material workbench {} v2 fixed Systems(10000x4)/Alerts(2048x3) arena contract disagrees", plan.id);
+    println!("compiler material workbench: v2 id={} rail={} views=3 data-views={} selected={} data-arenas={:?} fixed-alpha-lanes={} glyph-alpha-lanes={} no-runtime-routing",
+             plan.id, plan.rail_id, compiled_data_views.len(), plan.initial_view,
+             compiled_data_views.iter().map(|entry| (&entry.id, entry.list_index, entry.view_index, entry.tile_mask)).collect::<Vec<_>>(),
              compiled.iter().map(|view| view.instance_offsets.len()).sum::<usize>(),
              compiled.iter().map(|view| view.glyph_slots.len()).sum::<usize>());
     Ok(Some(CompiledMaterialObservabilityWorkbenchPlan {
         id: plan.id.clone(), rail_id: plan.rail_id.clone(), state_index: plan.state_index,
-        systems_list_index, systems_view_index, selected_index: plan.initial_value as usize,
-        views: compiled, view_for_event_slot,
+        selected_index: plan.initial_value as usize, views: compiled, data_views: compiled_data_views,
+        view_for_event_slot, owner_view_for_list,
     }))
 }
 

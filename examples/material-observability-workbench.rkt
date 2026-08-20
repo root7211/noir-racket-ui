@@ -1,9 +1,9 @@
 #lang noir/ui
 
-;; Material Observability Workbench v1.
-;; All three view subtrees are compiled as resident static resources. The rail changes
-;; only compiler-proved alpha endpoints; the Systems viewport is the single 10,000-row
-;; mutable arena and the deployment overlay remains a fixed modal subgraph.
+;; Material Observability Workbench v2.
+;; All three view subtrees are resident static resources. Systems and Alerts each own
+;; one compiler-proved compact data arena; the rail changes only alpha endpoints and
+;; input admission, while the deployment overlay remains a fixed modal subgraph.
 (noir-app
  (font-asset #:manifest "assets/fontc/noir-desktop-sans-18/manifest.json"
              #:atlas "assets/fontc/noir-desktop-sans-18/atlas.r8")
@@ -13,11 +13,13 @@
  (material-profile material-dark)
  (state [workbench-view 0]
         [workbench-overlay-visible 0]
-        [workbench-detail-damage 0])
+        [workbench-detail-damage 0]
+        [workbench-alert-detail-damage 0])
  (action workbench-select-overview (set workbench-view 0))
  (action workbench-select-systems (set workbench-view 1))
  (action workbench-select-alerts (set workbench-view 2))
  (action workbench-open-detail (set workbench-detail-damage (+ workbench-detail-damage 1)))
+ (action workbench-open-alert-detail (set workbench-alert-detail-damage (+ workbench-alert-detail-damage 1)))
  (action workbench-open-deployment (set workbench-overlay-visible 1))
  (action workbench-confirm-deployment (set workbench-overlay-visible 0))
  (action workbench-dismiss-deployment (set workbench-overlay-visible 0))
@@ -25,14 +27,20 @@
  (action workbench-copy-artifact (set workbench-overlay-visible 0))
  (action workbench-export-manifest (set workbench-overlay-visible 0))
  (list-navigation #:id observability-list-navigation #:for observability-log #:scrollbar observability-scrollbar)
+ (list-navigation #:id observability-alert-list-navigation #:for observability-alert-stream #:scrollbar observability-alert-scrollbar)
  (log-browser #:id observability-log-browser #:for observability-log #:detail observability-detail
    #:append ((9997 "WARN  TIME  AUTH  TOKEN RETRY")
              (9998 "ERROR TIME  AUTH  TOKEN DENIED")
              (9999 "DEBUG TIME  CACHE ROTATE DONE")))
+ (log-browser #:id observability-alert-log-browser #:for observability-alert-stream #:detail observability-alert-detail
+   #:append ((2045 "WARN  TIME  EDGE  RETRY")
+             (2046 "ERROR TIME  EDGE  DENIED")
+             (2047 "DEBUG TIME  CACHE  ROTATE")))
  (material-observability-workbench
   #:id observability-workbench
   #:rail observability-rail
-  #:systems-list observability-log
+  #:data-views ((systems-data-view observability-log systems-view)
+                (alerts-data-view observability-alert-stream alerts-view))
   #:views ((observability-overview overview-view)
            (observability-systems systems-view)
            (observability-alerts alerts-view)))
@@ -113,25 +121,43 @@
                                #:font-face noir-desktop-sans-18 #:on workbench-open-detail
                                #:x 772 #:y 64 #:width 176 #:height 40)))
 
-   ;; View 2 — fixed alert summary; no second data arena is permitted in v1.
+   ;; View 2 — second compact Alerts arena; it is resident yet input-gated unless Alerts is active.
    (stack #:id alerts-view #:x 204 #:y 72 #:width 996 #:height 560 #:visual-anchor #t
           #:background (theme-color background)
-     (material-card #:id alerts-summary-card #:x 0 #:y 16 #:width 996 #:height 168
-                    #:background (theme-color surface-container-high)
-       (text #:id alerts-summary-title #:x 24 #:y 22 #:width 620 #:height 30
-             #:font-face noir-desktop-sans-18 #:font-scale 0.82 #:text-inset 0.0 "Alert posture")
-       (overlay #:id alerts-summary-accent #:x 24 #:y 122 #:width 948 #:height 4
-                #:background (theme-color error) #:opacity 1.0 #:z 8))
-     (material-card #:id alerts-proof-card #:x 0 #:y 216 #:width 482 #:height 276
-                    #:background (theme-color surface-container-low)
-       (text #:id alerts-proof-title #:x 24 #:y 22 #:width 410 #:height 28
-             #:font-face noir-desktop-sans-18 #:font-scale 0.80 #:text-inset 0.0 "Visible endpoint"))
-
-     (material-card #:id alerts-action-card #:x 514 #:y 216 #:width 482 #:height 276
+     (surface #:id alerts-table-card #:x 0 #:y 16 #:width 996 #:height 368
+              #:background (theme-color surface-container-high) #:elevation (theme-elevation raised)
+              #:radius (theme-radius card) #:clip #t
+       (text #:id alerts-table-title #:x 24 #:y 16 #:width 420 #:height 30
+             #:font-face noir-desktop-sans-18 #:font-scale 0.82 #:text-inset 0.0 "Alert incident stream")
+       (stack #:id alerts-column-header #:x 20 #:y 62 #:width 956 #:height 34 #:visual-anchor #t
+              #:background (theme-color surface-container)
+         (text #:id alerts-column-labels #:x 14 #:y 0 #:width 916 #:height 32
+               #:font-face noir-desktop-sans-18 #:font-scale 0.70 #:text-inset 0.0 "Level   Time   Edge   Incident"))
+       (surface #:id alerts-list-shell #:x 20 #:y 98 #:width 956 #:height 96
+                #:background (theme-color surface-container-low) #:elevation (theme-elevation level-0) #:clip #t
+         (virtual-list #:id observability-alert-stream
+                       #:logical-capacity 2048
+                       #:physical-slots 3
+                       #:visible-rows 3
+                       #:row-height 32
+                       #:max-chars 32
+           (data-register-table #:id observability-alerts-data #:font-face noir-table-body-mono-16 #:seed "WARN  TIME  EDGE  RETRY"
+             (data-update-batch #:id bootstrap-observability-alerts
+               ((0 "WARN  TIME  EDGE  RETRY"))))
+           (on-activate workbench-open-alert-detail)
+           (row-template ((observability-alert-row-a "WARN  TIME  EDGE  RETRY")
+                          (observability-alert-row-b "WARN  TIME  EDGE  RETRY")
+                          (observability-alert-row-c "WARN  TIME  EDGE  RETRY"))))
+         (scrollbar #:id observability-alert-scrollbar #:for observability-alert-stream
+                    #:x 940 #:y 0 #:width 12 #:height 96 #:thumb-height 24)))
+     (material-card #:id alerts-detail-card #:x 0 #:y 408 #:width 996 #:height 128
                     #:background (theme-color surface-container)
-       (text #:id alerts-action-title #:x 24 #:y 22 #:width 410 #:height 28
-             #:font-face noir-desktop-sans-18 #:font-scale 0.80 #:text-inset 0.0 "Deployment guard")
-))
+       (detail-panel #:id alerts-detail-panel #:text-id observability-alert-detail #:dynamic workbench-alert-detail-damage #:max-chars 29
+                     #:x 24 #:y 46 #:width 548 #:height 50 #:background (theme-color surface-container))
+       (material-filled-button #:id alerts-ack-action #:button-id alerts-ack-button
+                               #:label-id alerts-ack-label #:label "Acknowledge"
+                               #:font-face noir-desktop-sans-18 #:on workbench-open-alert-detail
+                               #:x 732 #:y 64 #:width 216 #:height 40)))
 
    (material-overlay-state #:id observability-deployment-overlay #:state workbench-overlay-visible #:initial 0
                            #:open-on workbench-open-deployment
