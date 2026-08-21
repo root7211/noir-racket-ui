@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Verify the Rust ABI gate and static association proof only. The transaction executor
-# deliberately remains absent: this script must never assert an acknowledgement write.
+# Verify Rust ABI gate and static association proof. The fixed executor is tested by
+# verify_workbench_cross_view_transaction_executor_v1.sh; this script only asserts admission/rejection.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -74,7 +74,7 @@ pids+=("$host_pid")
 sleep 3
 kill -0 "$host_pid"
 grep -Fq 'compiler workbench cross-view transaction: v1 id=workbench-acknowledge-alert-transaction' /tmp/noir-cross-view-gate-x11.log
-grep -Fq 'source=alerts-data-view#observability-alert-stream target=overview-alert-ack-count glyph-lanes=8 row-color-lanes=3 tile-mask=0x1 executor=absent' /tmp/noir-cross-view-gate-x11.log
+grep -Fq 'source=alerts-data-view#observability-alert-stream target=overview-alert-ack-count glyph-lanes=8 row-color-lanes=3 tile-mask=0x1 executor=fixed-patch' /tmp/noir-cross-view-gate-x11.log
 kill "$host_pid" 2>/dev/null || true
 pids=("${pids[@]:0:${#pids[@]}-1}")
 

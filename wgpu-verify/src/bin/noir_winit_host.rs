@@ -925,6 +925,28 @@ struct CompiledMaterialObservabilityWorkbenchPlan {
     owner_view_for_list: Vec<Option<usize>>,
 }
 
+// This is deliberately the *post-proof* executor representation. It contains no node
+// queries, JSON maps, action lookup or tile discovery inputs: event-time code selects only
+// the already-admitted Alerts physical lane and writes these compiler-fixed addresses.
+#[derive(Clone, Debug)]
+struct CompiledWorkbenchCrossViewTransactionPlan {
+    id: String,
+    action_id: String,
+    action_slot_index: usize,
+    event_slot: usize,
+    state_index: usize,
+    delta: i64,
+    source_list_index: usize,
+    source_view_index: usize,
+    source_physical_slots: usize,
+    source_selected_color: [f32; 4],
+    source_row_color_offsets: Vec<usize>,
+    source_log_browser_index: usize,
+    source_detail_glyph_offsets: Vec<usize>,
+    target_count_glyph_offsets: Vec<usize>,
+    tile_mask: u64,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 struct LogAppendUpdate { index: usize, value: String }
 #[derive(Clone, Debug, Deserialize)]
@@ -2024,6 +2046,7 @@ struct Host {
     modal_focus_subgraph_plan: Option<CompiledModalFocusSubgraphPlan>,
     modal_focus_visual_plan: Option<CompiledModalFocusVisualPlan>,
     material_observability_workbench_plan: Option<CompiledMaterialObservabilityWorkbenchPlan>,
+    workbench_cross_view_transaction_plan: Option<CompiledWorkbenchCrossViewTransactionPlan>,
     log_browser_plans: Vec<CompiledLogBrowserPlan>,
     log_levels: Vec<Vec<LogLevel>>,
     // Registered v1 fontc atlases. They deliberately remain separate from legacy
@@ -2178,7 +2201,7 @@ impl Host {
         let material_observability_workbench_plan = compiler_material_observability_workbench_plan(
             &scene, &state_slot_ids, &navigation_selection_plan, &virtual_lists, &scrollbar_plans, &list_navigation_plans, &log_browser_plans, &instances, &placements,
         )?;
-        compiler_workbench_cross_view_transaction_plan(
+        let workbench_cross_view_transaction_plan = compiler_workbench_cross_view_transaction_plan(
             &scene, &state_slot_ids, &action_slot_ids, &action_tile_masks, &material_observability_workbench_plan, &list_interactions, &log_browser_plans,
         )?;
         apply_material_observability_workbench_initial_visibility(
@@ -2249,7 +2272,7 @@ impl Host {
         let initial_glyph_bytes = glyph_bytes.clone();
         let virtual_list_count = virtual_lists.len();
         let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, canvas_width: visual_canvas.width, canvas_height: visual_canvas.height, canvas_margin: visual_canvas.margin, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, rounded_surface_bind_group, _rounded_surface_buffer: rounded_surface_buffer, shadow_pipeline, shadow_surface_bind_group, shadow_instance_buffer, shadow_instance_count, shadow_instances: shadow_instance_upload, _shadow_surface_buffer: shadow_surface_buffer, focus_ring_pipeline, focus_ring_bind_group, focus_ring_instance_buffer, focus_ring_instance_count, focus_ring_instances, _focus_ring_meta_buffer: focus_ring_meta_buffer, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group,
- cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, release_tracks, active_release_tracks: Vec::new(), virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, navigation_selection_plan, overlay_state_plan, modal_focus_subgraph_plan, modal_focus_visual_plan, material_observability_workbench_plan, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
+ cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, release_tracks, active_release_tracks: Vec::new(), virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, navigation_selection_plan, overlay_state_plan, modal_focus_subgraph_plan, modal_focus_visual_plan, material_observability_workbench_plan, workbench_cross_view_transaction_plan, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
         host.sync_focus_visuals();
         host.execute_scene_data_update_batches()?;
         host.redraw_canvas_full();
@@ -2744,6 +2767,17 @@ impl Host {
                     self.execute_pointer_transaction(index, transaction_index, &operation);
                     self.apply_overlay_state(index);
                 } else {
+                    let action_id = self.scene.event_map[index]._action.clone();
+                    if let Some(action_id) = action_id {
+                        if let Some(executed) = self.execute_workbench_cross_view_transaction(Some(index), &action_id, "pointer") {
+                            // The normal activate batch would run the same action but is deliberately
+                            // bypassed here: the transaction plan owns the complete verified write set.
+                            let release_id = self.event_batch_ids[index].release.clone();
+                            self.execute_release_task(&release_id);
+                            println!("pointer cross-view transaction: event-slot={} action={} executed={}", index, action_id, executed);
+                            return;
+                        }
+                    }
                     let batch_id = self.event_batch_ids[index].activate.clone();
                     self.dispatch_compiler_batch(&batch_id);
                     self.apply_navigation_selection(index);
@@ -3675,6 +3709,83 @@ impl Host {
     // `row_activation_plans` has already proven that this list, Action Slot, coalesced batch,
     // action-local tile mask, physical-slot rule and no-packets worklist form one closed ABI.
     // At input time we only read the selected logical row and dispatch the precomputed batch.
+    // Returns None only when `action_id` is unrelated to the unique transaction plan.
+    // Some(false) is an admitted-but-gated transaction: it consumes the action while
+    // intentionally producing zero state/data/glyph writes.
+    fn execute_workbench_cross_view_transaction(
+        &mut self,
+        event_slot: Option<usize>,
+        action_id: &str,
+        origin: &str,
+    ) -> Option<bool> {
+        let plan = self.workbench_cross_view_transaction_plan.clone()?;
+        if plan.action_id != action_id { return None; }
+        if let Some(event_slot) = event_slot {
+            if event_slot != plan.event_slot { return None; }
+        }
+        let active_view = self.material_observability_workbench_plan.as_ref()
+            .map(|workbench| workbench.selected_index);
+        if active_view != Some(plan.source_view_index) {
+            println!("workbench-cross-view-transaction-gated: id={} origin={} active-view={:?} required-view={} state-writes=0 gpu-writes=0",
+                     plan.id, origin, active_view, plan.source_view_index);
+            return Some(false);
+        }
+        let Some(logical) = self.list_selected_rows.get(plan.source_list_index).and_then(|entry| *entry) else {
+            println!("workbench-cross-view-transaction-gated: id={} origin={} reason=no-alert-selection state-writes=0 gpu-writes=0",
+                     plan.id, origin);
+            return Some(false);
+        };
+        let physical = logical % plan.source_physical_slots;
+        let row_color_offset = *plan.source_row_color_offsets.get(physical)
+            .expect("cross-view transaction proof fixed one color lane per Alerts physical slot");
+        let row_instance = row_color_offset / std::mem::size_of::<QuadInstance>();
+        let current_count = *self.state_slot_values.get(plan.state_index)
+            .expect("cross-view transaction proof fixed its state slot");
+        let Some(next_count) = current_count.checked_add(plan.delta) else {
+            println!("workbench-cross-view-transaction-gated: id={} origin={} reason=state-overflow state-writes=0 gpu-writes=0",
+                     plan.id, origin);
+            return Some(false);
+        };
+        let target_glyphs = match digit_ids(next_count, plan.target_count_glyph_offsets.len()) {
+            Ok(glyphs) => glyphs,
+            Err(_) => {
+                println!("workbench-cross-view-transaction-gated: id={} origin={} reason=count-width-overflow state-writes=0 gpu-writes=0",
+                         plan.id, origin);
+                return Some(false);
+            }
+        };
+        let level = match self.log_levels.get(plan.source_log_browser_index).and_then(|levels| levels.get(logical)).copied() {
+            Some(level) => level,
+            None => {
+                println!("workbench-cross-view-transaction-gated: id={} origin={} reason=alerts-level-missing state-writes=0 gpu-writes=0",
+                         plan.id, origin);
+                return Some(false);
+            }
+        };
+        let detail_text = format!("DETAIL {} SELECTED", Self::log_level_name(level));
+        let detail_glyphs = plan.source_detail_glyph_offsets.iter().zip(detail_text.chars().chain(std::iter::repeat(' ')))
+            .map(|(&offset, ch)| {
+                let glyph_id = if ch == ' ' { 1u32 << 16 } else { (1u32 << 16) | (1 + (ch as u32 - 'A' as u32)) };
+                (offset, glyph_id)
+            }).collect::<Vec<_>>();
+        // Commit begins only after every bounded derivation is admitted. The following writes
+        // are exactly the address sets frozen by compiler_workbench_cross_view_transaction_plan.
+        self.state_slot_values[plan.state_index] = next_count;
+        self.instances[row_instance].color = plan.source_selected_color;
+        self.queue.write_buffer(&self.instance_buffer, row_color_offset as u64, bytemuck::cast_slice(&plan.source_selected_color));
+        for (offset, glyph_id) in &detail_glyphs {
+            self.queue.write_buffer(&self.glyph_buffer, *offset as u64, &glyph_id.to_le_bytes());
+        }
+        for (offset, glyph_id) in plan.target_count_glyph_offsets.iter().zip(target_glyphs.iter()) {
+            self.queue.write_buffer(&self.glyph_buffer, *offset as u64, &glyph_id.to_le_bytes());
+        }
+        self.enqueue_render(RenderRequest::no_packets(plan.tile_mask), "workbench-cross-view-transaction");
+        println!("workbench-cross-view-transaction: id={} origin={} action={} slot={} event={:?} alerts-logical={} physical={} state={}=>{} state-writes=1 row-color-writes=1 detail-glyph-writes={} overview-count-glyph-writes={} tile-mask=0x{:016x} worklist=no-packets",
+                 plan.id, origin, plan.action_id, plan.action_slot_index, event_slot, logical, physical, current_count, next_count,
+                 detail_glyphs.len(), plan.target_count_glyph_offsets.len(), plan.tile_mask);
+        Some(true)
+    }
+
     fn activate_selected_list_row_for(&mut self, requested_list_id: Option<&str>) -> bool {
         for plan in self.row_activation_plans.clone() {
             let list_id = self.virtual_lists[plan.list_index].id.clone();
@@ -3685,6 +3796,11 @@ impl Host {
             println!("row-activation: list={} logical={} physical={} action-slot={} batch={} action-tile-mask=0x{:016x} worklist={}",
                      list_id, logical, physical, plan.action_slot_index, plan.activate_batch_id,
                      plan.tile_mask, plan.packet_worklist_index);
+            let action_id = self.action_slot_ids[plan.action_slot_index].clone();
+            if let Some(executed) = self.execute_workbench_cross_view_transaction(None, &action_id, "row-activation") {
+                println!("row-activation cross-view: list={} logical={} physical={} executed={}", list_id, logical, physical, executed);
+                return executed;
+            }
             // Reuse the sole coalesced executor: winner-write ordering, batch-local composite
             // worklist selection, and RenderRequest enqueue remain exactly the verified path.
             self.execute_coalesced_batch(&plan.activate_batch_id);
@@ -6114,12 +6230,12 @@ fn compiler_workbench_cross_view_transaction_plan(
     material_workbench: &Option<CompiledMaterialObservabilityWorkbenchPlan>,
     list_interactions: &[CompiledListInteractionPlan],
     log_browser_plans: &[CompiledLogBrowserPlan],
-) -> Result<()> {
+) -> Result<Option<CompiledWorkbenchCrossViewTransactionPlan>> {
     let Some(plan) = &scene.workbench_cross_view_transaction_plan else {
         anyhow::ensure!(!scene.workbench_cross_view_transaction_required,
                         "Scene marked workbench_cross_view_transaction_required may not disable workbench_cross_view_transaction_plan v1");
         println!("compiler workbench cross-view transaction: disabled executor=absent");
-        return Ok(());
+        return Ok(None);
     };
     anyhow::ensure!(scene.workbench_cross_view_transaction_required
                     && plan.abi_schema == WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_SCHEMA
@@ -6169,8 +6285,9 @@ fn compiler_workbench_cross_view_transaction_plan(
                     && source_view.node_ids.iter().any(|node| node == &action_events[0].node),
                     "workbench cross-view transaction {} Event Map witness is not the unique Alerts acknowledgement event", plan.id);
 
-    let source_browser = log_browser_plans.iter().find(|browser| browser.list_index == source_compiled.list_index)
+    let source_log_browser_index = log_browser_plans.iter().position(|browser| browser.list_index == source_compiled.list_index)
         .with_context(|| format!("workbench cross-view transaction {} source log-browser plan is absent", plan.id))?;
+    let source_browser = &log_browser_plans[source_log_browser_index];
     anyhow::ensure!(source_browser.id == source_wire.log_browser_id
                     && source_browser.detail_glyph_offsets == plan.source_detail_glyph_offsets
                     && source_browser.row_color_offsets == plan.source_row_color_offsets,
@@ -6233,10 +6350,19 @@ fn compiler_workbench_cross_view_transaction_plan(
     anyhow::ensure!(target_tile_mask != 0
                     && actual_tile_mask == (source_compiled.tile_mask | source_browser.detail_tile_mask | action_tile_mask | target_tile_mask),
                     "workbench cross-view transaction {} tile scope is not the canonical Alerts/detail/action/Overview union", plan.id);
-    println!("compiler workbench cross-view transaction: v1 id={} action={} slot={} event={} source={}#{} target={} glyph-lanes={} row-color-lanes={} tile-mask=0x{:x} executor=absent",
+    println!("compiler workbench cross-view transaction: v1 id={} action={} slot={} event={} source={}#{} target={} glyph-lanes={} row-color-lanes={} tile-mask=0x{:x} executor=fixed-patch",
              plan.id, plan.action_id, plan.action_slot_index, plan.event_slot, plan.source_data_view_id, plan.source_list_id,
              plan.target_count_node_id, plan.target_count_glyph_offsets.len(), plan.source_row_color_offsets.len(), actual_tile_mask);
-    Ok(())
+    Ok(Some(CompiledWorkbenchCrossViewTransactionPlan {
+        id: plan.id.clone(), action_id: plan.action_id.clone(), action_slot_index: plan.action_slot_index,
+        event_slot: plan.event_slot, state_index: plan.state_index, delta: plan.delta,
+        source_list_index: source_compiled.list_index, source_view_index: source_compiled.view_index,
+        source_physical_slots: source_wire.physical_slots,
+        source_selected_color: interaction.selected_color,
+        source_row_color_offsets: plan.source_row_color_offsets.clone(),
+        source_log_browser_index, source_detail_glyph_offsets: plan.source_detail_glyph_offsets.clone(),
+        target_count_glyph_offsets: plan.target_count_glyph_offsets.clone(), tile_mask: actual_tile_mask,
+    }))
 }
 
 fn apply_material_observability_workbench_initial_visibility(
