@@ -225,7 +225,7 @@
 (check-equal? (map (lambda (entry) (hash-ref entry 'navigation_id)) workbench-data-views-json)
               '("observability-list-navigation" "observability-alert-list-navigation"))
 (check-equal? (map (lambda (entry) (hash-ref entry 'row_activation_action)) workbench-data-views-json)
-              '("workbench-open-detail" "workbench-open-alert-detail"))
+              '("workbench-open-detail" "workbench-acknowledge-alert"))
 (define (workbench-data-disjoint? key)
   (define values (append-map (lambda (entry) (hash-ref entry key)) workbench-data-views-json))
   (= (length values) (length (remove-duplicates values))))
@@ -236,6 +236,39 @@
 (check-true (hash-ref material-workbench-json 'overlay_state_required))
 (check-true (hash-ref material-workbench-json 'modal_focus_visual_required))
 (check-equal? (length (hash-ref (hash-ref material-workbench-json 'modal_focus_visual_plan) 'entries)) 5)
+
+;; Cross-view transaction v1 freezes a single Alerts acknowledgement write set that
+;; spans the active compact row authority and the hidden Overview count endpoint.
+(check-true (hash-ref material-workbench-json 'workbench_cross_view_transaction_required))
+(check-equal? (hash-ref (hash-ref material-workbench-json 'abi_contracts) 'workbench_cross_view_transaction_plan)
+              (hash 'schema "noir-workbench-cross-view-transaction-plan-v1" 'revision 1))
+(define cross-view-json (hash-ref material-workbench-json 'workbench_cross_view_transaction_plan))
+(check-equal? (hash-ref cross-view-json 'abi_schema) "noir-workbench-cross-view-transaction-plan-v1")
+(check-equal? (hash-ref cross-view-json 'abi_revision) 1)
+(check-equal? (hash-ref cross-view-json 'id) "workbench-acknowledge-alert-transaction")
+(check-equal? (hash-ref cross-view-json 'action_id) "workbench-acknowledge-alert")
+(check-equal? (hash-ref cross-view-json 'state) "workbench-alert-ack-count")
+(check-equal? (hash-ref cross-view-json 'delta) 1)
+(check-equal? (hash-ref cross-view-json 'source_data_view_id) "alerts-data-view")
+(check-equal? (hash-ref cross-view-json 'source_list_id) "observability-alert-stream")
+(check-equal? (hash-ref cross-view-json 'source_view_id) "alerts-view")
+(check-equal? (hash-ref cross-view-json 'source_detail_node_id) "observability-alert-detail")
+(check-equal? (hash-ref cross-view-json 'target_view_id) "overview-view")
+(check-equal? (hash-ref cross-view-json 'target_count_node_id) "overview-alert-ack-count")
+(check-equal? (hash-ref cross-view-json 'tile_ids) '(0))
+(check-equal? (length (hash-ref cross-view-json 'source_row_color_offsets)) 3)
+(check-equal? (length (hash-ref cross-view-json 'source_detail_glyph_offsets)) 29)
+(check-equal? (length (hash-ref cross-view-json 'target_count_glyph_offsets)) 8)
+(define cross-view-alert-data (second workbench-data-views-json))
+(for ([color-offset (in-list (hash-ref cross-view-json 'source_row_color_offsets))])
+  (check-not-false (member (- color-offset 16) (hash-ref cross-view-alert-data 'instance_offsets))))
+(define cross-view-slots (scene-action-slots material-workbench-app-scene))
+(define cross-view-action-slot
+  (action-slot-index (findf (lambda (slot) (eq? (action-slot-id slot) 'workbench-acknowledge-alert)) cross-view-slots)))
+(check-equal? (hash-ref cross-view-json 'action_slot_index) cross-view-action-slot)
+(check-equal? (hash-ref cross-view-json 'state_index)
+              (state-slot-index (findf (lambda (slot) (eq? (state-slot-id slot) 'workbench-alert-ack-count))
+                                       (scene-state-slots material-workbench-app-scene))))
 
 ;; Dialog/menu v1 is a syntax-only static composition. It has no runtime overlay manager
 ;; or navigation plan: fixed scrim/surface/menu geometry and five already-known actions are enough.

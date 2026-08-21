@@ -14,12 +14,14 @@
  (state [workbench-view 0]
         [workbench-overlay-visible 0]
         [workbench-detail-damage 0]
-        [workbench-alert-detail-damage 0])
+        [workbench-alert-detail-damage 0]
+        [workbench-alert-ack-count 0])
  (action workbench-select-overview (set workbench-view 0))
  (action workbench-select-systems (set workbench-view 1))
  (action workbench-select-alerts (set workbench-view 2))
  (action workbench-open-detail (set workbench-detail-damage (+ workbench-detail-damage 1)))
  (action workbench-open-alert-detail (set workbench-alert-detail-damage (+ workbench-alert-detail-damage 1)))
+ (action workbench-acknowledge-alert (set workbench-alert-ack-count (+ workbench-alert-ack-count 1)))
  (action workbench-open-deployment (set workbench-overlay-visible 1))
  (action workbench-confirm-deployment (set workbench-overlay-visible 0))
  (action workbench-dismiss-deployment (set workbench-overlay-visible 0))
@@ -44,6 +46,12 @@
   #:views ((observability-overview overview-view)
            (observability-systems systems-view)
            (observability-alerts alerts-view)))
+ (workbench-cross-view-transaction
+  #:id workbench-acknowledge-alert-transaction
+  #:action workbench-acknowledge-alert
+  #:from (alerts-data-view observability-alert-stream alerts-view observability-alert-detail)
+  #:to (overview-view overview-alert-ack-count)
+  #:state workbench-alert-ack-count #:delta 1)
 
  (stack #:id material-observability-workbench #:width 1216 #:height 656 #:clip #t
         #:background (theme-color background)
@@ -68,6 +76,11 @@
                     #:background (theme-color surface-container-low)
        (text #:id overview-health-title #:x 24 #:y 22 #:width 410 #:height 28
              #:font-face noir-desktop-sans-18 #:font-scale 0.82 #:text-inset 0.0 "Service health")
+       (text #:id overview-alert-ack-label #:x 24 #:y 76 #:width 236 #:height 24
+             #:font-face noir-desktop-sans-18 #:font-scale 0.70 #:text-inset 0.0 "Acknowledged alerts")
+       (detail-panel #:id overview-alert-ack-panel #:text-id overview-alert-ack-count
+                     #:dynamic workbench-alert-ack-count #:max-chars 8
+                     #:x 24 #:y 108 #:width 238 #:height 40 #:background (theme-color surface-container))
        (overlay #:id overview-health-accent #:x 24 #:y 170 #:width 434 #:height 4
                 #:background (theme-color primary) #:opacity 1.0 #:z 8))
      (material-card #:id overview-render-card #:x 514 #:y 16 #:width 482 #:height 220
@@ -144,7 +157,7 @@
            (data-register-table #:id observability-alerts-data #:font-face noir-table-body-mono-16 #:seed "WARN  TIME  EDGE  RETRY"
              (data-update-batch #:id bootstrap-observability-alerts
                ((0 "WARN  TIME  EDGE  RETRY"))))
-           (on-activate workbench-open-alert-detail)
+           (on-activate workbench-acknowledge-alert)
            (row-template ((observability-alert-row-a "WARN  TIME  EDGE  RETRY")
                           (observability-alert-row-b "WARN  TIME  EDGE  RETRY")
                           (observability-alert-row-c "WARN  TIME  EDGE  RETRY"))))
@@ -156,7 +169,7 @@
                      #:x 24 #:y 46 #:width 548 #:height 50 #:background (theme-color surface-container))
        (material-filled-button #:id alerts-ack-action #:button-id alerts-ack-button
                                #:label-id alerts-ack-label #:label "Acknowledge"
-                               #:font-face noir-desktop-sans-18 #:on workbench-open-alert-detail
+                               #:font-face noir-desktop-sans-18 #:on workbench-acknowledge-alert
                                #:x 732 #:y 64 #:width 216 #:height 40)))
 
    (material-overlay-state #:id observability-deployment-overlay #:state workbench-overlay-visible #:initial 0

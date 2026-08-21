@@ -74,6 +74,7 @@ scene-glyph-draw-packets
          (struct-out modal-focus-visual-plan)
          (struct-out material-observability-workbench-view)
          (struct-out material-observability-workbench-plan)
+         (struct-out workbench-cross-view-transaction-plan)
          (struct-out virtual-list-plan)
          (struct-out log-browser-plan)
          (struct-out font-asset-plan)
@@ -174,6 +175,10 @@ scene-glyph-draw-packets
 ;; layout, view discovery or dynamic list allocation.
 (define material-observability-workbench-plan-abi-schema "noir-material-observability-workbench-plan-v2")
 (define material-observability-workbench-plan-abi-revision 2)
+;; A closed Alerts → Overview acknowledgement transaction. It binds fixed resource
+;; ranges across two resident views but does not generalize into runtime routing.
+(define workbench-cross-view-transaction-plan-abi-schema "noir-workbench-cross-view-transaction-plan-v1")
+(define workbench-cross-view-transaction-plan-abi-revision 1)
 
 (define (abi-contracts->jsexpr)
   (hash 'virtual_list_plan
@@ -223,12 +228,15 @@ scene-glyph-draw-packets
               'revision modal-focus-visual-plan-abi-revision)
         'material_observability_workbench_plan
         (hash 'schema material-observability-workbench-plan-abi-schema
-              'revision material-observability-workbench-plan-abi-revision)))
+              'revision material-observability-workbench-plan-abi-revision)
+        'workbench_cross_view_transaction_plan
+        (hash 'schema workbench-cross-view-transaction-plan-abi-schema
+              'revision workbench-cross-view-transaction-plan-abi-revision)))
 
 (struct ui-node (tag id props children source) #:transparent)
 ;; Scene 以静态树和增量执行计划共同组成。state/actions 由 `noir-app`
 ;; 的扩展语法生成；普通 `(ui ...)` 保持空状态表，仍可独立使用。
-(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan navigation-selection-plan overlay-state-plan overlay-state-required? modal-focus-subgraph-plan modal-focus-subgraph-required? modal-focus-visual-plan modal-focus-visual-required? material-observability-workbench-plan material-observability-workbench-required?) #:transparent)
+(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan navigation-selection-plan overlay-state-plan overlay-state-required? modal-focus-subgraph-plan modal-focus-subgraph-required? modal-focus-visual-plan modal-focus-visual-required? material-observability-workbench-plan material-observability-workbench-required? workbench-cross-view-transaction-plan workbench-cross-view-transaction-required?) #:transparent)
 ;; state-slot 的 index 是所有 runtime state read/write 的唯一地址；id/initial 只保留为启动期 proof 与可审计导出。
 (struct state-slot (index id initial) #:transparent)
 ;; action-slot 与 state-slot 一样为 macro expansion 生成的 dense canonical address。
@@ -350,6 +358,10 @@ scene-glyph-draw-packets
 ;; Every scalar is compiler-derived; no runtime list ownership query is permitted.
 (struct material-observability-workbench-data-view (id list-id view-id list-index logical-capacity physical-slots visible-rows scrollbar-id navigation-id log-browser-id row-activation-action node-ids instance-offsets glyph-slots event-slots tile-ids) #:transparent)
 (struct material-observability-workbench-plan (id rail-id state state-index initial-view initial-value views data-views) #:transparent)
+;; The action, state and every GPU address are compiler-derived. Source row colors
+;; are physical-slot lanes selected by the existing compact Alerts list rule; all
+;; other glyph ranges are immutable addresses exported at macro expansion time.
+(struct workbench-cross-view-transaction-plan (id action-id action-slot-index event-slot state state-index delta source-data-view-id source-list-id source-view-id source-row-color-offsets source-detail-node-id source-detail-glyph-offsets target-view-id target-count-node-id target-count-glyph-offsets tile-ids) #:transparent)
 
 (define (value->jsexpr v)
   (cond
@@ -1040,6 +1052,28 @@ scene-glyph-draw-packets
                      'event_slots (material-observability-workbench-data-view-event-slots data-view)
                      'tile_ids (material-observability-workbench-data-view-tile-ids data-view))))))
 
+(define (workbench-cross-view-transaction-plan->jsexpr plan)
+  (and plan
+       (hash 'abi_schema workbench-cross-view-transaction-plan-abi-schema
+             'abi_revision workbench-cross-view-transaction-plan-abi-revision
+             'id (symbol->string (workbench-cross-view-transaction-plan-id plan))
+             'action_id (symbol->string (workbench-cross-view-transaction-plan-action-id plan))
+             'action_slot_index (workbench-cross-view-transaction-plan-action-slot-index plan)
+             'event_slot (workbench-cross-view-transaction-plan-event-slot plan)
+             'state (symbol->string (workbench-cross-view-transaction-plan-state plan))
+             'state_index (workbench-cross-view-transaction-plan-state-index plan)
+             'delta (workbench-cross-view-transaction-plan-delta plan)
+             'source_data_view_id (symbol->string (workbench-cross-view-transaction-plan-source-data-view-id plan))
+             'source_list_id (symbol->string (workbench-cross-view-transaction-plan-source-list-id plan))
+             'source_view_id (symbol->string (workbench-cross-view-transaction-plan-source-view-id plan))
+             'source_row_color_offsets (workbench-cross-view-transaction-plan-source-row-color-offsets plan)
+             'source_detail_node_id (symbol->string (workbench-cross-view-transaction-plan-source-detail-node-id plan))
+             'source_detail_glyph_offsets (workbench-cross-view-transaction-plan-source-detail-glyph-offsets plan)
+             'target_view_id (symbol->string (workbench-cross-view-transaction-plan-target-view-id plan))
+             'target_count_node_id (symbol->string (workbench-cross-view-transaction-plan-target-count-node-id plan))
+             'target_count_glyph_offsets (workbench-cross-view-transaction-plan-target-count-glyph-offsets plan)
+             'tile_ids (workbench-cross-view-transaction-plan-tile-ids plan))))
+
 (define (navigation-selection-plan->jsexpr plan)
   (and plan
        (hash 'abi_schema navigation-selection-plan-abi-schema
@@ -1111,6 +1145,8 @@ scene-glyph-draw-packets
         'modal_focus_visual_required (scene-modal-focus-visual-required? s)
         'material_observability_workbench_plan (material-observability-workbench-plan->jsexpr (scene-material-observability-workbench-plan s))
         'material_observability_workbench_required (scene-material-observability-workbench-required? s)
+        'workbench_cross_view_transaction_plan (workbench-cross-view-transaction-plan->jsexpr (scene-workbench-cross-view-transaction-plan s))
+        'workbench_cross_view_transaction_required (scene-workbench-cross-view-transaction-required? s)
         'text_field_visuals (text-field-visuals->jsexpr s)))
   (if build-attestation
       (hash-set base 'build_attestation (value->jsexpr build-attestation))
@@ -1222,6 +1258,10 @@ scene-glyph-draw-packets
   (struct c-material-observability-workbench-view (destination-id event-slot target-value view-root-id node-ids instance-offsets instance-alphas glyph-slots event-slots tile-ids) #:transparent)
   (struct c-material-observability-workbench-data-view (id list-id view-id list-index logical-capacity physical-slots visible-rows scrollbar-id navigation-id log-browser-id row-activation-action node-ids instance-offsets glyph-slots event-slots tile-ids) #:transparent)
   (struct c-material-observability-workbench-plan (id rail-id state state-index initial-view initial-value views data-views) #:transparent)
+  ;; A deliberately narrow, declaration-only acknowledgement transaction. The source
+  ;; is one closed workbench data view; the target is one resident dynamic text node.
+  (struct c-workbench-cross-view-transaction-spec (id action-id source-data-view-id source-list-id source-view-id source-detail-id target-view-id target-count-id state delta source) #:transparent)
+  (struct c-workbench-cross-view-transaction-plan (id action-id action-slot-index event-slot state state-index delta source-data-view-id source-list-id source-view-id source-row-color-offsets source-detail-node-id source-detail-glyph-offsets target-view-id target-count-node-id target-count-glyph-offsets tile-ids) #:transparent)
   (struct c-font-asset-spec (manifest-path atlas-path source) #:transparent)
   (struct c-font-glyph (glyph-id codepoint character x y width height advance bearing-x bearing-y) #:transparent)
 (struct c-font-asset-plan (face-id manifest-path atlas-path font-sha256 atlas-sha256 atlas-width atlas-height atlas-channels pixel-size line-height glyph-domain-first glyph-domain-count atlas-page activation glyphs) #:transparent)
@@ -6289,6 +6329,25 @@ scene-glyph-draw-packets
                             (map cons indices values) form)]
         [_ (raise-syntax-error 'log-browser "expected (log-browser #:id id #:for list #:detail text-id #:append ((index UPPERCASE_RECORD) ...+))" form)])))
 
+  (define (parse-workbench-cross-view-transaction-forms forms)
+    (for/list ([form (in-list forms)])
+      (syntax-parse form
+        #:datum-literals (workbench-cross-view-transaction)
+        [(workbench-cross-view-transaction #:id id:id #:action action-id:id
+                                           #:from (data-view-id:id list-id:id view-id:id detail-id:id)
+                                           #:to (target-view-id:id count-id:id)
+                                           #:state state:id #:delta delta)
+         (define delta-value (expect-integer 'workbench-cross-view-transaction #'delta))
+         (unless (= delta-value 1)
+           (raise-syntax-error 'workbench-cross-view-transaction "v1 freezes acknowledgement delta to literal +1" #'delta))
+         (c-workbench-cross-view-transaction-spec
+          (syntax-e #'id) (syntax-e #'action-id) (syntax-e #'data-view-id) (syntax-e #'list-id)
+          (syntax-e #'view-id) (syntax-e #'detail-id) (syntax-e #'target-view-id)
+          (syntax-e #'count-id) (syntax-e #'state) delta-value form)]
+        [_ (raise-syntax-error 'workbench-cross-view-transaction
+                               "expected (workbench-cross-view-transaction #:id id #:action action #:from (data-view list source-view detail-text) #:to (target-view target-count-text) #:state state #:delta 1)"
+                               form)])))
+
   (define (parse-material-observability-workbench-forms forms)
     (for/list ([form (in-list forms)])
       (syntax-parse form
@@ -6629,6 +6688,142 @@ scene-glyph-draw-packets
         (c-navigation-selection-plan-state navigation-selection-plan)
         (c-navigation-selection-plan-state-index navigation-selection-plan)
         initial-view initial-value view-records data-view-records)]))
+
+  ;; v1 is intentionally not a generic cross-view command language. It admits one
+  ;; literal acknowledgement: one Alerts compact arena contributes its physical-row
+  ;; color authority and detail range; one Overview dynamic text range consumes the
+  ;; literal +1 state action. Every range is emitted before host startup.
+  (define (compile-workbench-cross-view-transaction-plan specs root layouts states actions action-indexes action-plans events glyph-placements workbench-plan log-browser-plans render-schedules)
+    (cond
+      [(null? specs) #f]
+      [(not workbench-plan)
+       (raise-syntax-error 'workbench-cross-view-transaction "requires one compiler-proved material-observability-workbench" (c-workbench-cross-view-transaction-spec-source (car specs)))]
+      [(not (= (length specs) 1))
+       (raise-syntax-error 'workbench-cross-view-transaction "v1 admits exactly one closed Alerts-to-Overview acknowledgement transaction" (c-workbench-cross-view-transaction-spec-source (car specs)))]
+      [else
+       (define spec (car specs))
+       (define source-data-view
+         (or (findf (lambda (entry) (eq? (c-material-observability-workbench-data-view-id entry)
+                                         (c-workbench-cross-view-transaction-spec-source-data-view-id spec)))
+                    (c-material-observability-workbench-plan-data-views workbench-plan))
+             (raise-syntax-error 'workbench-cross-view-transaction "#:from data view must be one compiler-proved workbench data view" (c-workbench-cross-view-transaction-spec-source spec))))
+       (unless (and (eq? (c-material-observability-workbench-data-view-list-id source-data-view)
+                         (c-workbench-cross-view-transaction-spec-source-list-id spec))
+                    (eq? (c-material-observability-workbench-data-view-view-id source-data-view)
+                         (c-workbench-cross-view-transaction-spec-source-view-id spec)))
+         (raise-syntax-error 'workbench-cross-view-transaction "#:from list/view must exactly match the admitted data view" (c-workbench-cross-view-transaction-spec-source spec)))
+       (define source-view
+         (or (findf (lambda (view) (eq? (c-material-observability-workbench-view-view-root-id view)
+                                        (c-workbench-cross-view-transaction-spec-source-view-id spec)))
+                    (c-material-observability-workbench-plan-views workbench-plan))
+             (raise-syntax-error 'workbench-cross-view-transaction "source workbench view must exist" (c-workbench-cross-view-transaction-spec-source spec))))
+       (define target-view
+         (or (findf (lambda (view) (eq? (c-material-observability-workbench-view-view-root-id view)
+                                        (c-workbench-cross-view-transaction-spec-target-view-id spec)))
+                    (c-material-observability-workbench-plan-views workbench-plan))
+             (raise-syntax-error 'workbench-cross-view-transaction "target workbench view must exist" (c-workbench-cross-view-transaction-spec-source spec))))
+       (unless (and (eq? (c-material-observability-workbench-view-destination-id source-view) 'observability-alerts)
+                    (eq? (c-material-observability-workbench-view-destination-id target-view) 'observability-overview)
+                    (not (eq? (c-material-observability-workbench-view-view-root-id source-view)
+                              (c-material-observability-workbench-view-view-root-id target-view))))
+         (raise-syntax-error 'workbench-cross-view-transaction "v1 freezes one Alerts source and one distinct Overview target view" (c-workbench-cross-view-transaction-spec-source spec)))
+       (define action
+         (or (findf (lambda (candidate) (eq? (c-action-id candidate) (c-workbench-cross-view-transaction-spec-action-id spec))) actions)
+             (raise-syntax-error 'workbench-cross-view-transaction "#:action must name a declared action" (c-workbench-cross-view-transaction-spec-source spec))))
+       (unless (and (eq? (c-action-state action) (c-workbench-cross-view-transaction-spec-state spec))
+                    (eq? (c-action-op action) 'add)
+                    (= (c-action-value action) (c-workbench-cross-view-transaction-spec-delta spec)))
+         (raise-syntax-error 'workbench-cross-view-transaction "acknowledgement action must be the declared literal state increment" (c-workbench-cross-view-transaction-spec-source spec)))
+       (define action-slot-index
+         (or (hash-ref action-indexes (c-action-id action) #f)
+             (raise-syntax-error 'workbench-cross-view-transaction "action has no canonical Action Slot" (c-workbench-cross-view-transaction-spec-source spec))))
+       (define action-plan
+         (or (findf (lambda (candidate) (eq? (c-action-plan-id candidate) (c-action-id action))) action-plans)
+             (raise-syntax-error 'workbench-cross-view-transaction "action has no fixed action plan" (c-workbench-cross-view-transaction-spec-source spec))))
+       (define source-events (filter (lambda (event) (eq? (c-event-action event) (c-action-id action))) events))
+       (unless (= (length source-events) 1)
+         (raise-syntax-error 'workbench-cross-view-transaction "acknowledgement action must own exactly one fixed Event Map slot" (c-workbench-cross-view-transaction-spec-source spec)))
+       (define log-browser
+         (or (findf (lambda (candidate) (eq? (c-log-browser-plan-list-id candidate)
+                                              (c-workbench-cross-view-transaction-spec-source-list-id spec))) log-browser-plans)
+             (raise-syntax-error 'workbench-cross-view-transaction "source list must own one fixed log-browser detail plan" (c-workbench-cross-view-transaction-spec-source spec))))
+       (unless (eq? (c-log-browser-plan-detail-node-id log-browser)
+                    (c-workbench-cross-view-transaction-spec-source-detail-id spec))
+         (raise-syntax-error 'workbench-cross-view-transaction "#:from detail text must exactly match the source log-browser plan" (c-workbench-cross-view-transaction-spec-source spec)))
+       (define node-by-id (for/hash ([node (in-list (walk-nodes root))]) (values (c-node-id node) node)))
+       (define target-node
+         (or (hash-ref node-by-id (c-workbench-cross-view-transaction-spec-target-count-id spec) #f)
+             (raise-syntax-error 'workbench-cross-view-transaction "#:to count text must name a static text node" (c-workbench-cross-view-transaction-spec-source spec))))
+       (unless (and (eq? (c-node-tag target-node) 'text)
+                    (eq? (dynamic-text-state target-node) (c-workbench-cross-view-transaction-spec-state spec))
+                    (member (c-node-id target-node) (c-material-observability-workbench-view-node-ids target-view))
+                    (member (c-workbench-cross-view-transaction-spec-source-detail-id spec)
+                            (c-material-observability-workbench-view-node-ids source-view)))
+         (raise-syntax-error 'workbench-cross-view-transaction "target dynamic count and source detail must belong to their declared resident views" (c-workbench-cross-view-transaction-spec-source spec)))
+       (define target-glyph-offsets
+         (sort (for/list ([placement (in-list glyph-placements)]
+                          #:when (eq? (c-glyph-placement-node-id placement) (c-node-id target-node)))
+                 (c-glyph-placement-glyph-byte-offset placement)) <))
+       (define source-detail-glyph-offsets (c-log-browser-plan-detail-glyph-offsets log-browser))
+       (unless (and (pair? target-glyph-offsets) (pair? source-detail-glyph-offsets)
+                    (member (c-node-id target-node)
+                            (map c-binding-node-id (c-action-plan-text-updates action-plan))))
+         (raise-syntax-error 'workbench-cross-view-transaction "acknowledgement action must own the fixed Overview count glyph range" (c-workbench-cross-view-transaction-spec-source spec)))
+       (define source-row-color-offsets (c-log-browser-plan-row-color-offsets log-browser))
+       (unless (and (pair? source-row-color-offsets)
+                    (andmap (lambda (offset)
+                              (member (- offset 16) (c-material-observability-workbench-data-view-instance-offsets source-data-view)))
+                            source-row-color-offsets))
+         (raise-syntax-error 'workbench-cross-view-transaction "source row color lanes must be fixed fields of the admitted Alerts data arena" (c-workbench-cross-view-transaction-spec-source spec)))
+       (define layout-by-id (for/hash ([layout (in-list layouts)]) (values (c-layout-id layout) layout)))
+       (define target-layout (hash-ref layout-by-id (c-node-id target-node)))
+       (define schedule (and (pair? render-schedules) (car render-schedules)))
+       (define target-tile-ids
+         (if schedule
+             (for/list ([tile (in-list (c-render-schedule-tiles schedule))] [tile-id (in-naturals)]
+                        #:when (rect-intersection (layout-rect target-layout) (tile-rect tile))) tile-id)
+             '()))
+       (define tile-ids
+         (sort (remove-duplicates
+                (append (c-material-observability-workbench-data-view-tile-ids source-data-view)
+                        (c-log-browser-plan-detail-tile-ids log-browser)
+                        (c-action-plan-tile-ids action-plan)
+                        target-tile-ids)) <))
+       (unless (pair? tile-ids)
+         (raise-syntax-error 'workbench-cross-view-transaction "source row, source detail and Overview count must share compiler-proved render tile coverage" (c-workbench-cross-view-transaction-spec-source spec)))
+       (define state-indexes (state-index-by-id states))
+       (c-workbench-cross-view-transaction-plan
+        (c-workbench-cross-view-transaction-spec-id spec) (c-action-id action) action-slot-index
+        (c-event-slot (car source-events)) (c-action-state action) (hash-ref state-indexes (c-action-state action))
+        (c-workbench-cross-view-transaction-spec-delta spec)
+        (c-material-observability-workbench-data-view-id source-data-view)
+        (c-material-observability-workbench-data-view-list-id source-data-view)
+        (c-material-observability-workbench-data-view-view-id source-data-view)
+        source-row-color-offsets (c-log-browser-plan-detail-node-id log-browser) source-detail-glyph-offsets
+        (c-material-observability-workbench-view-view-root-id target-view) (c-node-id target-node)
+        target-glyph-offsets tile-ids)]))
+
+  (define (workbench-cross-view-transaction-plan->datum plan)
+    (if (not plan)
+        '#f
+        `(workbench-cross-view-transaction-plan
+          ',(c-workbench-cross-view-transaction-plan-id plan)
+          ',(c-workbench-cross-view-transaction-plan-action-id plan)
+          ,(c-workbench-cross-view-transaction-plan-action-slot-index plan)
+          ,(c-workbench-cross-view-transaction-plan-event-slot plan)
+          ',(c-workbench-cross-view-transaction-plan-state plan)
+          ,(c-workbench-cross-view-transaction-plan-state-index plan)
+          ,(c-workbench-cross-view-transaction-plan-delta plan)
+          ',(c-workbench-cross-view-transaction-plan-source-data-view-id plan)
+          ',(c-workbench-cross-view-transaction-plan-source-list-id plan)
+          ',(c-workbench-cross-view-transaction-plan-source-view-id plan)
+          ',(c-workbench-cross-view-transaction-plan-source-row-color-offsets plan)
+          ',(c-workbench-cross-view-transaction-plan-source-detail-node-id plan)
+          ',(c-workbench-cross-view-transaction-plan-source-detail-glyph-offsets plan)
+          ',(c-workbench-cross-view-transaction-plan-target-view-id plan)
+          ',(c-workbench-cross-view-transaction-plan-target-count-node-id plan)
+          ',(c-workbench-cross-view-transaction-plan-target-count-glyph-offsets plan)
+          ',(c-workbench-cross-view-transaction-plan-tile-ids plan))))
 
   (define (material-observability-workbench-plan->datum plan)
     (if (not plan)
@@ -7518,7 +7713,7 @@ scene-glyph-draw-packets
                    [OVERLAY-STATE (datum-stx stx '#f)]
                    [MODAL-FOCUS-SUBGRAPH (datum-stx stx '#f)]
                    [MODAL-FOCUS-VISUAL (datum-stx stx '#f)])
-       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE #f MODAL-FOCUS-SUBGRAPH #f MODAL-FOCUS-VISUAL #f #f #f))]
+       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE #f MODAL-FOCUS-SUBGRAPH #f MODAL-FOCUS-VISUAL #f #f #f #f #f))]
     [(_ root:expr extra:expr ...)
      (raise-syntax-error 'ui "expects exactly one root layout node" stx)]))
 
@@ -7534,6 +7729,8 @@ scene-glyph-draw-packets
      (define log-browser-forms (filter (lambda (form) (eq? (form-head-symbol form) 'log-browser)) forms))
      (define material-observability-workbench-forms
        (filter (lambda (form) (eq? (form-head-symbol form) 'material-observability-workbench)) forms))
+     (define workbench-cross-view-transaction-forms
+       (filter (lambda (form) (eq? (form-head-symbol form) 'workbench-cross-view-transaction)) forms))
      (define font-asset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'font-asset)) forms))
      (define dynamic-font-cell-asset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'dynamic-font-cell-asset)) forms))
      (define theme-forms (filter (lambda (form) (eq? (form-head-symbol form) 'theme)) forms))
@@ -7541,7 +7738,7 @@ scene-glyph-draw-packets
      (define visual-preset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'visual-preset)) forms))
      (define layout-forms
        (filter (lambda (form)
-                 (not (memq (form-head-symbol form) '(state action commit-group command-table list-navigation log-browser material-observability-workbench font-asset dynamic-font-cell-asset theme material-profile visual-preset))))
+                 (not (memq (form-head-symbol form) '(state action commit-group command-table list-navigation log-browser material-observability-workbench workbench-cross-view-transaction font-asset dynamic-font-cell-asset theme material-profile visual-preset))))
                forms))
      (unless (= (length state-forms) 1)
        (raise-syntax-error 'noir-app "expects exactly one (state ...) form" stx))
@@ -7578,6 +7775,8 @@ scene-glyph-draw-packets
      (define log-browser-specs (parse-log-browser-forms log-browser-forms))
      (define material-observability-workbench-specs
        (parse-material-observability-workbench-forms material-observability-workbench-forms))
+     (define workbench-cross-view-transaction-specs
+       (parse-workbench-cross-view-transaction-forms workbench-cross-view-transaction-forms))
      (define font-asset-specs (parse-font-asset-forms font-asset-forms))
      (define font-assets (compile-font-asset-plans font-asset-specs))
      (define dynamic-font-cell-asset
@@ -7687,6 +7886,12 @@ scene-glyph-draw-packets
         material-observability-workbench-specs root-node layouts glyph-placements events
         virtual-list-plans scrollbar-plans list-navigation-plans log-browser-plans navigation-selection-plan render-schedules))
      (define material-workbench-v2-datum (material-observability-workbench-plan->datum material-observability-workbench-plan))
+     (define workbench-cross-view-transaction-plan
+       (compile-workbench-cross-view-transaction-plan
+        workbench-cross-view-transaction-specs root-node layouts states actions action-indexes plans events glyph-placements
+        material-observability-workbench-plan log-browser-plans render-schedules))
+     (define workbench-cross-view-transaction-datum
+       (workbench-cross-view-transaction-plan->datum workbench-cross-view-transaction-plan))
      (with-syntax ([ROOT (datum-stx stx (node->datum root-node))]
                    [STATIC (datum-stx stx (- total dynamic))]
                    [DYNAMIC (datum-stx stx dynamic)]
@@ -7733,7 +7938,9 @@ scene-glyph-draw-packets
                      [MODAL-FOCUS-VISUAL (datum-stx stx (modal-focus-visual-plan->datum modal-focus-visual-plan))]
                      [MODAL-FOCUS-VISUAL-REQUIRED (datum-stx stx (and modal-focus-visual-plan #t))]
                      [MATERIAL-OBSERVABILITY-WORKBENCH (datum-stx stx material-workbench-v2-datum)]
-                     [MATERIAL-OBSERVABILITY-WORKBENCH-REQUIRED (datum-stx stx (and material-observability-workbench-plan #t))])
+                     [MATERIAL-OBSERVABILITY-WORKBENCH-REQUIRED (datum-stx stx (and material-observability-workbench-plan #t))]
+                     [WORKBENCH-CROSS-VIEW-TRANSACTION (datum-stx stx workbench-cross-view-transaction-datum)]
+                     [WORKBENCH-CROSS-VIEW-TRANSACTION-REQUIRED (datum-stx stx (and workbench-cross-view-transaction-plan #t))])
        #'(begin
-           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE OVERLAY-STATE-REQUIRED MODAL-FOCUS-SUBGRAPH MODAL-FOCUS-REQUIRED MODAL-FOCUS-VISUAL MODAL-FOCUS-VISUAL-REQUIRED MATERIAL-OBSERVABILITY-WORKBENCH MATERIAL-OBSERVABILITY-WORKBENCH-REQUIRED))
+           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE OVERLAY-STATE-REQUIRED MODAL-FOCUS-SUBGRAPH MODAL-FOCUS-REQUIRED MODAL-FOCUS-VISUAL MODAL-FOCUS-VISUAL-REQUIRED MATERIAL-OBSERVABILITY-WORKBENCH MATERIAL-OBSERVABILITY-WORKBENCH-REQUIRED WORKBENCH-CROSS-VIEW-TRANSACTION WORKBENCH-CROSS-VIEW-TRANSACTION-REQUIRED))
            (provide app-scene)))]))
