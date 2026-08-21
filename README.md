@@ -219,8 +219,9 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/verify_workbench_cross_view_transaction_abi_gate_v1.sh` | 跨视图事务v1的Racket导出、Rust release、真实X11/Vulkan启动proof与ABI/disable/action/target四类Scene拒绝回归。 |
 | `tools/verify_workbench_cross_view_transaction_executor_v1.sh` | 跨视图事务固定执行器一键回归：合法确认、无选中零写入、非活动view零写入、截图、ABI攻击拒绝与rounded兼容。 |
 | `tools/mutate_workbench_cross_view_transaction_scene.py` | 生成跨视图事务ABI合同、required禁用、action slot与Overview目标glyph四类攻击Scene。 |
-| `APPLICATION_DSL_MACRO_DESIGN_V1.md` | 应用层`noir-workbench/app`语法、profile推导、stable ID/状态所有权生成和专家层边界设计。 |
-| `tools/verify_application_layer_dsl_v1.py` | 标准/compact应用层Scene的容量、所有权、stable ID和事务结构oracle。 |
+| `APPLICATION_DSL_MACRO_DESIGN_V1.md` | 应用层`noir-workbench/app`语法、profile推导、stable ID/状态所有权生成、`#:row-state acknowledged`与专家层边界设计。 |
+| `ACKNOWLEDGED_ROW_STATE_PLAN_ABI_V1.md` | Alerts确认行状态的固定bitset ABI、应用层lowering、recycle恢复见证与当前未接入Rust执行器的边界。 |
+| `tools/verify_application_layer_dsl_v1.py` | 标准/compact应用层Scene的容量、所有权、stable ID、跨视图事务与确认行状态bitset结构oracle。 |
 | `tools/verify_application_layer_dsl_v1.sh` | 应用层DSL一键回归：禁止应用源码暴露低层资源参数、双profile导出、Racket测试、Rust构建与真实X11/Vulkan启动。 |
 | `MODAL_FOCUS_VISUAL_PLAN_ABI_V1.md` | 预分配modal focus ring的Scene ABI、启动期proof、GPU metadata与固定alpha写集规范。 |
 | `MODAL_FOCUS_VISUAL_PLAN_V1_REPORT.md` | focus视觉交付结果、真实X11/Vulkan截图证据、篡改拒绝与兼容回归报告。 |

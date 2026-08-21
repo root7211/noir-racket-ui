@@ -9,7 +9,7 @@
  #:id ops
  #:title "Operations workbench"
  (systems #:seed "INFO  TIME  CORE  STARTUP")
- (alerts  #:seed "WARN  TIME  EDGE  RETRY"))
+ (alerts  #:seed "WARN  TIME  EDGE  RETRY" #:row-state acknowledged))
 ```
 
 该表单不暴露容量、physical slot、visible row、stable node ID、detail damage state、row action、rail action、glyph address、tile ID或workbench ownership。宏在展开期生成现有 `noir-app` 的受限低层表单，因而复用已有的Racket compiler、Scene ABI、Rust gate和固定执行器。
@@ -18,7 +18,7 @@
 
 | 层 | 作者写入 | 编译器推导 |
 |---|---|---|
-| 应用层 | 应用ID、标题、两个领域流和其seed数据；可选profile | 所有内部ID、状态、action、owner view、workbench data view、transaction和资源计划。 |
+| 应用层 | 应用ID、标题、两个领域流和其seed数据；可选profile；Alerts的`#:row-state acknowledged`业务意图 | 所有内部ID、状态、action、owner view、workbench data view、transaction、逻辑行bitset和资源计划。 |
 | Profile层 | `compact` 或默认 `standard` 这种离散策略名 | logical capacity、physical slot、visible row、viewport高度和固定row template数量。 |
 | 专家层 | 原有 `noir-app` / `virtual-list` / `material-observability-workbench` | 无；作者显式承担容量与proof约束。 |
 
@@ -37,7 +37,9 @@ profile是编译期离散选择，不是任意数值参数。v1故意拒绝裸`#
 
 给定应用ID `ops`，宏以卫生方式派生唯一ID，例如 `ops-view`、`ops-alert-ack-count`、`ops-alert-stream`、`ops-alert-detail`、`ops-alert-acknowledge`、`ops-systems-view`和`ops-alerts-view`。状态所有权不由作者指定：rail状态属于workbench，detail状态属于其data view，确认计数属于Overview summary，Alerts确认action属于Alerts逻辑arena。
 
-宏生成的低层计划包括：状态/action、两个list navigation、两个log browser、三view workbench、唯一cross-view transaction、Material rail、Overview计数端点、两个虚拟列表、两张detail card和固定overlay。下游compiler继续从该静态树导出所有glyph、instance、tile、state slot和proof witness。
+宏生成的低层计划包括：状态/action、两个list navigation、两个log browser、三view workbench、唯一cross-view transaction、`acknowledged_row_state_plan`、Material rail、Overview计数端点、两个虚拟列表、两张detail card和固定overlay。下游compiler继续从该静态树导出所有glyph、instance、tile、state slot和proof witness。
+
+Alerts的`#:row-state acknowledged`仅表达二值业务域。编译器从profile的Alerts逻辑容量推导`ceil(capacity / 64)`个固定`u64`状态word，并绑定唯一Alerts owner view、当前物理row颜色lane、detail glyph范围和确认事务tile并集。应用作者不写row→word映射、recycle恢复地址或GPU offset。当前交付只完成该计划的Racket lowering与Scene proof；Rust word表、确认写入和滚动recycle恢复执行器将在后续宿主阶段接入。
 
 ## 拒绝语义
 
@@ -45,4 +47,4 @@ profile是编译期离散选择，不是任意数值参数。v1故意拒绝裸`#
 
 ## 验证准则
 
-应用层fixture应与现有workbench v2满足相同的双arena、workbench和cross-view transaction结构oracle。其Scene必须保留Systems `10,000 × 4`、Alerts `2,048 × 3`、三个resident view、唯一confirmation action以及固定Alerts→Overview写集；作者源码中不得出现低层容量、物理槽、workbench data-view或transaction声明。
+应用层fixture应与现有workbench v2满足相同的双arena、workbench和cross-view transaction结构oracle。其Scene必须保留Systems `10,000 × 4`、Alerts `2,048 × 3`、三个resident view、唯一confirmation action、固定Alerts→Overview写集，以及Alerts `32 × u64`确认状态word（compact为`8 × u64`）；作者源码中不得出现低层容量、物理槽、状态word、owner、workbench data-view或transaction声明。

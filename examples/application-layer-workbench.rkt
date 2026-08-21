@@ -6,4 +6,4 @@
  #:id operations
  #:title "Operations workbench"
  (systems #:seed "INFO  TIME  CORE  STARTUP")
- (alerts #:seed "WARN  TIME  EDGE  RETRY"))
+ (alerts #:seed "WARN  TIME  EDGE  RETRY" #:row-state acknowledged))

@@ -31,6 +31,23 @@ def check(path: Path, app: str, capacities: tuple[int, int], slots: tuple[int, i
     assert len(transaction["source_row_color_offsets"]) == slots[1]
     assert len(transaction["source_detail_glyph_offsets"]) == 29
     assert len(transaction["target_count_glyph_offsets"]) == 8
+    acknowledged = scene["acknowledged_row_state_plan"]
+    assert scene["acknowledged_row_state_required"] is True
+    assert acknowledged["abi_schema"] == "noir-acknowledged-row-state-plan-v1"
+    assert acknowledged["abi_revision"] == 1
+    assert acknowledged["id"] == f"{app}-acknowledged-alert-state"
+    assert acknowledged["data_view_id"] == f"{app}-alerts-data-view"
+    assert acknowledged["list_id"] == f"{app}-alerts-stream"
+    assert acknowledged["owner_view_id"] == f"{app}-alerts-view"
+    assert acknowledged["logical_capacity"] == capacities[1]
+    assert acknowledged["state_domain"] == ["open", "acknowledged"]
+    assert acknowledged["word_bits"] == 64
+    assert acknowledged["word_count"] == (capacities[1] + 63) // 64
+    assert acknowledged["acknowledge_action_id"] == f"{app}-acknowledge-alert"
+    assert acknowledged["action_slot_index"] == transaction["action_slot_index"]
+    assert acknowledged["row_color_offsets"] == transaction["source_row_color_offsets"]
+    assert acknowledged["detail_glyph_offsets"] == transaction["source_detail_glyph_offsets"]
+    assert set(transaction["tile_ids"]).issubset(acknowledged["tile_ids"])
     print(f"APPLICATION_DSL_ORACLE: {path.name}: PASS")
 
 

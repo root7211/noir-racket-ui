@@ -64,6 +64,8 @@ scene-glyph-draw-packets
          scene-modal-focus-visual-required?
          scene-material-observability-workbench-plan
          scene-material-observability-workbench-required?
+         scene-acknowledged-row-state-plan
+         scene-acknowledged-row-state-required?
          (struct-out navigation-selection-entry)
          (struct-out navigation-selection-plan)
          (struct-out shadow-surface)
@@ -76,6 +78,7 @@ scene-glyph-draw-packets
          (struct-out material-observability-workbench-view)
          (struct-out material-observability-workbench-plan)
          (struct-out workbench-cross-view-transaction-plan)
+         (struct-out acknowledged-row-state-plan)
          (struct-out virtual-list-plan)
          (struct-out log-browser-plan)
          (struct-out font-asset-plan)
@@ -180,6 +183,10 @@ scene-glyph-draw-packets
 ;; ranges across two resident views but does not generalize into runtime routing.
 (define workbench-cross-view-transaction-plan-abi-schema "noir-workbench-cross-view-transaction-plan-v1")
 (define workbench-cross-view-transaction-plan-abi-revision 1)
+;; A bounded logical-row state table for the Alerts arena. It owns a fixed binary
+;; domain and recycle restoration witnesses; it is distinct from generic state slots.
+(define acknowledged-row-state-plan-abi-schema "noir-acknowledged-row-state-plan-v1")
+(define acknowledged-row-state-plan-abi-revision 1)
 
 (define (abi-contracts->jsexpr)
   (hash 'virtual_list_plan
@@ -232,12 +239,15 @@ scene-glyph-draw-packets
               'revision material-observability-workbench-plan-abi-revision)
         'workbench_cross_view_transaction_plan
         (hash 'schema workbench-cross-view-transaction-plan-abi-schema
-              'revision workbench-cross-view-transaction-plan-abi-revision)))
+              'revision workbench-cross-view-transaction-plan-abi-revision)
+        'acknowledged_row_state_plan
+        (hash 'schema acknowledged-row-state-plan-abi-schema
+              'revision acknowledged-row-state-plan-abi-revision)))
 
 (struct ui-node (tag id props children source) #:transparent)
 ;; Scene 以静态树和增量执行计划共同组成。state/actions 由 `noir-app`
 ;; 的扩展语法生成；普通 `(ui ...)` 保持空状态表，仍可独立使用。
-(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan navigation-selection-plan overlay-state-plan overlay-state-required? modal-focus-subgraph-plan modal-focus-subgraph-required? modal-focus-visual-plan modal-focus-visual-required? material-observability-workbench-plan material-observability-workbench-required? workbench-cross-view-transaction-plan workbench-cross-view-transaction-required?) #:transparent)
+(struct scene (root static-node-count dynamic-node-count resource-budget state state-slots actions action-slots transactions command-matchers update-plan layout-plan glyph-placement-plan glyph-draw-packets subgroup-packet-plan packet-activity-contract packet-worklists event-map animation-tracks frame-schedule conflict-graph frame-coalesced-batches render-schedules focus-graph keyboard-map keyboard-command-map virtual-list-plans row-activation-plans scrollbar-plans list-navigation-plans log-browser-plans font-assets dynamic-font-cell-plan visual-language-plan rounded-surface-plan shadow-surface-plan navigation-selection-plan overlay-state-plan overlay-state-required? modal-focus-subgraph-plan modal-focus-subgraph-required? modal-focus-visual-plan modal-focus-visual-required? material-observability-workbench-plan material-observability-workbench-required? workbench-cross-view-transaction-plan workbench-cross-view-transaction-required? acknowledged-row-state-plan acknowledged-row-state-required?) #:transparent)
 ;; state-slot 的 index 是所有 runtime state read/write 的唯一地址；id/initial 只保留为启动期 proof 与可审计导出。
 (struct state-slot (index id initial) #:transparent)
 ;; action-slot 与 state-slot 一样为 macro expansion 生成的 dense canonical address。
@@ -363,6 +373,9 @@ scene-glyph-draw-packets
 ;; are physical-slot lanes selected by the existing compact Alerts list rule; all
 ;; other glyph ranges are immutable addresses exported at macro expansion time.
 (struct workbench-cross-view-transaction-plan (id action-id action-slot-index event-slot state state-index delta source-data-view-id source-list-id source-view-id source-row-color-offsets source-detail-node-id source-detail-glyph-offsets target-view-id target-count-node-id target-count-glyph-offsets tile-ids) #:transparent)
+;; Per-logical-row acknowledged state is a compact fixed bitset, not a collection of
+;; mutable UI state slots. The compiler emits every owner and restoration endpoint.
+(struct acknowledged-row-state-plan (id data-view-id list-id owner-view-id logical-capacity state-domain word-bits word-count acknowledge-action-id action-slot-index row-color-offsets detail-glyph-offsets tile-ids) #:transparent)
 
 (define (value->jsexpr v)
   (cond
@@ -1075,6 +1088,24 @@ scene-glyph-draw-packets
              'target_count_glyph_offsets (workbench-cross-view-transaction-plan-target-count-glyph-offsets plan)
              'tile_ids (workbench-cross-view-transaction-plan-tile-ids plan))))
 
+(define (acknowledged-row-state-plan->jsexpr plan)
+  (and plan
+       (hash 'abi_schema acknowledged-row-state-plan-abi-schema
+             'abi_revision acknowledged-row-state-plan-abi-revision
+             'id (symbol->string (acknowledged-row-state-plan-id plan))
+             'data_view_id (symbol->string (acknowledged-row-state-plan-data-view-id plan))
+             'list_id (symbol->string (acknowledged-row-state-plan-list-id plan))
+             'owner_view_id (symbol->string (acknowledged-row-state-plan-owner-view-id plan))
+             'logical_capacity (acknowledged-row-state-plan-logical-capacity plan)
+             'state_domain (map symbol->string (acknowledged-row-state-plan-state-domain plan))
+             'word_bits (acknowledged-row-state-plan-word-bits plan)
+             'word_count (acknowledged-row-state-plan-word-count plan)
+             'acknowledge_action_id (symbol->string (acknowledged-row-state-plan-acknowledge-action-id plan))
+             'action_slot_index (acknowledged-row-state-plan-action-slot-index plan)
+             'row_color_offsets (acknowledged-row-state-plan-row-color-offsets plan)
+             'detail_glyph_offsets (acknowledged-row-state-plan-detail-glyph-offsets plan)
+             'tile_ids (acknowledged-row-state-plan-tile-ids plan))))
+
 (define (navigation-selection-plan->jsexpr plan)
   (and plan
        (hash 'abi_schema navigation-selection-plan-abi-schema
@@ -1148,6 +1179,8 @@ scene-glyph-draw-packets
         'material_observability_workbench_required (scene-material-observability-workbench-required? s)
         'workbench_cross_view_transaction_plan (workbench-cross-view-transaction-plan->jsexpr (scene-workbench-cross-view-transaction-plan s))
         'workbench_cross_view_transaction_required (scene-workbench-cross-view-transaction-required? s)
+        'acknowledged_row_state_plan (acknowledged-row-state-plan->jsexpr (scene-acknowledged-row-state-plan s))
+        'acknowledged_row_state_required (scene-acknowledged-row-state-required? s)
         'text_field_visuals (text-field-visuals->jsexpr s)))
   (if build-attestation
       (hash-set base 'build_attestation (value->jsexpr build-attestation))
@@ -1263,6 +1296,11 @@ scene-glyph-draw-packets
   ;; is one closed workbench data view; the target is one resident dynamic text node.
   (struct c-workbench-cross-view-transaction-spec (id action-id source-data-view-id source-list-id source-view-id source-detail-id target-view-id target-count-id state delta source) #:transparent)
   (struct c-workbench-cross-view-transaction-plan (id action-id action-slot-index event-slot state state-index delta source-data-view-id source-list-id source-view-id source-row-color-offsets source-detail-node-id source-detail-glyph-offsets target-view-id target-count-node-id target-count-glyph-offsets tile-ids) #:transparent)
+  ;; Internal lowering form emitted only by `noir-workbench/app`. It names the
+  ;; business endpoint, while capacity, bitset width, owner and resource witnesses
+  ;; are mechanically derived from prior workbench/list/transaction plans.
+  (struct c-acknowledged-row-state-spec (id data-view-id list-id owner-view-id acknowledge-action-id source-detail-id source) #:transparent)
+  (struct c-acknowledged-row-state-plan (id data-view-id list-id owner-view-id logical-capacity state-domain word-bits word-count acknowledge-action-id action-slot-index row-color-offsets detail-glyph-offsets tile-ids) #:transparent)
   (struct c-font-asset-spec (manifest-path atlas-path source) #:transparent)
   (struct c-font-glyph (glyph-id codepoint character x y width height advance bearing-x bearing-y) #:transparent)
 (struct c-font-asset-plan (face-id manifest-path atlas-path font-sha256 atlas-sha256 atlas-width atlas-height atlas-channels pixel-size line-height glyph-domain-first glyph-domain-count atlas-page activation glyphs) #:transparent)
@@ -6349,6 +6387,21 @@ scene-glyph-draw-packets
                                "expected (workbench-cross-view-transaction #:id id #:action action #:from (data-view list source-view detail-text) #:to (target-view target-count-text) #:state state #:delta 1)"
                                form)])))
 
+  (define (parse-acknowledged-row-state-forms forms)
+    (for/list ([form (in-list forms)])
+      (syntax-parse form
+        #:datum-literals (acknowledged-row-state)
+        [(acknowledged-row-state #:id id:id
+                                 #:for (data-view-id:id list-id:id owner-view-id:id detail-id:id)
+                                 #:on acknowledge-action-id:id)
+         (c-acknowledged-row-state-spec
+          (syntax-e #'id) (syntax-e #'data-view-id) (syntax-e #'list-id)
+          (syntax-e #'owner-view-id) (syntax-e #'acknowledge-action-id)
+          (syntax-e #'detail-id) form)]
+        [_ (raise-syntax-error 'acknowledged-row-state
+                               "internal form expects #:id, #:for (data-view list owner-view detail), and #:on acknowledgement-action"
+                               form)])))
+
   (define (parse-material-observability-workbench-forms forms)
     (for/list ([form (in-list forms)])
       (syntax-parse form
@@ -6829,6 +6882,96 @@ scene-glyph-draw-packets
           ',(c-workbench-cross-view-transaction-plan-target-count-node-id plan)
           ',(c-workbench-cross-view-transaction-plan-target-count-glyph-offsets plan)
           ',(c-workbench-cross-view-transaction-plan-tile-ids plan))))
+
+  (define (compile-acknowledged-row-state-plan specs workbench-plan transaction-plan virtual-list-plans log-browser-plans)
+    (cond
+      [(null? specs) #f]
+      [(not workbench-plan)
+       (raise-syntax-error 'acknowledged-row-state "requires one compiler-proved material-observability-workbench" (c-acknowledged-row-state-spec-source (car specs)))]
+      [(not transaction-plan)
+       (raise-syntax-error 'acknowledged-row-state "requires one compiler-proved Alerts acknowledgement transaction" (c-acknowledged-row-state-spec-source (car specs)))]
+      [(not (= (length specs) 1))
+       (raise-syntax-error 'acknowledged-row-state "v1 admits exactly one closed Alerts acknowledged state domain" (c-acknowledged-row-state-spec-source (car specs)))]
+      [else
+       (define spec (car specs))
+       (define data-view
+         (or (findf (lambda (entry) (eq? (c-material-observability-workbench-data-view-id entry)
+                                         (c-acknowledged-row-state-spec-data-view-id spec)))
+                    (c-material-observability-workbench-plan-data-views workbench-plan))
+             (raise-syntax-error 'acknowledged-row-state "#:for must name one compiler-proved workbench data view" (c-acknowledged-row-state-spec-source spec))))
+       (unless (and (eq? (c-material-observability-workbench-data-view-list-id data-view)
+                         (c-acknowledged-row-state-spec-list-id spec))
+                    (eq? (c-material-observability-workbench-data-view-view-id data-view)
+                         (c-acknowledged-row-state-spec-owner-view-id spec))
+                    (eq? (c-material-observability-workbench-data-view-id data-view)
+                         (c-workbench-cross-view-transaction-plan-source-data-view-id transaction-plan))
+                    (eq? (c-material-observability-workbench-data-view-list-id data-view)
+                         (c-workbench-cross-view-transaction-plan-source-list-id transaction-plan))
+                    (eq? (c-material-observability-workbench-data-view-view-id data-view)
+                         (c-workbench-cross-view-transaction-plan-source-view-id transaction-plan)))
+         (raise-syntax-error 'acknowledged-row-state "v1 may own only the acknowledged transaction's Alerts data arena" (c-acknowledged-row-state-spec-source spec)))
+       (define list-plan
+         (or (findf (lambda (entry) (eq? (c-virtual-list-plan-id entry)
+                                         (c-acknowledged-row-state-spec-list-id spec))) virtual-list-plans)
+             (raise-syntax-error 'acknowledged-row-state "Alerts source list has no fixed virtual-list plan" (c-acknowledged-row-state-spec-source spec))))
+       (define log-browser
+         (or (findf (lambda (entry) (eq? (c-log-browser-plan-list-id entry)
+                                         (c-acknowledged-row-state-spec-list-id spec))) log-browser-plans)
+             (raise-syntax-error 'acknowledged-row-state "Alerts source list has no fixed log-browser plan" (c-acknowledged-row-state-spec-source spec))))
+       (unless (and (eq? (c-workbench-cross-view-transaction-plan-action-id transaction-plan)
+                         (c-acknowledged-row-state-spec-acknowledge-action-id spec))
+                    (eq? (c-log-browser-plan-detail-node-id log-browser)
+                         (c-acknowledged-row-state-spec-source-detail-id spec))
+                    (equal? (c-log-browser-plan-row-color-offsets log-browser)
+                            (c-workbench-cross-view-transaction-plan-source-row-color-offsets transaction-plan))
+                    (equal? (c-log-browser-plan-detail-glyph-offsets log-browser)
+                            (c-workbench-cross-view-transaction-plan-source-detail-glyph-offsets transaction-plan)))
+         (raise-syntax-error 'acknowledged-row-state "action, physical row colors and detail glyphs must exactly match the acknowledgement transaction" (c-acknowledged-row-state-spec-source spec)))
+       (define logical-capacity (c-virtual-list-plan-logical-capacity list-plan))
+       (define physical-slots (c-virtual-list-plan-physical-slots list-plan))
+       (define word-bits 64)
+       (define word-count (quotient (+ logical-capacity (sub1 word-bits)) word-bits))
+       (unless (and (> logical-capacity 0)
+                    (= physical-slots (length (c-log-browser-plan-row-color-offsets log-browser)))
+                    (= physical-slots (length (c-workbench-cross-view-transaction-plan-source-row-color-offsets transaction-plan)))
+                    (= word-count (quotient (+ logical-capacity 63) 64)))
+         (raise-syntax-error 'acknowledged-row-state "logical capacity, bitset words and physical recycle lanes must be compiler-consistent" (c-acknowledged-row-state-spec-source spec)))
+       (define tile-ids
+         (sort (remove-duplicates
+                (append (c-material-observability-workbench-data-view-tile-ids data-view)
+                        (c-log-browser-plan-detail-tile-ids log-browser)
+                        (c-workbench-cross-view-transaction-plan-tile-ids transaction-plan))) <))
+       (unless (pair? tile-ids)
+         (raise-syntax-error 'acknowledged-row-state "Alerts acknowledgement and recycle restoration require fixed tile coverage" (c-acknowledged-row-state-spec-source spec)))
+       (c-acknowledged-row-state-plan
+        (c-acknowledged-row-state-spec-id spec)
+        (c-material-observability-workbench-data-view-id data-view)
+        (c-material-observability-workbench-data-view-list-id data-view)
+        (c-material-observability-workbench-data-view-view-id data-view)
+        logical-capacity '(open acknowledged) word-bits word-count
+        (c-workbench-cross-view-transaction-plan-action-id transaction-plan)
+        (c-workbench-cross-view-transaction-plan-action-slot-index transaction-plan)
+        (c-log-browser-plan-row-color-offsets log-browser)
+        (c-log-browser-plan-detail-glyph-offsets log-browser)
+        tile-ids)]))
+
+  (define (acknowledged-row-state-plan->datum plan)
+    (if (not plan)
+        '#f
+        `(acknowledged-row-state-plan
+          ',(c-acknowledged-row-state-plan-id plan)
+          ',(c-acknowledged-row-state-plan-data-view-id plan)
+          ',(c-acknowledged-row-state-plan-list-id plan)
+          ',(c-acknowledged-row-state-plan-owner-view-id plan)
+          ,(c-acknowledged-row-state-plan-logical-capacity plan)
+          ',(c-acknowledged-row-state-plan-state-domain plan)
+          ,(c-acknowledged-row-state-plan-word-bits plan)
+          ,(c-acknowledged-row-state-plan-word-count plan)
+          ',(c-acknowledged-row-state-plan-acknowledge-action-id plan)
+          ,(c-acknowledged-row-state-plan-action-slot-index plan)
+          ',(c-acknowledged-row-state-plan-row-color-offsets plan)
+          ',(c-acknowledged-row-state-plan-detail-glyph-offsets plan)
+          ',(c-acknowledged-row-state-plan-tile-ids plan))))
 
   (define (material-observability-workbench-plan->datum plan)
     (if (not plan)
@@ -7718,7 +7861,7 @@ scene-glyph-draw-packets
                    [OVERLAY-STATE (datum-stx stx '#f)]
                    [MODAL-FOCUS-SUBGRAPH (datum-stx stx '#f)]
                    [MODAL-FOCUS-VISUAL (datum-stx stx '#f)])
-       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE #f MODAL-FOCUS-SUBGRAPH #f MODAL-FOCUS-VISUAL #f #f #f #f #f))]
+       #'(scene ROOT STATIC DYNAMIC BUDGET (hash) STATE-SLOTS '() '() TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS '() SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE #f MODAL-FOCUS-SUBGRAPH #f MODAL-FOCUS-VISUAL #f #f #f #f #f #f #f))]
     [(_ root:expr extra:expr ...)
      (raise-syntax-error 'ui "expects exactly one root layout node" stx)]))
 
@@ -7736,6 +7879,8 @@ scene-glyph-draw-packets
        (filter (lambda (form) (eq? (form-head-symbol form) 'material-observability-workbench)) forms))
      (define workbench-cross-view-transaction-forms
        (filter (lambda (form) (eq? (form-head-symbol form) 'workbench-cross-view-transaction)) forms))
+     (define acknowledged-row-state-forms
+       (filter (lambda (form) (eq? (form-head-symbol form) 'acknowledged-row-state)) forms))
      (define font-asset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'font-asset)) forms))
      (define dynamic-font-cell-asset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'dynamic-font-cell-asset)) forms))
      (define theme-forms (filter (lambda (form) (eq? (form-head-symbol form) 'theme)) forms))
@@ -7743,7 +7888,7 @@ scene-glyph-draw-packets
      (define visual-preset-forms (filter (lambda (form) (eq? (form-head-symbol form) 'visual-preset)) forms))
      (define layout-forms
        (filter (lambda (form)
-                 (not (memq (form-head-symbol form) '(state action commit-group command-table list-navigation log-browser material-observability-workbench workbench-cross-view-transaction font-asset dynamic-font-cell-asset theme material-profile visual-preset))))
+                 (not (memq (form-head-symbol form) '(state action commit-group command-table list-navigation log-browser material-observability-workbench workbench-cross-view-transaction acknowledged-row-state font-asset dynamic-font-cell-asset theme material-profile visual-preset))))
                forms))
      (unless (= (length state-forms) 1)
        (raise-syntax-error 'noir-app "expects exactly one (state ...) form" stx))
@@ -7782,6 +7927,8 @@ scene-glyph-draw-packets
        (parse-material-observability-workbench-forms material-observability-workbench-forms))
      (define workbench-cross-view-transaction-specs
        (parse-workbench-cross-view-transaction-forms workbench-cross-view-transaction-forms))
+     (define acknowledged-row-state-specs
+       (parse-acknowledged-row-state-forms acknowledged-row-state-forms))
      (define font-asset-specs (parse-font-asset-forms font-asset-forms))
      (define font-assets (compile-font-asset-plans font-asset-specs))
      (define dynamic-font-cell-asset
@@ -7897,6 +8044,12 @@ scene-glyph-draw-packets
         material-observability-workbench-plan log-browser-plans render-schedules))
      (define workbench-cross-view-transaction-datum
        (workbench-cross-view-transaction-plan->datum workbench-cross-view-transaction-plan))
+     (define acknowledged-row-state-plan
+       (compile-acknowledged-row-state-plan
+        acknowledged-row-state-specs material-observability-workbench-plan workbench-cross-view-transaction-plan
+        virtual-list-plans log-browser-plans))
+     (define acknowledged-row-state-datum
+       (acknowledged-row-state-plan->datum acknowledged-row-state-plan))
      (with-syntax ([ROOT (datum-stx stx (node->datum root-node))]
                    [STATIC (datum-stx stx (- total dynamic))]
                    [DYNAMIC (datum-stx stx dynamic)]
@@ -7945,9 +8098,11 @@ scene-glyph-draw-packets
                      [MATERIAL-OBSERVABILITY-WORKBENCH (datum-stx stx material-workbench-v2-datum)]
                      [MATERIAL-OBSERVABILITY-WORKBENCH-REQUIRED (datum-stx stx (and material-observability-workbench-plan #t))]
                      [WORKBENCH-CROSS-VIEW-TRANSACTION (datum-stx stx workbench-cross-view-transaction-datum)]
-                     [WORKBENCH-CROSS-VIEW-TRANSACTION-REQUIRED (datum-stx stx (and workbench-cross-view-transaction-plan #t))])
+                     [WORKBENCH-CROSS-VIEW-TRANSACTION-REQUIRED (datum-stx stx (and workbench-cross-view-transaction-plan #t))]
+                     [ACKNOWLEDGED-ROW-STATE (datum-stx stx acknowledged-row-state-datum)]
+                     [ACKNOWLEDGED-ROW-STATE-REQUIRED (datum-stx stx (and acknowledged-row-state-plan #t))])
        #'(begin
-           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE OVERLAY-STATE-REQUIRED MODAL-FOCUS-SUBGRAPH MODAL-FOCUS-REQUIRED MODAL-FOCUS-VISUAL MODAL-FOCUS-VISUAL-REQUIRED MATERIAL-OBSERVABILITY-WORKBENCH MATERIAL-OBSERVABILITY-WORKBENCH-REQUIRED WORKBENCH-CROSS-VIEW-TRANSACTION WORKBENCH-CROSS-VIEW-TRANSACTION-REQUIRED))
+           (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE OVERLAY-STATE-REQUIRED MODAL-FOCUS-SUBGRAPH MODAL-FOCUS-REQUIRED MODAL-FOCUS-VISUAL MODAL-FOCUS-VISUAL-REQUIRED MATERIAL-OBSERVABILITY-WORKBENCH MATERIAL-OBSERVABILITY-WORKBENCH-REQUIRED WORKBENCH-CROSS-VIEW-TRANSACTION WORKBENCH-CROSS-VIEW-TRANSACTION-REQUIRED ACKNOWLEDGED-ROW-STATE ACKNOWLEDGED-ROW-STATE-REQUIRED))
            (provide app-scene)))]))
 
 ;; ---------------------------------------------------------------------------
@@ -8006,6 +8161,7 @@ scene-glyph-draw-packets
     (define alerts-destination (app-id app "alerts"))
     (define ack-count-node (app-id app "overview-alert-ack-count"))
     (define transaction (app-id app "acknowledge-alert-transaction"))
+    (define acknowledged-row-state (app-id app "acknowledged-alert-state"))
     (define systems-rows
       (for/list ([index (in-range systems-slots)])
         #`(#,(app-id app (format "systems-row-~a" index)) #,systems-seed)))
@@ -8035,6 +8191,7 @@ scene-glyph-draw-packets
                   [SYSTEMS-DATA-VIEW systems-data-view] [ALERTS-DATA-VIEW alerts-data-view]
                   [OVERVIEW-DESTINATION overview-destination] [SYSTEMS-DESTINATION systems-destination] [ALERTS-DESTINATION alerts-destination]
                   [ACK-COUNT-NODE ack-count-node] [TRANSACTION transaction]
+                  [ACKNOWLEDGED-ROW-STATE acknowledged-row-state]
                   [(SYSTEMS-ROW ...) systems-rows] [(ALERTS-ROW ...) alerts-rows])
       #`(noir-app
          (font-asset #:manifest "assets/fontc/noir-desktop-sans-18/manifest.json"
@@ -8068,6 +8225,10 @@ scene-glyph-draw-packets
           #:from (ALERTS-DATA-VIEW ALERTS-LIST ALERTS-VIEW ALERTS-DETAIL)
           #:to (OVERVIEW-VIEW ACK-COUNT-NODE)
           #:state ACK-COUNT-STATE #:delta 1)
+         (acknowledged-row-state
+          #:id ACKNOWLEDGED-ROW-STATE
+          #:for (ALERTS-DATA-VIEW ALERTS-LIST ALERTS-VIEW ALERTS-DETAIL)
+          #:on ACKNOWLEDGE-ALERT)
          (stack #:id APP #:width 1216 #:height 656 #:clip #t #:background (theme-color background)
            (material-nav-rail #:id RAIL #:state VIEW-STATE #:active OVERVIEW-DESTINATION
                               #:font-face noir-desktop-sans-18 #:x 0 #:y 0 #:width 180 #:height 656
@@ -8115,6 +8276,15 @@ scene-glyph-draw-packets
 
 (define-syntax (noir-workbench/app stx)
   (syntax-parse stx
+    #:datum-literals (acknowledged)
+    [(_ #:id app:id #:title title:str
+        (systems #:seed systems-seed:str)
+        (alerts #:seed alerts-seed:str #:row-state acknowledged))
+     (expand-noir-workbench/app stx #'app #'title #'standard #'systems-seed #'alerts-seed)]
+    [(_ #:id app:id #:title title:str #:profile profile:id
+        (systems #:seed systems-seed:str)
+        (alerts #:seed alerts-seed:str #:row-state acknowledged))
+     (expand-noir-workbench/app stx #'app #'title #'profile #'systems-seed #'alerts-seed)]
     [(_ #:id app:id #:title title:str
         (systems #:seed systems-seed:str)
         (alerts #:seed alerts-seed:str))
@@ -8125,5 +8295,5 @@ scene-glyph-draw-packets
      (expand-noir-workbench/app stx #'app #'title #'profile #'systems-seed #'alerts-seed)]
     [(_ . _)
      (raise-syntax-error 'noir-workbench/app
-                         "expects #:id, #:title, optional literal #:profile, then one systems and one alerts seed stream"
+                         "expects #:id, #:title, optional literal #:profile, then systems and alerts seed streams; Alerts may declare #:row-state acknowledged"
                          stx)]))

@@ -7,4 +7,4 @@
  #:title "Compact operations workbench"
  #:profile compact
  (systems #:seed "INFO  TIME  CORE  STARTUP")
- (alerts #:seed "WARN  TIME  EDGE  RETRY"))
+ (alerts #:seed "WARN  TIME  EDGE  RETRY" #:row-state acknowledged))
