@@ -6,7 +6,7 @@
 
 > v1 不是通用事件总线、组件查询器或跨视图状态管理器。它只把一个已知 Alerts 数据arena 与一个已知 Overview 动态文本端点压缩为不可扩张的静态写集。
 
-本文件定义的是 **Racket compiler ABI**。Rust 宿主的执行器、启动期反向proof和GPU patch实现尚未接入；在这些工作完成前，导出的计划仅是可审计的编译产物，不表示运行时已经执行跨视图确认事务。
+本文件定义的是 Racket compiler ABI 及其对应的 **Rust ABI gate/proof**。Rust 宿主现已采用object-or-false合同反序列化该计划，并在任何可见GPU渲染状态建立前验证schema/revision、required门禁及其对workbench v2、Alerts arena、Overview动态字形、action/state/event/tile见证的关联。GPU patch执行器尚未接入，因此计划已经可被拒绝或准入，但尚不表示运行时会执行跨视图确认事务。
 
 | 属性 | 冻结值 |
 |---|---|
@@ -17,7 +17,7 @@
 | admitted source | `observability-alerts` resident view 的一枚已声明 data view |
 | admitted target | `observability-overview` resident view 的一枚动态计数字符串 |
 | action语义 | `(set state (+ state 1))`，且增量必须为字面量 `1` |
-| 宿主状态 | 未实现；本阶段只导出并验证编译期计划 |
+| 宿主状态 | ABI gate与启动期关联proof已实现；固定GPU patch执行器尚未接入。 |
 
 ## 受限宏语法
 
@@ -77,24 +77,25 @@ workbench_cross_view_transaction_plan = {
 | 状态转换 | `workbench-alert-ack-count += 1` |
 | render范围 | 已证明的局部tile并集；当前固定画布产物为 tile `0` |
 
-## 后续宿主实现边界
+## Rust ABI gate与后续执行器边界
 
-后续 Rust 阶段应把本计划接入统一ABI gate，并在GPU资源创建前反向验证action slot、state slot、Event Map slot、data-view ownership、glyph byte offset、color lane与tile范围。执行器应由Alerts激活端点门禁，仅对当前选择的Alerts物理行、source detail glyph、Overview count glyph和该计划的tile并集提交固定patch；它不得搜索组件、扩展写入范围、重新布局或更新Systems arena。
+Rust 宿主已把该计划接入统一ABI合同表、Scene object-or-false反序列化和required门禁。在workbench v2、Alerts data-view、list interaction、log-browser及Overview glyph placement已经被证明后，启动期关联proof反向验证action slot、state slot、唯一Event Map slot、data-view ownership、3个row color lane、29个detail glyph、8个Overview count glyph及tile并集。`abi`、`disable`、`action`和`target`四类非canonical Scene均会在首次可见渲染前被拒绝。
 
-在该阶段完成前，本计划不改变现有 Rust 主机的输入或GPU写入行为。
+执行器仍是下一阶段的唯一缺口。它必须由Alerts active-view门禁触发，只对当前选择的Alerts物理行、source detail glyph、Overview count glyph和已证明tile并集提交固定patch；不得搜索组件、扩展写集、重新布局或更新Systems arena。当前宿主日志明确标记 `executor=absent`，且不会因为加载计划而改变输入或GPU写入行为。
 
 ## 验证
 
-Racket全量语言回归已冻结本ABI对象、required门禁、source/target IDs、状态与动作、3个source颜色字段、29个source detail glyph、8个target计数字glyph、canonical action/state slot及tile并集。workbench Scene 可经 `tools/export-dashboard.rkt` 导出，并包含 `workbench_cross_view_transaction_required: true`。
+Racket全量语言回归冻结本ABI对象、required门禁、source/target IDs、状态与动作、3个source颜色字段、29个source detail glyph、8个target计数字glyph、canonical action/state slot及tile并集。`tools/verify_workbench_cross_view_transaction_abi_gate_v1.sh` 进一步执行Rust 1.87 release构建、真实X11/Vulkan启动proof及`abi`、`disable`、`action`、`target`四类拒绝回归。workbench Scene 包含 `workbench_cross_view_transaction_required: true`。
 
 ```bash
 cd /home/ubuntu/noir_review/noir-racket-ui-statistical-analysis
 PLTCOLLECTS="$PWD:" racket tests/run.rkt
 NOIR_ENTRY_MODULE=examples/material-observability-workbench.rkt \
   PLTCOLLECTS="$PWD:" racket tools/export-dashboard.rkt \
-  out/material-observability-workbench-cross-view.scene.json
+  out/material-observability-workbench-v2.scene.json
+bash tools/verify_workbench_cross_view_transaction_abi_gate_v1.sh
 ```
 
 ## 非目标
 
-v1 不实现通用跨视图事务、任意多写入state、第三数据arena、动态动作发现、运行时视图查询、Rust执行器、GPU提交、性能测试或真实X11/Vulkan事务验证。这些工作必须在宿主proof与固定patch执行器阶段单独实现并验证。
+v1 不实现通用跨视图事务、任意多写入state、第三数据arena、动态动作发现、运行时视图查询、固定GPU patch执行器、GPU提交、性能测试或真实X11/Vulkan事务**执行**验证。ABI gate/proof已在真实X11/Vulkan启动中验证；真正的事务行为仍必须在固定patch执行器阶段单独实现并验证。

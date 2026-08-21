@@ -212,7 +212,9 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/mutate_material_observability_workbench_v2_scene.py` | 生成第二数据arena的instance地址、owner子树、tile范围和required禁用四类攻击Scene。 |
 | `MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_V2.md` | v2双data-view Scene ABI、启动proof、owner-view输入门禁、固定alpha写集与非目标边界。 |
 | `MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_V2_REPORT.md` | v2双arena交付结果、真实X11/Vulkan截图、篡改拒绝与rounded兼容报告。 |
-| `WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_V1.md` | Alerts→Overview确认事务的Racket编译期ABI：固定action/state、Alerts颜色与detail、Overview计数字形、tile并集及未接入Rust执行器的明确边界。 |
+| `WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_V1.md` | Alerts→Overview确认事务ABI：Racket lowering、Rust schema/required gate、workbench关联proof与仍未接入的固定GPU patch执行器边界。 |
+| `tools/verify_workbench_cross_view_transaction_abi_gate_v1.sh` | 跨视图事务v1的Racket导出、Rust release、真实X11/Vulkan启动proof与ABI/disable/action/target四类Scene拒绝回归。 |
+| `tools/mutate_workbench_cross_view_transaction_scene.py` | 生成跨视图事务ABI合同、required禁用、action slot与Overview目标glyph四类攻击Scene。 |
 | `MODAL_FOCUS_VISUAL_PLAN_ABI_V1.md` | 预分配modal focus ring的Scene ABI、启动期proof、GPU metadata与固定alpha写集规范。 |
 | `MODAL_FOCUS_VISUAL_PLAN_V1_REPORT.md` | focus视觉交付结果、真实X11/Vulkan截图证据、篡改拒绝与兼容回归报告。 |
 | `tools/make_overlay_state_v1_comparison.py` | 将关闭、打开与Escape关闭的真实X11/Vulkan端点生成审阅对照板。 |

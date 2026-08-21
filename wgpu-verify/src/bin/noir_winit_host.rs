@@ -60,6 +60,8 @@ const MODAL_FOCUS_VISUAL_PLAN_ABI_SCHEMA: &str = "noir-modal-focus-visual-plan-v
 const MODAL_FOCUS_VISUAL_PLAN_ABI_REVISION: u32 = 1;
 const MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_SCHEMA: &str = "noir-material-observability-workbench-plan-v2";
 const MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_REVISION: u32 = 2;
+const WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_SCHEMA: &str = "noir-workbench-cross-view-transaction-plan-v1";
+const WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_REVISION: u32 = 1;
 const FOCUS_RING_HALO_PX: f32 = 3.0;
 const FOCUS_RING_THICKNESS_PX: f32 = 2.0;
 const FOCUS_RING_COLOR: [f32; 4] = [0.36, 0.72, 1.0, 1.0];
@@ -128,6 +130,10 @@ struct Scene {
     material_observability_workbench_plan: Option<MaterialObservabilityWorkbenchPlan>,
     #[serde(default)]
     material_observability_workbench_required: bool,
+    #[serde(deserialize_with = "deserialize_workbench_cross_view_transaction_plan_option")]
+    workbench_cross_view_transaction_plan: Option<WorkbenchCrossViewTransactionPlan>,
+    #[serde(default)]
+    workbench_cross_view_transaction_required: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -150,6 +156,7 @@ struct AbiContracts {
     modal_focus_subgraph: AbiContract,
     modal_focus_visual_plan: AbiContract,
     material_observability_workbench_plan: AbiContract,
+    workbench_cross_view_transaction_plan: AbiContract,
 }
 
 #[derive(Debug, Deserialize)]
@@ -424,6 +431,43 @@ where D: Deserializer<'de> {
         MaterialObservabilityWorkbenchPlanWire::Plan(plan) => Ok(Some(plan)),
         MaterialObservabilityWorkbenchPlanWire::Disabled(false) => Ok(None),
         MaterialObservabilityWorkbenchPlanWire::Disabled(true) => Err(serde::de::Error::custom("material_observability_workbench_plan may be an object or false, never true")),
+    }
+}
+
+// This plan is ABI-only in the present host revision. Its fields are nevertheless
+// wire-level pointers, so the next proof/executor stage cannot replace them with
+// runtime component lookup or a dynamic transaction description.
+#[derive(Clone, Debug, Deserialize)]
+struct WorkbenchCrossViewTransactionPlan {
+    abi_schema: String,
+    abi_revision: u32,
+    id: String,
+    action_id: String,
+    action_slot_index: usize,
+    event_slot: usize,
+    state: String,
+    state_index: usize,
+    delta: i64,
+    source_data_view_id: String,
+    source_list_id: String,
+    source_view_id: String,
+    source_row_color_offsets: Vec<usize>,
+    source_detail_node_id: String,
+    source_detail_glyph_offsets: Vec<usize>,
+    target_view_id: String,
+    target_count_node_id: String,
+    target_count_glyph_offsets: Vec<usize>,
+    tile_ids: Vec<usize>,
+}
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum WorkbenchCrossViewTransactionPlanWire { Plan(WorkbenchCrossViewTransactionPlan), Disabled(bool) }
+fn deserialize_workbench_cross_view_transaction_plan_option<'de, D>(deserializer: D) -> std::result::Result<Option<WorkbenchCrossViewTransactionPlan>, D::Error>
+where D: Deserializer<'de> {
+    match WorkbenchCrossViewTransactionPlanWire::deserialize(deserializer)? {
+        WorkbenchCrossViewTransactionPlanWire::Plan(plan) => Ok(Some(plan)),
+        WorkbenchCrossViewTransactionPlanWire::Disabled(false) => Ok(None),
+        WorkbenchCrossViewTransactionPlanWire::Disabled(true) => Err(serde::de::Error::custom("workbench_cross_view_transaction_plan may be an object or false, never true")),
     }
 }
 
@@ -2133,6 +2177,9 @@ impl Host {
         let modal_focus_visual_plan = compiler_modal_focus_visual_plan(&scene, &overlay_state_plan, &modal_focus_subgraph_plan, &event_tile_masks, &instances)?;
         let material_observability_workbench_plan = compiler_material_observability_workbench_plan(
             &scene, &state_slot_ids, &navigation_selection_plan, &virtual_lists, &scrollbar_plans, &list_navigation_plans, &log_browser_plans, &instances, &placements,
+        )?;
+        compiler_workbench_cross_view_transaction_plan(
+            &scene, &state_slot_ids, &action_slot_ids, &action_tile_masks, &material_observability_workbench_plan, &list_interactions, &log_browser_plans,
         )?;
         apply_material_observability_workbench_initial_visibility(
             &material_observability_workbench_plan, &mut instances, &mut placements, &mut shadow_instances, &queue, &instance_buffer,
@@ -5189,7 +5236,23 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
                     "unsupported material_observability_workbench_plan ABI {}@{}; expected {}@{}",
                     scene.abi_contracts.material_observability_workbench_plan.schema, scene.abi_contracts.material_observability_workbench_plan.revision,
                     MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_SCHEMA, MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_REVISION);
-    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} rounded-surface={}@{} shadow-surface={}@{} navigation-selection={}@{} modal-focus={}@{} modal-focus-visual={}@{} workbench={}@{} frozen",
+    anyhow::ensure!(scene.abi_contracts.workbench_cross_view_transaction_plan.schema == WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_SCHEMA
+                    && scene.abi_contracts.workbench_cross_view_transaction_plan.revision == WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_REVISION,
+                    "unsupported workbench_cross_view_transaction_plan ABI {}@{}; expected {}@{}",
+                    scene.abi_contracts.workbench_cross_view_transaction_plan.schema, scene.abi_contracts.workbench_cross_view_transaction_plan.revision,
+                    WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_SCHEMA, WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_REVISION);
+    match &scene.workbench_cross_view_transaction_plan {
+        None => anyhow::ensure!(!scene.workbench_cross_view_transaction_required,
+                                "Scene marked workbench_cross_view_transaction_required may not disable workbench_cross_view_transaction_plan v1"),
+        Some(plan) => {
+            anyhow::ensure!(scene.workbench_cross_view_transaction_required,
+                            "workbench cross-view transaction plan may not be present without its explicit required marker");
+            anyhow::ensure!(plan.abi_schema == WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_SCHEMA
+                            && plan.abi_revision == WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_REVISION,
+                            "workbench cross-view transaction has unsupported ABI {}@{}", plan.abi_schema, plan.abi_revision);
+        }
+    }
+    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} rounded-surface={}@{} shadow-surface={}@{} navigation-selection={}@{} modal-focus={}@{} modal-focus-visual={}@{} workbench={}@{} cross-view-transaction={}@{} frozen",
              scene.abi_contracts.virtual_list_plan.schema, scene.abi_contracts.virtual_list_plan.revision,
              scene.abi_contracts.row_activation_plan.schema, scene.abi_contracts.row_activation_plan.revision,
              scene.abi_contracts.scrollbar_plan.schema, scene.abi_contracts.scrollbar_plan.revision,
@@ -5204,7 +5267,8 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
              scene.abi_contracts.navigation_selection_plan.schema, scene.abi_contracts.navigation_selection_plan.revision,
              scene.abi_contracts.modal_focus_subgraph.schema, scene.abi_contracts.modal_focus_subgraph.revision,
              scene.abi_contracts.modal_focus_visual_plan.schema, scene.abi_contracts.modal_focus_visual_plan.revision,
-             scene.abi_contracts.material_observability_workbench_plan.schema, scene.abi_contracts.material_observability_workbench_plan.revision);
+             scene.abi_contracts.material_observability_workbench_plan.schema, scene.abi_contracts.material_observability_workbench_plan.revision,
+             scene.abi_contracts.workbench_cross_view_transaction_plan.schema, scene.abi_contracts.workbench_cross_view_transaction_plan.revision);
     Ok(())
 }
 
@@ -6040,6 +6104,139 @@ fn compiler_material_observability_workbench_plan(
         selected_index: plan.initial_value as usize, views: compiled, data_views: compiled_data_views,
         view_for_event_slot, owner_view_for_list,
     }))
+}
+
+fn compiler_workbench_cross_view_transaction_plan(
+    scene: &Scene,
+    state_slot_ids: &[String],
+    action_slot_ids: &[String],
+    action_tile_masks: &HashMap<String, u64>,
+    material_workbench: &Option<CompiledMaterialObservabilityWorkbenchPlan>,
+    list_interactions: &[CompiledListInteractionPlan],
+    log_browser_plans: &[CompiledLogBrowserPlan],
+) -> Result<()> {
+    let Some(plan) = &scene.workbench_cross_view_transaction_plan else {
+        anyhow::ensure!(!scene.workbench_cross_view_transaction_required,
+                        "Scene marked workbench_cross_view_transaction_required may not disable workbench_cross_view_transaction_plan v1");
+        println!("compiler workbench cross-view transaction: disabled executor=absent");
+        return Ok(());
+    };
+    anyhow::ensure!(scene.workbench_cross_view_transaction_required
+                    && plan.abi_schema == WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_SCHEMA
+                    && plan.abi_revision == WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_REVISION,
+                    "workbench cross-view transaction plan ABI/required marker disagrees");
+    anyhow::ensure!(plan.delta == 1,
+                    "workbench cross-view transaction {} must use the fixed acknowledgement delta +1", plan.id);
+    let wire_workbench = scene.material_observability_workbench_plan.as_ref()
+        .context("workbench cross-view transaction requires an admitted material_observability_workbench_plan v2")?;
+    let compiled_workbench = material_workbench.as_ref()
+        .context("workbench cross-view transaction requires a proved material workbench")?;
+    let source_wire = wire_workbench.data_views.iter().find(|entry| entry.id == plan.source_data_view_id)
+        .with_context(|| format!("workbench cross-view transaction {} source data view is absent", plan.id))?;
+    let source_compiled = compiled_workbench.data_views.iter().find(|entry| entry.id == plan.source_data_view_id)
+        .with_context(|| format!("workbench cross-view transaction {} source data view was not proved", plan.id))?;
+    anyhow::ensure!(source_wire.list_id == plan.source_list_id && source_wire.view_id == plan.source_view_id
+                    && source_wire.list_index == source_compiled.list_index
+                    && source_wire.logical_capacity == 2_048 && source_wire.physical_slots == 3
+                    && source_compiled.view_index < compiled_workbench.views.len(),
+                    "workbench cross-view transaction {} source must be the fixed Alerts(2048x3) data arena", plan.id);
+    let source_view = wire_workbench.views.get(source_compiled.view_index)
+        .context("workbench cross-view transaction source owner view is absent")?;
+    anyhow::ensure!(source_view.view_root_id == plan.source_view_id && source_view.destination_id == "observability-alerts",
+                    "workbench cross-view transaction {} source owner is not the canonical Alerts resident view", plan.id);
+    let target_view = wire_workbench.views.iter().find(|view| view.view_root_id == plan.target_view_id)
+        .with_context(|| format!("workbench cross-view transaction {} target view is absent", plan.id))?;
+    anyhow::ensure!(target_view.destination_id == "observability-overview" && plan.target_view_id != plan.source_view_id,
+                    "workbench cross-view transaction {} target must be the distinct canonical Overview resident view", plan.id);
+
+    assert_state_slot(state_slot_ids, plan.state_index, &plan.state, "workbench cross-view transaction state")?;
+    let action_slot = action_slot_ids.get(plan.action_slot_index)
+        .with_context(|| format!("workbench cross-view transaction {} action_slot_index is absent", plan.id))?;
+    anyhow::ensure!(action_slot == &plan.action_id,
+                    "workbench cross-view transaction {} action slot disagrees with action id", plan.id);
+    let action = scene.actions.get(&plan.action_id)
+        .with_context(|| format!("workbench cross-view transaction {} action is absent", plan.id))?;
+    anyhow::ensure!(action.action_index == plan.action_slot_index
+                    && action.writes.len() == 1 && action.instance_updates.is_empty(),
+                    "workbench cross-view transaction {} action has noncanonical write classes", plan.id);
+    let write = &action.writes[0];
+    anyhow::ensure!(write.state == plan.state && write.state_index == plan.state_index
+                    && write.op == "add" && write.value == plan.delta,
+                    "workbench cross-view transaction {} action does not perform the fixed acknowledgement state write", plan.id);
+    let action_events = scene.event_map.iter().filter(|event| event._action.as_deref() == Some(plan.action_id.as_str())).collect::<Vec<_>>();
+    anyhow::ensure!(action_events.len() == 1 && action_events[0].slot == plan.event_slot
+                    && action_events[0].action_index == Some(plan.action_slot_index)
+                    && source_view.node_ids.iter().any(|node| node == &action_events[0].node),
+                    "workbench cross-view transaction {} Event Map witness is not the unique Alerts acknowledgement event", plan.id);
+
+    let source_browser = log_browser_plans.iter().find(|browser| browser.list_index == source_compiled.list_index)
+        .with_context(|| format!("workbench cross-view transaction {} source log-browser plan is absent", plan.id))?;
+    anyhow::ensure!(source_browser.id == source_wire.log_browser_id
+                    && source_browser.detail_glyph_offsets == plan.source_detail_glyph_offsets
+                    && source_browser.row_color_offsets == plan.source_row_color_offsets,
+                    "workbench cross-view transaction {} source detail/color write set disagrees with Alerts log-browser plan", plan.id);
+    anyhow::ensure!(scene.log_browser_plans.iter().any(|browser| browser.id == source_wire.log_browser_id
+                    && browser.list_id == plan.source_list_id && browser.detail_node_id == plan.source_detail_node_id),
+                    "workbench cross-view transaction {} source detail node is not canonical", plan.id);
+    let interaction = list_interactions.get(source_compiled.list_index)
+        .context("workbench cross-view transaction source list interaction is absent")?;
+    anyhow::ensure!(interaction.row_color_offsets == plan.source_row_color_offsets
+                    && plan.source_row_color_offsets.len() == source_wire.physical_slots
+                    && plan.source_row_color_offsets.iter().all(|offset| *offset >= 16 && *offset % std::mem::size_of::<QuadInstance>() == 16
+                        && source_wire.instance_offsets.contains(&(*offset - 16))),
+                    "workbench cross-view transaction {} row-color lanes escape the Alerts physical arena", plan.id);
+    anyhow::ensure!(source_view.node_ids.iter().any(|node| node == &plan.source_detail_node_id),
+                    "workbench cross-view transaction {} source detail lies outside Alerts resident subtree", plan.id);
+
+    let target_layout = scene.layout_plan.iter().find(|layout| layout.id == plan.target_count_node_id)
+        .with_context(|| format!("workbench cross-view transaction {} target count layout is absent", plan.id))?;
+    anyhow::ensure!(target_view.node_ids.iter().any(|node| node == &plan.target_count_node_id),
+                    "workbench cross-view transaction {} target count lies outside Overview resident subtree", plan.id);
+    let target_placements = scene.glyph_placement_plan.iter().filter(|placement| placement.node == plan.target_count_node_id).collect::<Vec<_>>();
+    let expected_target_offsets = target_placements.iter().map(|placement| placement.glyph_byte_offset).collect::<Vec<_>>();
+    anyhow::ensure!(!expected_target_offsets.is_empty()
+                    && expected_target_offsets == plan.target_count_glyph_offsets
+                    && target_placements.iter().all(|placement| placement.dynamic
+                        && placement.state_index == Some(plan.state_index)
+                        && placement._state.as_str() == Some(plan.state.as_str()))
+                    && plan.target_count_glyph_offsets.windows(2).all(|pair| pair[0] + GLYPH_CELL_BYTES == pair[1])
+                    && plan.target_count_glyph_offsets.iter().all(|offset| *offset % GLYPH_CELL_BYTES == 0
+                        && *offset + 4 <= scene.resource_budget.glyph_capacity * GLYPH_CELL_BYTES),
+                    "workbench cross-view transaction {} Overview count glyph range is not the canonical dynamic state target", plan.id);
+    anyhow::ensure!(action.gpu_updates.len() == 1, "workbench cross-view transaction {} action must have exactly one Overview glyph update", plan.id);
+    let update = &action.gpu_updates[0];
+    anyhow::ensure!(update.kind == "text-run" && update.node == plan.target_count_node_id
+                    && update.state == plan.state && update.state_index == plan.state_index
+                    && update.glyph_count == plan.target_count_glyph_offsets.len()
+                    && update.byte_length == update.glyph_count * GLYPH_CELL_BYTES
+                    && update.glyph_id_offsets == plan.target_count_glyph_offsets
+                    && update.offset == plan.target_count_glyph_offsets[0],
+                    "workbench cross-view transaction {} action glyph update escapes the Overview count endpoint", plan.id);
+    anyhow::ensure!(plan.source_detail_glyph_offsets.iter().all(|offset| !plan.target_count_glyph_offsets.contains(offset)),
+                    "workbench cross-view transaction {} source detail aliases Overview count glyph storage", plan.id);
+
+    let schedule = scene.render_schedules.first().context("workbench cross-view transaction requires one render schedule")?;
+    let actual_tile_mask = tile_mask(&plan.tile_ids, schedule.tiles.len(), &format!("workbench cross-view transaction {}", plan.id))?;
+    let action_tile_mask = *action_tile_masks.get(&plan.action_id)
+        .with_context(|| format!("workbench cross-view transaction {} action tile mask is absent", plan.id))?;
+    let canvas = &scene.visual_language_plan.canvas;
+    let mut target_tile_mask = 0u64;
+    for (tile_index, tile) in schedule.tiles.iter().enumerate() {
+        let x = (target_layout.ndc_pos[0] + 1.0) * canvas.width * 0.5;
+        let y = (1.0 - target_layout.ndc_pos[1] - target_layout.ndc_size[1]) * canvas.height * 0.5;
+        let width = target_layout.ndc_size[0] * canvas.width * 0.5;
+        let height = target_layout.ndc_size[1] * canvas.height * 0.5;
+        if x < tile.x + tile.width && tile.x < x + width && y < tile.y + tile.height && tile.y < y + height {
+            target_tile_mask |= 1u64 << tile_index;
+        }
+    }
+    anyhow::ensure!(target_tile_mask != 0
+                    && actual_tile_mask == (source_compiled.tile_mask | source_browser.detail_tile_mask | action_tile_mask | target_tile_mask),
+                    "workbench cross-view transaction {} tile scope is not the canonical Alerts/detail/action/Overview union", plan.id);
+    println!("compiler workbench cross-view transaction: v1 id={} action={} slot={} event={} source={}#{} target={} glyph-lanes={} row-color-lanes={} tile-mask=0x{:x} executor=absent",
+             plan.id, plan.action_id, plan.action_slot_index, plan.event_slot, plan.source_data_view_id, plan.source_list_id,
+             plan.target_count_node_id, plan.target_count_glyph_offsets.len(), plan.source_row_color_offsets.len(), actual_tile_mask);
+    Ok(())
 }
 
 fn apply_material_observability_workbench_initial_visibility(
