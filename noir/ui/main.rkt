@@ -24,6 +24,7 @@
 (provide (all-from-out racket/base)
          ui
          noir-app
+         noir-workbench/app
          scene?
          scene-root
          scene-static-node-count
@@ -6722,11 +6723,15 @@ scene-glyph-draw-packets
                                         (c-workbench-cross-view-transaction-spec-target-view-id spec)))
                     (c-material-observability-workbench-plan-views workbench-plan))
              (raise-syntax-error 'workbench-cross-view-transaction "target workbench view must exist" (c-workbench-cross-view-transaction-spec-source spec))))
-       (unless (and (eq? (c-material-observability-workbench-view-destination-id source-view) 'observability-alerts)
-                    (eq? (c-material-observability-workbench-view-destination-id target-view) 'observability-overview)
+       ;; v1 keeps the semantic endpoints closed without imposing fixture-specific stable IDs.
+       ;; Workbench v2 has already proven three rail endpoints; index/value 2 is its Alerts
+       ;; arena and index/value 0 is its Overview summary. Application macros may therefore
+       ;; hygienically derive their destination identifiers while this proof remains exact.
+       (unless (and (= (c-material-observability-workbench-view-target-value source-view) 2)
+                    (= (c-material-observability-workbench-view-target-value target-view) 0)
                     (not (eq? (c-material-observability-workbench-view-view-root-id source-view)
                               (c-material-observability-workbench-view-view-root-id target-view))))
-         (raise-syntax-error 'workbench-cross-view-transaction "v1 freezes one Alerts source and one distinct Overview target view" (c-workbench-cross-view-transaction-spec-source spec)))
+         (raise-syntax-error 'workbench-cross-view-transaction "v1 freezes the workbench Alerts endpoint (value 2) and distinct Overview endpoint (value 0)" (c-workbench-cross-view-transaction-spec-source spec)))
        (define action
          (or (findf (lambda (candidate) (eq? (c-action-id candidate) (c-workbench-cross-view-transaction-spec-action-id spec))) actions)
              (raise-syntax-error 'workbench-cross-view-transaction "#:action must name a declared action" (c-workbench-cross-view-transaction-spec-source spec))))
@@ -7944,3 +7949,181 @@ scene-glyph-draw-packets
        #'(begin
            (define app-scene (scene ROOT STATIC DYNAMIC BUDGET STATE STATE-SLOTS ACTIONS ACTION-SLOTS TRANSACTIONS COMMAND-MATCHERS UPDATES LAYOUT GLYPH-PLACEMENTS GLYPH-PACKETS SUBGROUP-PACKETS PACKET-ACTIVITY-CONTRACT PACKET-WORKLISTS EVENTS TRACKS SCHEDULE CONFLICTS BATCHES RENDER-SCHEDULES FOCUS-GRAPH KEYBOARD-MAP KEYBOARD-COMMAND-MAP VIRTUAL-LISTS ROW-ACTIVATIONS SCROLLBARS LIST-NAVIGATIONS LOG-BROWSERS FONT-ASSETS DYNAMIC-FONT-CELL-PLAN VISUAL-LANGUAGE ROUNDED-SURFACES SHADOW-SURFACES NAVIGATION-SELECTION OVERLAY-STATE OVERLAY-STATE-REQUIRED MODAL-FOCUS-SUBGRAPH MODAL-FOCUS-REQUIRED MODAL-FOCUS-VISUAL MODAL-FOCUS-VISUAL-REQUIRED MATERIAL-OBSERVABILITY-WORKBENCH MATERIAL-OBSERVABILITY-WORKBENCH-REQUIRED WORKBENCH-CROSS-VIEW-TRANSACTION WORKBENCH-CROSS-VIEW-TRANSACTION-REQUIRED))
            (provide app-scene)))]))
+
+;; ---------------------------------------------------------------------------
+;; Application layer v1
+;;
+;; The expert `noir-app` surface remains intentionally explicit. This macro is
+;; the narrow authoring layer for the proven observability shape: it converts
+;; domain streams and a named capacity profile into the existing lower-level
+;; forms. In particular, its caller cannot name a raw capacity, physical slot,
+;; workbench owner, state slot, resource address or proof witness.
+(begin-for-syntax
+  (define (app-id origin suffix)
+    (datum->syntax origin
+                   (string->symbol (format "~a-~a" (syntax-e origin) suffix))))
+  (define (app-natural origin number)
+    (datum->syntax origin number))
+  (define (expand-noir-workbench/app stx app title profile systems-seed alerts-seed)
+    (define profile-name (syntax-e profile))
+    (define-values (systems-capacity systems-slots alerts-capacity alerts-slots)
+      (case profile-name
+        [(standard) (values 10000 4 2048 3)]
+        [(compact) (values 2048 3 512 3)]
+        [else (raise-syntax-error 'noir-workbench/app
+                                  "#:profile must be the literal identifier standard or compact" stx profile)]))
+    (define systems-view (app-id app "systems-view"))
+    (define alerts-view (app-id app "alerts-view"))
+    (define overview-view (app-id app "overview-view"))
+    (define rail (app-id app "rail"))
+    (define workbench (app-id app "workbench"))
+    (define view-state (app-id app "view"))
+    (define systems-detail-state (app-id app "systems-detail-damage"))
+    (define alerts-detail-state (app-id app "alerts-detail-damage"))
+    (define ack-count-state (app-id app "alert-ack-count"))
+    (define select-overview (app-id app "select-overview"))
+    (define select-systems (app-id app "select-systems"))
+    (define select-alerts (app-id app "select-alerts"))
+    (define open-systems-detail (app-id app "open-systems-detail"))
+    (define open-alerts-detail (app-id app "open-alerts-detail"))
+    (define acknowledge-alert (app-id app "acknowledge-alert"))
+    (define systems-list (app-id app "systems-stream"))
+    (define alerts-list (app-id app "alerts-stream"))
+    (define systems-table (app-id app "systems-data"))
+    (define alerts-table (app-id app "alerts-data"))
+    (define systems-scrollbar (app-id app "systems-scrollbar"))
+    (define alerts-scrollbar (app-id app "alerts-scrollbar"))
+    (define systems-navigation (app-id app "systems-navigation"))
+    (define alerts-navigation (app-id app "alerts-navigation"))
+    (define systems-browser (app-id app "systems-browser"))
+    (define alerts-browser (app-id app "alerts-browser"))
+    (define systems-detail (app-id app "systems-detail"))
+    (define alerts-detail (app-id app "alerts-detail"))
+    (define alerts-data-view (app-id app "alerts-data-view"))
+    (define systems-data-view (app-id app "systems-data-view"))
+    (define overview-destination (app-id app "overview"))
+    (define systems-destination (app-id app "systems"))
+    (define alerts-destination (app-id app "alerts"))
+    (define ack-count-node (app-id app "overview-alert-ack-count"))
+    (define transaction (app-id app "acknowledge-alert-transaction"))
+    (define systems-rows
+      (for/list ([index (in-range systems-slots)])
+        #`(#,(app-id app (format "systems-row-~a" index)) #,systems-seed)))
+    (define alerts-rows
+      (for/list ([index (in-range alerts-slots)])
+        #`(#,(app-id app (format "alerts-row-~a" index)) #,alerts-seed)))
+    (with-syntax ([APP app] [TITLE title] [SYSTEMS-SEED systems-seed] [ALERTS-SEED alerts-seed]
+                  [SYSTEMS-CAPACITY (app-natural app systems-capacity)]
+                  [SYSTEMS-TAIL (app-natural app (sub1 systems-capacity))]
+                  [SYSTEMS-SLOTS (app-natural app systems-slots)]
+                  [ALERTS-CAPACITY (app-natural app alerts-capacity)]
+                  [ALERTS-TAIL (app-natural app (sub1 alerts-capacity))]
+                  [ALERTS-SLOTS (app-natural app alerts-slots)]
+                  [WORKBENCH workbench] [RAIL rail] [VIEW-STATE view-state]
+                  [SYSTEMS-VIEW systems-view] [ALERTS-VIEW alerts-view] [OVERVIEW-VIEW overview-view]
+                  [SYSTEMS-DETAIL-STATE systems-detail-state] [ALERTS-DETAIL-STATE alerts-detail-state]
+                  [ACK-COUNT-STATE ack-count-state]
+                  [SELECT-OVERVIEW select-overview] [SELECT-SYSTEMS select-systems] [SELECT-ALERTS select-alerts]
+                  [OPEN-SYSTEMS-DETAIL open-systems-detail] [OPEN-ALERTS-DETAIL open-alerts-detail]
+                  [ACKNOWLEDGE-ALERT acknowledge-alert]
+                  [SYSTEMS-LIST systems-list] [ALERTS-LIST alerts-list]
+                  [SYSTEMS-TABLE systems-table] [ALERTS-TABLE alerts-table]
+                  [SYSTEMS-SCROLLBAR systems-scrollbar] [ALERTS-SCROLLBAR alerts-scrollbar]
+                  [SYSTEMS-NAVIGATION systems-navigation] [ALERTS-NAVIGATION alerts-navigation]
+                  [SYSTEMS-BROWSER systems-browser] [ALERTS-BROWSER alerts-browser]
+                  [SYSTEMS-DETAIL systems-detail] [ALERTS-DETAIL alerts-detail]
+                  [SYSTEMS-DATA-VIEW systems-data-view] [ALERTS-DATA-VIEW alerts-data-view]
+                  [OVERVIEW-DESTINATION overview-destination] [SYSTEMS-DESTINATION systems-destination] [ALERTS-DESTINATION alerts-destination]
+                  [ACK-COUNT-NODE ack-count-node] [TRANSACTION transaction]
+                  [(SYSTEMS-ROW ...) systems-rows] [(ALERTS-ROW ...) alerts-rows])
+      #`(noir-app
+         (font-asset #:manifest "assets/fontc/noir-desktop-sans-18/manifest.json"
+                     #:atlas "assets/fontc/noir-desktop-sans-18/atlas.r8")
+         (dynamic-font-cell-asset #:manifest "assets/fontc/noir-table-body-mono-16/manifest.json"
+                                  #:atlas "assets/fontc/noir-table-body-mono-16/atlas.r8")
+         (visual-preset desktop-wide)
+         (material-profile material-dark)
+         (state [VIEW-STATE 0] [SYSTEMS-DETAIL-STATE 0] [ALERTS-DETAIL-STATE 0] [ACK-COUNT-STATE 0])
+         (action SELECT-OVERVIEW (set VIEW-STATE 0))
+         (action SELECT-SYSTEMS (set VIEW-STATE 1))
+         (action SELECT-ALERTS (set VIEW-STATE 2))
+         (action OPEN-SYSTEMS-DETAIL (set SYSTEMS-DETAIL-STATE (+ SYSTEMS-DETAIL-STATE 1)))
+         (action OPEN-ALERTS-DETAIL (set ALERTS-DETAIL-STATE (+ ALERTS-DETAIL-STATE 1)))
+         (action ACKNOWLEDGE-ALERT (set ACK-COUNT-STATE (+ ACK-COUNT-STATE 1)))
+         (list-navigation #:id SYSTEMS-NAVIGATION #:for SYSTEMS-LIST #:scrollbar SYSTEMS-SCROLLBAR)
+         (list-navigation #:id ALERTS-NAVIGATION #:for ALERTS-LIST #:scrollbar ALERTS-SCROLLBAR)
+         (log-browser #:id SYSTEMS-BROWSER #:for SYSTEMS-LIST #:detail SYSTEMS-DETAIL
+           #:append ((SYSTEMS-TAIL SYSTEMS-SEED)))
+         (log-browser #:id ALERTS-BROWSER #:for ALERTS-LIST #:detail ALERTS-DETAIL
+           #:append ((ALERTS-TAIL ALERTS-SEED)))
+         (material-observability-workbench
+          #:id WORKBENCH #:rail RAIL
+          #:data-views ((SYSTEMS-DATA-VIEW SYSTEMS-LIST SYSTEMS-VIEW)
+                        (ALERTS-DATA-VIEW ALERTS-LIST ALERTS-VIEW))
+          #:views ((OVERVIEW-DESTINATION OVERVIEW-VIEW)
+                   (SYSTEMS-DESTINATION SYSTEMS-VIEW)
+                   (ALERTS-DESTINATION ALERTS-VIEW)))
+         (workbench-cross-view-transaction
+          #:id TRANSACTION #:action ACKNOWLEDGE-ALERT
+          #:from (ALERTS-DATA-VIEW ALERTS-LIST ALERTS-VIEW ALERTS-DETAIL)
+          #:to (OVERVIEW-VIEW ACK-COUNT-NODE)
+          #:state ACK-COUNT-STATE #:delta 1)
+         (stack #:id APP #:width 1216 #:height 656 #:clip #t #:background (theme-color background)
+           (material-nav-rail #:id RAIL #:state VIEW-STATE #:active OVERVIEW-DESTINATION
+                              #:font-face noir-desktop-sans-18 #:x 0 #:y 0 #:width 180 #:height 656
+             (material-destination #:id OVERVIEW-DESTINATION #:label-id #,(app-id app "overview-label") #:label "Overview" #:icon dashboard #:on SELECT-OVERVIEW)
+             (material-destination #:id SYSTEMS-DESTINATION #:label-id #,(app-id app "systems-label") #:label "Systems" #:icon status #:on SELECT-SYSTEMS)
+             (material-destination #:id ALERTS-DESTINATION #:label-id #,(app-id app "alerts-label") #:label "Alerts" #:icon more #:on SELECT-ALERTS))
+           (material-app-bar #:id #,(app-id app "app-bar") #:title-id #,(app-id app "app-bar-title") #:title TITLE
+                             #:font-face noir-desktop-sans-18 #:x 204 #:y 0 #:width 996)
+           (stack #:id OVERVIEW-VIEW #:x 204 #:y 72 #:width 996 #:height 560 #:visual-anchor #t #:background (theme-color background)
+             (material-card #:id #,(app-id app "overview-card") #:x 0 #:y 16 #:width 482 #:height 220 #:background (theme-color surface-container-low)
+               (text #:id #,(app-id app "overview-title") #:x 24 #:y 22 #:width 410 #:height 28 #:font-face noir-desktop-sans-18 #:font-scale 0.82 #:text-inset 0.0 "Service health")
+               (text #:id #,(app-id app "overview-alert-label") #:x 24 #:y 76 #:width 236 #:height 24 #:font-face noir-desktop-sans-18 #:font-scale 0.70 #:text-inset 0.0 "Acknowledged alerts")
+               (detail-panel #:id #,(app-id app "overview-alert-panel") #:text-id ACK-COUNT-NODE #:dynamic ACK-COUNT-STATE #:max-chars 8 #:x 24 #:y 108 #:width 238 #:height 40 #:background (theme-color surface-container)))
+             (material-card #:id #,(app-id app "overview-proof-card") #:x 514 #:y 16 #:width 482 #:height 220 #:background (theme-color surface-container)
+               (text #:id #,(app-id app "overview-proof") #:x 24 #:y 44 #:width 420 #:height 32 #:font-face noir-desktop-sans-18 #:font-scale 0.72 #:text-inset 0.0 "Static resources and state ownership are compiler-derived.")))
+           (stack #:id SYSTEMS-VIEW #:x 204 #:y 72 #:width 996 #:height 560 #:visual-anchor #t #:background (theme-color background)
+             (surface #:id #,(app-id app "systems-table-card") #:x 0 #:y 16 #:width 996 #:height 368 #:background (theme-color surface-container-low) #:elevation (theme-elevation raised) #:radius (theme-radius card) #:clip #t
+               (text #:id #,(app-id app "systems-title") #:x 24 #:y 16 #:width 420 #:height 30 #:font-face noir-desktop-sans-18 #:font-scale 0.82 #:text-inset 0.0 "System event stream")
+               (surface #:id #,(app-id app "systems-list-shell") #:x 20 #:y 62 #:width 956 #:height 144 #:background (theme-color surface-container-low) #:elevation (theme-elevation level-0) #:clip #t
+                 (virtual-list #:id SYSTEMS-LIST #:logical-capacity SYSTEMS-CAPACITY #:physical-slots SYSTEMS-SLOTS #:visible-rows SYSTEMS-SLOTS #:row-height 32 #:max-chars 32
+                   (data-register-table #:id SYSTEMS-TABLE #:font-face noir-table-body-mono-16 #:seed SYSTEMS-SEED
+                     (data-update-batch #:id #,(app-id app "systems-bootstrap") ((SYSTEMS-TAIL SYSTEMS-SEED)))
+                   )
+                   (on-activate OPEN-SYSTEMS-DETAIL)
+                   (row-template (SYSTEMS-ROW ...)))
+                 (scrollbar #:id SYSTEMS-SCROLLBAR #:for SYSTEMS-LIST #:x 940 #:y 0 #:width 12 #:height 144 #:thumb-height 24)))
+             (material-card #:id #,(app-id app "systems-detail-card") #:x 0 #:y 408 #:width 996 #:height 128 #:background (theme-color surface-container)
+               (detail-panel #:id #,(app-id app "systems-detail-panel") #:text-id SYSTEMS-DETAIL #:dynamic SYSTEMS-DETAIL-STATE #:max-chars 29 #:x 24 #:y 46 #:width 548 #:height 50 #:background (theme-color surface-container))
+               (material-filled-button #:id #,(app-id app "systems-append-action") #:button-id #,(app-id app "systems-append-button") #:label-id #,(app-id app "systems-append-label") #:label "Append tail" #:font-face noir-desktop-sans-18 #:on OPEN-SYSTEMS-DETAIL #:x 772 #:y 64 #:width 176 #:height 40)))
+           (stack #:id ALERTS-VIEW #:x 204 #:y 72 #:width 996 #:height 560 #:visual-anchor #t #:background (theme-color background)
+             (surface #:id #,(app-id app "alerts-table-card") #:x 0 #:y 16 #:width 996 #:height 368 #:background (theme-color surface-container-high) #:elevation (theme-elevation raised) #:radius (theme-radius card) #:clip #t
+               (text #:id #,(app-id app "alerts-title") #:x 24 #:y 16 #:width 420 #:height 30 #:font-face noir-desktop-sans-18 #:font-scale 0.82 #:text-inset 0.0 "Alert incident stream")
+               (surface #:id #,(app-id app "alerts-list-shell") #:x 20 #:y 62 #:width 956 #:height 96 #:background (theme-color surface-container-low) #:elevation (theme-elevation level-0) #:clip #t
+                 (virtual-list #:id ALERTS-LIST #:logical-capacity ALERTS-CAPACITY #:physical-slots ALERTS-SLOTS #:visible-rows ALERTS-SLOTS #:row-height 32 #:max-chars 32
+                   (data-register-table #:id ALERTS-TABLE #:font-face noir-table-body-mono-16 #:seed ALERTS-SEED
+                     (data-update-batch #:id #,(app-id app "alerts-bootstrap") ((ALERTS-TAIL ALERTS-SEED)))
+                   )
+                   (on-activate ACKNOWLEDGE-ALERT)
+                   (row-template (ALERTS-ROW ...)))
+                 (scrollbar #:id ALERTS-SCROLLBAR #:for ALERTS-LIST #:x 940 #:y 0 #:width 12 #:height 96 #:thumb-height 24)))
+             (material-card #:id #,(app-id app "alerts-detail-card") #:x 0 #:y 408 #:width 996 #:height 128 #:background (theme-color surface-container)
+               (detail-panel #:id #,(app-id app "alerts-detail-panel") #:text-id ALERTS-DETAIL #:dynamic ALERTS-DETAIL-STATE #:max-chars 29 #:x 24 #:y 46 #:width 548 #:height 50 #:background (theme-color surface-container))
+               (material-filled-button #:id #,(app-id app "alerts-ack-action") #:button-id #,(app-id app "alerts-ack-button") #:label-id #,(app-id app "alerts-ack-label") #:label "Acknowledge" #:font-face noir-desktop-sans-18 #:on ACKNOWLEDGE-ALERT #:x 732 #:y 64 #:width 216 #:height 40)))))))
+  )
+
+(define-syntax (noir-workbench/app stx)
+  (syntax-parse stx
+    [(_ #:id app:id #:title title:str
+        (systems #:seed systems-seed:str)
+        (alerts #:seed alerts-seed:str))
+     (expand-noir-workbench/app stx #'app #'title #'standard #'systems-seed #'alerts-seed)]
+    [(_ #:id app:id #:title title:str #:profile profile:id
+        (systems #:seed systems-seed:str)
+        (alerts #:seed alerts-seed:str))
+     (expand-noir-workbench/app stx #'app #'title #'profile #'systems-seed #'alerts-seed)]
+    [(_ . _)
+     (raise-syntax-error 'noir-workbench/app
+                         "expects #:id, #:title, optional literal #:profile, then one systems and one alerts seed stream"
+                         stx)]))

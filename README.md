@@ -183,7 +183,9 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `examples/realtime-monitor.rkt` | 10,000条实时监控表格：数值data-register、可见性分流、状态色与比例字体chrome。 |
 | `examples/material-profile-dashboard.rkt` | Material Profile桌面示例：静态rail、navigation selection、closed-domain icon、small app bar、rounded/shadow card与fixed filled button。 |
 | `examples/material-overlay-showcase.rkt` | 可开关的受限Material dialog/menu示例：固定scrim、dialog、menu、closed-domain icon、open/close状态转换、release motion、编译期modal Tab子图与预分配的圆角focus-ring。 |
-| `examples/material-observability-workbench.rkt` | 框架级Material工作台：一个rail、三个常驻view端点、唯一10,000行Systems数据arena、detail panel、受限overlay与focus-ring。 |
+| `examples/material-observability-workbench.rkt` | 专家层框架级Material工作台：显式rail、三常驻view、双数据arena、detail、overlay与focus-ring。 |
+| `examples/application-layer-workbench.rkt` | 应用层DSL v1标准示例：作者仅写应用ID、标题与Systems/Alerts seed；宏推导容量、状态、所有权、stable ID和确认事务。 |
+| `examples/application-layer-workbench-compact.rkt` | 同一应用层DSL的`compact`离散profile；作者不写裸资源数值。 |
 | `tools/verify_log_browser.sh` | 真实X11/Vulkan日志工作流与log-browser ABI篡改回归。 |
 | `tools/verify_realtime_monitor.sh` | 实时监控表格的真实X11/Vulkan、glyph-domain篡改、可见性分流与键鼠回归。 |
 | `tools/verify_desktop_component_macros.sh` | 编译期组件宏与手写primitive Scene等价性回归。 |
@@ -217,6 +219,9 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/verify_workbench_cross_view_transaction_abi_gate_v1.sh` | 跨视图事务v1的Racket导出、Rust release、真实X11/Vulkan启动proof与ABI/disable/action/target四类Scene拒绝回归。 |
 | `tools/verify_workbench_cross_view_transaction_executor_v1.sh` | 跨视图事务固定执行器一键回归：合法确认、无选中零写入、非活动view零写入、截图、ABI攻击拒绝与rounded兼容。 |
 | `tools/mutate_workbench_cross_view_transaction_scene.py` | 生成跨视图事务ABI合同、required禁用、action slot与Overview目标glyph四类攻击Scene。 |
+| `APPLICATION_DSL_MACRO_DESIGN_V1.md` | 应用层`noir-workbench/app`语法、profile推导、stable ID/状态所有权生成和专家层边界设计。 |
+| `tools/verify_application_layer_dsl_v1.py` | 标准/compact应用层Scene的容量、所有权、stable ID和事务结构oracle。 |
+| `tools/verify_application_layer_dsl_v1.sh` | 应用层DSL一键回归：禁止应用源码暴露低层资源参数、双profile导出、Racket测试、Rust构建与真实X11/Vulkan启动。 |
 | `MODAL_FOCUS_VISUAL_PLAN_ABI_V1.md` | 预分配modal focus ring的Scene ABI、启动期proof、GPU metadata与固定alpha写集规范。 |
 | `MODAL_FOCUS_VISUAL_PLAN_V1_REPORT.md` | focus视觉交付结果、真实X11/Vulkan截图证据、篡改拒绝与兼容回归报告。 |
 | `tools/make_overlay_state_v1_comparison.py` | 将关闭、打开与Escape关闭的真实X11/Vulkan端点生成审阅对照板。 |

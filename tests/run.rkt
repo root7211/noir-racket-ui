@@ -10,6 +10,8 @@
          (only-in "../examples/material-profile-dashboard.rkt" [app-scene material-profile-app-scene])
          (only-in "../examples/material-overlay-showcase.rkt" [app-scene material-overlay-app-scene])
          (only-in "../examples/material-observability-workbench.rkt" [app-scene material-workbench-app-scene])
+         (only-in "../examples/application-layer-workbench.rkt" [app-scene application-layer-app-scene])
+         (only-in "../examples/application-layer-workbench-compact.rkt" [app-scene application-layer-compact-app-scene])
          (only-in "../examples/repeat-dashboard.rkt" [app-scene repeat-app-scene])
          (only-in "../examples/focus-dashboard.rkt" [app-scene focus-app-scene])
          (only-in "../examples/command-dashboard.rkt" [app-scene command-app-scene])
@@ -269,6 +271,33 @@
 (check-equal? (hash-ref cross-view-json 'state_index)
               (state-slot-index (findf (lambda (slot) (eq? (state-slot-id slot) 'workbench-alert-ack-count))
                                        (scene-state-slots material-workbench-app-scene))))
+
+;; Application-layer workbench v1 hides raw capacities, physical slots, state ownership,
+;; data-view ownership and cross-view wiring. The macro must nevertheless lower to the same
+;; closed plan shape with hygienically derived stable IDs and named profile endpoints.
+(define application-layer-json (scene->jsexpr application-layer-app-scene))
+(define application-layer-plan (hash-ref application-layer-json 'material_observability_workbench_plan))
+(define application-layer-data-views (hash-ref application-layer-plan 'data_views))
+(check-true (hash-ref application-layer-json 'material_observability_workbench_required))
+(check-equal? (hash-ref application-layer-plan 'id) "operations-workbench")
+(check-equal? (hash-ref application-layer-plan 'rail_id) "operations-rail")
+(check-equal? (map (lambda (entry) (hash-ref entry 'view_id)) application-layer-data-views)
+              '("operations-systems-view" "operations-alerts-view"))
+(check-equal? (map (lambda (entry) (hash-ref entry 'logical_capacity)) application-layer-data-views) '(10000 2048))
+(check-equal? (map (lambda (entry) (hash-ref entry 'physical_slots)) application-layer-data-views) '(4 3))
+(define application-layer-transaction (hash-ref application-layer-json 'workbench_cross_view_transaction_plan))
+(check-true (hash-ref application-layer-json 'workbench_cross_view_transaction_required))
+(check-equal? (hash-ref application-layer-transaction 'id) "operations-acknowledge-alert-transaction")
+(check-equal? (hash-ref application-layer-transaction 'source_data_view_id) "operations-alerts-data-view")
+(check-equal? (hash-ref application-layer-transaction 'source_view_id) "operations-alerts-view")
+(check-equal? (hash-ref application-layer-transaction 'target_view_id) "operations-overview-view")
+(check-equal? (hash-ref application-layer-transaction 'state) "operations-alert-ack-count")
+(define application-layer-compact-json (scene->jsexpr application-layer-compact-app-scene))
+(define application-layer-compact-data-views
+  (hash-ref (hash-ref application-layer-compact-json 'material_observability_workbench_plan) 'data_views))
+(check-equal? (map (lambda (entry) (hash-ref entry 'logical_capacity)) application-layer-compact-data-views) '(2048 512))
+(check-equal? (map (lambda (entry) (hash-ref entry 'physical_slots)) application-layer-compact-data-views) '(3 3))
+(check-equal? (map (lambda (entry) (hash-ref entry 'visible_rows)) application-layer-compact-data-views) '(3 3))
 
 ;; Dialog/menu v1 is a syntax-only static composition. It has no runtime overlay manager
 ;; or navigation plan: fixed scrim/surface/menu geometry and five already-known actions are enough.

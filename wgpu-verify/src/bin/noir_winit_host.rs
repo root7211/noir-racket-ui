@@ -6258,12 +6258,14 @@ fn compiler_workbench_cross_view_transaction_plan(
                     "workbench cross-view transaction {} source must be the fixed Alerts(2048x3) data arena", plan.id);
     let source_view = wire_workbench.views.get(source_compiled.view_index)
         .context("workbench cross-view transaction source owner view is absent")?;
-    anyhow::ensure!(source_view.view_root_id == plan.source_view_id && source_view.destination_id == "observability-alerts",
-                    "workbench cross-view transaction {} source owner is not the canonical Alerts resident view", plan.id);
+    // Application-layer macros hygienically derive stable destination IDs. Workbench v2
+    // freezes semantic endpoints through target values instead: Alerts is 2 and Overview is 0.
+    anyhow::ensure!(source_view.view_root_id == plan.source_view_id && source_view.target_value == 2,
+                    "workbench cross-view transaction {} source owner is not the canonical Alerts(value=2) resident view", plan.id);
     let target_view = wire_workbench.views.iter().find(|view| view.view_root_id == plan.target_view_id)
         .with_context(|| format!("workbench cross-view transaction {} target view is absent", plan.id))?;
-    anyhow::ensure!(target_view.destination_id == "observability-overview" && plan.target_view_id != plan.source_view_id,
-                    "workbench cross-view transaction {} target must be the distinct canonical Overview resident view", plan.id);
+    anyhow::ensure!(target_view.target_value == 0 && plan.target_view_id != plan.source_view_id,
+                    "workbench cross-view transaction {} target must be the distinct canonical Overview(value=0) resident view", plan.id);
 
     assert_state_slot(state_slot_ids, plan.state_index, &plan.state, "workbench cross-view transaction state")?;
     let action_slot = action_slot_ids.get(plan.action_slot_index)
