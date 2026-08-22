@@ -62,6 +62,8 @@ const MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_SCHEMA: &str = "noir-material-ob
 const MATERIAL_OBSERVABILITY_WORKBENCH_PLAN_ABI_REVISION: u32 = 2;
 const WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_SCHEMA: &str = "noir-workbench-cross-view-transaction-plan-v1";
 const WORKBENCH_CROSS_VIEW_TRANSACTION_PLAN_ABI_REVISION: u32 = 1;
+const ACKNOWLEDGED_ROW_STATE_PLAN_ABI_SCHEMA: &str = "noir-acknowledged-row-state-plan-v1";
+const ACKNOWLEDGED_ROW_STATE_PLAN_ABI_REVISION: u32 = 1;
 const FOCUS_RING_HALO_PX: f32 = 3.0;
 const FOCUS_RING_THICKNESS_PX: f32 = 2.0;
 const FOCUS_RING_COLOR: [f32; 4] = [0.36, 0.72, 1.0, 1.0];
@@ -134,6 +136,10 @@ struct Scene {
     workbench_cross_view_transaction_plan: Option<WorkbenchCrossViewTransactionPlan>,
     #[serde(default)]
     workbench_cross_view_transaction_required: bool,
+    #[serde(deserialize_with = "deserialize_acknowledged_row_state_plan_option")]
+    acknowledged_row_state_plan: Option<AcknowledgedRowStatePlan>,
+    #[serde(default)]
+    acknowledged_row_state_required: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -157,6 +163,7 @@ struct AbiContracts {
     modal_focus_visual_plan: AbiContract,
     material_observability_workbench_plan: AbiContract,
     workbench_cross_view_transaction_plan: AbiContract,
+    acknowledged_row_state_plan: AbiContract,
 }
 
 #[derive(Debug, Deserialize)]
@@ -462,6 +469,37 @@ struct WorkbenchCrossViewTransactionPlan {
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum WorkbenchCrossViewTransactionPlanWire { Plan(WorkbenchCrossViewTransactionPlan), Disabled(bool) }
+
+#[derive(Clone, Debug, Deserialize)]
+struct AcknowledgedRowStatePlan {
+    abi_schema: String,
+    abi_revision: u32,
+    id: String,
+    data_view_id: String,
+    list_id: String,
+    owner_view_id: String,
+    logical_capacity: usize,
+    state_domain: Vec<String>,
+    word_bits: usize,
+    word_count: usize,
+    acknowledge_action_id: String,
+    action_slot_index: usize,
+    row_color_offsets: Vec<usize>,
+    detail_glyph_offsets: Vec<usize>,
+    tile_ids: Vec<usize>,
+}
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum AcknowledgedRowStatePlanWire { Plan(AcknowledgedRowStatePlan), Disabled(bool) }
+fn deserialize_acknowledged_row_state_plan_option<'de, D>(deserializer: D) -> std::result::Result<Option<AcknowledgedRowStatePlan>, D::Error>
+where D: Deserializer<'de> {
+    match AcknowledgedRowStatePlanWire::deserialize(deserializer)? {
+        AcknowledgedRowStatePlanWire::Plan(plan) => Ok(Some(plan)),
+        AcknowledgedRowStatePlanWire::Disabled(false) => Ok(None),
+        AcknowledgedRowStatePlanWire::Disabled(true) => Err(serde::de::Error::custom("acknowledged_row_state_plan may be an object or false, never true")),
+    }
+}
+
 fn deserialize_workbench_cross_view_transaction_plan_option<'de, D>(deserializer: D) -> std::result::Result<Option<WorkbenchCrossViewTransactionPlan>, D::Error>
 where D: Deserializer<'de> {
     match WorkbenchCrossViewTransactionPlanWire::deserialize(deserializer)? {
@@ -928,6 +966,30 @@ struct CompiledMaterialObservabilityWorkbenchPlan {
 // This is deliberately the *post-proof* executor representation. It contains no node
 // queries, JSON maps, action lookup or tile discovery inputs: event-time code selects only
 // the already-admitted Alerts physical lane and writes these compiler-fixed addresses.
+#[derive(Clone, Debug)]
+struct CompiledAcknowledgedRowStatePlan {
+    id: String,
+    data_view_id: String,
+    list_index: usize,
+    owner_view_index: usize,
+    logical_capacity: usize,
+    word_bits: usize,
+    word_count: usize,
+    acknowledge_action_id: String,
+    action_slot_index: usize,
+    row_color_offsets: Vec<usize>,
+    detail_glyph_offsets: Vec<usize>,
+    tile_mask: u64,
+}
+
+// The Box slice is allocated exactly once after startup proof and has no resize API.
+// It is the only logical acknowledgement state store admitted by v1.
+#[derive(Debug)]
+struct AcknowledgedRowStateTable {
+    plan: CompiledAcknowledgedRowStatePlan,
+    words: Box<[u64]>,
+}
+
 #[derive(Clone, Debug)]
 struct CompiledWorkbenchCrossViewTransactionPlan {
     id: String,
@@ -2047,6 +2109,7 @@ struct Host {
     modal_focus_visual_plan: Option<CompiledModalFocusVisualPlan>,
     material_observability_workbench_plan: Option<CompiledMaterialObservabilityWorkbenchPlan>,
     workbench_cross_view_transaction_plan: Option<CompiledWorkbenchCrossViewTransactionPlan>,
+    acknowledged_row_state_table: Option<AcknowledgedRowStateTable>,
     log_browser_plans: Vec<CompiledLogBrowserPlan>,
     log_levels: Vec<Vec<LogLevel>>,
     // Registered v1 fontc atlases. They deliberately remain separate from legacy
@@ -2204,6 +2267,9 @@ impl Host {
         let workbench_cross_view_transaction_plan = compiler_workbench_cross_view_transaction_plan(
             &scene, &state_slot_ids, &action_slot_ids, &action_tile_masks, &material_observability_workbench_plan, &list_interactions, &log_browser_plans,
         )?;
+        let acknowledged_row_state_table = compiler_acknowledged_row_state_plan(
+            &scene, &material_observability_workbench_plan, &workbench_cross_view_transaction_plan, &virtual_lists, &log_browser_plans,
+        )?;
         apply_material_observability_workbench_initial_visibility(
             &material_observability_workbench_plan, &mut instances, &mut placements, &mut shadow_instances, &queue, &instance_buffer,
         );
@@ -2272,7 +2338,7 @@ impl Host {
         let initial_glyph_bytes = glyph_bytes.clone();
         let virtual_list_count = virtual_lists.len();
         let mut host = Self { scene_fingerprint_fnv1a64: scene_fingerprint_fnv1a64.to_string(), source_fingerprint_fnv1a64, window, surface, device, queue, config, size, canvas_width: visual_canvas.width, canvas_height: visual_canvas.height, canvas_margin: visual_canvas.margin, scene, state_slot_ids, state_slot_values, initial_state_slot_values, instances, initial_instances, initial_glyph_bytes, placements, instance_buffer, glyph_buffer, placement_buffer, unit_quad, clear_buffer, static_pipeline, rounded_surface_bind_group, _rounded_surface_buffer: rounded_surface_buffer, shadow_pipeline, shadow_surface_bind_group, shadow_instance_buffer, shadow_instance_count, shadow_instances: shadow_instance_upload, _shadow_surface_buffer: shadow_surface_buffer, focus_ring_pipeline, focus_ring_bind_group, focus_ring_instance_buffer, focus_ring_instance_count, focus_ring_instances, _focus_ring_meta_buffer: focus_ring_meta_buffer, text_pipeline, glyph_bind_group, blit_pipeline, _canvas: canvas, canvas_view, blit_bind_group,
- cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, release_tracks, active_release_tracks: Vec::new(), virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, navigation_selection_plan, overlay_state_plan, modal_focus_subgraph_plan, modal_focus_visual_plan, material_observability_workbench_plan, workbench_cross_view_transaction_plan, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
+ cursor: [0.0;2], hovered: None, pressed: None, action_slot_ids, compiled_actions, compiled_transactions, subgroup_packets, packet_activity, _packet_activity_reference: packet_activity_reference, packet_activity_variant, packet_worklists, keyboard_packet_worklist_indices, transaction_packet_worklist_indices, subgroup_vertex_supported, command_matchers, transient_task_ids, action_tile_masks, event_tile_masks, coalesced_batches, event_batch_ids, frame_task_event_slots, release_tracks, active_release_tracks: Vec::new(), virtual_lists, list_interactions, list_hovered_rows: vec![None; virtual_list_count], list_selected_rows: vec![None; virtual_list_count], row_activation_plans, scrollbar_plans, active_scrollbar: None, list_navigation_plans, navigation_selection_plan, overlay_state_plan, modal_focus_subgraph_plan, modal_focus_visual_plan, material_observability_workbench_plan, workbench_cross_view_transaction_plan, acknowledged_row_state_table, log_browser_plans, log_levels, _font_atlases: font_atlases, _dynamic_font_cell_atlas: dynamic_font_cell_atlas, pending_render: Vec::new(), focus, keyboard, keyboard_commands, keyboard_cursors, keyboard_pending_values, keyboard_text_values, visuals, blink_origin: Instant::now(), blink_on: true, modifiers: ModifiersState::empty(), canvas_dirty: true, gpu_timer, adapter_name: adapter_info.name, backend_name: format!("{:?}", adapter_info.backend) };
         host.sync_focus_visuals();
         host.execute_scene_data_update_batches()?;
         host.redraw_canvas_full();
@@ -3578,18 +3644,34 @@ impl Host {
         Some(self.log_browser_plans[plan_index].level_colors[color_index])
     }
 
+    // Runtime lookup is a single bounded bit test against the startup-proved table. It never
+    // consults Scene JSON or component IDs, and only admits the one Alerts-owned list index.
+    fn acknowledged_row_is_set(&self, list_index: usize, logical: usize) -> bool {
+        let Some(table) = self.acknowledged_row_state_table.as_ref() else { return false; };
+        let plan = &table.plan;
+        if plan.list_index != list_index || logical >= plan.logical_capacity || plan.word_bits != 64 { return false; }
+        let word_index = logical / plan.word_bits;
+        let bit_mask = 1u64 << (logical % plan.word_bits);
+        table.words.get(word_index).is_some_and(|word| (*word & bit_mask) != 0)
+    }
+
     fn patch_log_browser_detail(&mut self, list_index: usize, logical: usize) -> bool {
         let Some(plan) = self.log_browser_plans.iter().find(|plan| plan.list_index == list_index).cloned() else { return false; };
         let plan_index = self.log_browser_plans.iter().position(|candidate| candidate.id == plan.id).expect("cloned log browser plan must remain indexed");
         let level = self.log_levels[plan_index][logical];
-        let value = format!("DETAIL {} SELECTED", Self::log_level_name(level));
+        let acknowledged = self.acknowledged_row_is_set(list_index, logical);
+        let value = if acknowledged {
+            format!("DETAIL {} ACKNOWLEDGED", Self::log_level_name(level))
+        } else {
+            format!("DETAIL {} SELECTED", Self::log_level_name(level))
+        };
         for (offset, ch) in plan.detail_glyph_offsets.iter().zip(value.chars().chain(std::iter::repeat(' '))) {
             let glyph_id = if ch == ' ' { 1u32 << 16 } else { (1u32 << 16) | (1 + (ch as u32 - 'A' as u32)) };
             self.queue.write_buffer(&self.glyph_buffer, *offset as u64, &glyph_id.to_le_bytes());
         }
         self.enqueue_render(RenderRequest::with_worklist(plan.detail_tile_mask, plan.packet_worklist_index), "log-browser-detail");
-        println!("log-browser detail: id={} logical={} level={} glyph-writes={} tile-mask=0x{:016x} worklist={}",
-                 plan.id, logical, Self::log_level_name(level), plan.detail_glyph_offsets.len(), plan.detail_tile_mask, plan.packet_worklist_index);
+        println!("log-browser detail: id={} logical={} level={} glyph-writes={} tile-mask=0x{:016x} worklist={} acknowledged={}",
+                 plan.id, logical, Self::log_level_name(level), plan.detail_glyph_offsets.len(), plan.detail_tile_mask, plan.packet_worklist_index, acknowledged);
         true
     }
 
@@ -3654,13 +3736,17 @@ impl Host {
         let physical = logical % physical_slots;
         let offset = interaction.row_color_offsets[physical];
         let instance = offset / std::mem::size_of::<QuadInstance>();
+        let acknowledged = self.acknowledged_row_is_set(list_index, logical);
         let color = if self.list_selected_rows[list_index] == Some(logical) { interaction.selected_color }
             else if self.list_hovered_rows[list_index] == Some(logical) { interaction.hover_color }
+            // v1 intentionally reuses the compiler-proved acknowledgement transaction color.
+            // No second style table or runtime palette lookup is admitted for recovered rows.
+            else if acknowledged { interaction.selected_color }
             else { self.log_row_color(list_index, logical).unwrap_or(self.initial_instances[instance].color) };
         self.instances[instance].color = color;
         self.queue.write_buffer(&self.instance_buffer, offset as u64, bytemuck::cast_slice(&color));
         let level = self.log_level_for(list_index, logical).map(Self::log_level_name).unwrap_or("BASE");
-        println!("list-interaction-patch: list={} logical={} physical={} color_offset={} level={} selected={} hovered={}", list_id, logical, physical, offset, level, self.list_selected_rows[list_index] == Some(logical), self.list_hovered_rows[list_index] == Some(logical));
+        println!("list-interaction-patch: list={} logical={} physical={} color_offset={} level={} selected={} hovered={} acknowledged={}", list_id, logical, physical, offset, level, self.list_selected_rows[list_index] == Some(logical), self.list_hovered_rows[list_index] == Some(logical), acknowledged);
     }
 
     fn set_list_hover_from_cursor(&mut self) -> bool {
@@ -3735,6 +3821,34 @@ impl Host {
                      plan.id, origin);
             return Some(false);
         };
+        let state_plan = match self.acknowledged_row_state_table.as_ref() {
+            Some(table) => table.plan.clone(),
+            None => {
+                println!("workbench-cross-view-transaction-gated: id={} origin={} reason=acknowledged-row-state-absent state-writes=0 gpu-writes=0", plan.id, origin);
+                return Some(false);
+            }
+        };
+        if state_plan.list_index != plan.source_list_index
+            || state_plan.owner_view_index != plan.source_view_index
+            || state_plan.acknowledge_action_id != plan.action_id
+            || state_plan.action_slot_index != plan.action_slot_index
+            || state_plan.row_color_offsets != plan.source_row_color_offsets
+            || state_plan.detail_glyph_offsets != plan.source_detail_glyph_offsets
+            || state_plan.tile_mask != plan.tile_mask
+            || logical >= state_plan.logical_capacity {
+            println!("workbench-cross-view-transaction-gated: id={} origin={} reason=acknowledged-row-state-plan-mismatch state-writes=0 gpu-writes=0", plan.id, origin);
+            return Some(false);
+        }
+        let word_index = logical / state_plan.word_bits;
+        let bit_mask = 1u64 << (logical % state_plan.word_bits);
+        let already_acknowledged = self.acknowledged_row_state_table.as_ref()
+            .expect("proved acknowledgement state table remains resident")
+            .words.get(word_index).is_some_and(|word| (*word & bit_mask) != 0);
+        if already_acknowledged {
+            println!("workbench-cross-view-transaction-gated: id={} origin={} reason=already-acknowledged logical={} word={} bit=0x{:016x} state-writes=0 gpu-writes=0",
+                     plan.id, origin, logical, word_index, bit_mask);
+            return Some(false);
+        }
         let physical = logical % plan.source_physical_slots;
         let row_color_offset = *plan.source_row_color_offsets.get(physical)
             .expect("cross-view transaction proof fixed one color lane per Alerts physical slot");
@@ -3762,7 +3876,7 @@ impl Host {
                 return Some(false);
             }
         };
-        let detail_text = format!("DETAIL {} SELECTED", Self::log_level_name(level));
+        let detail_text = format!("DETAIL {} ACKNOWLEDGED", Self::log_level_name(level));
         let detail_glyphs = plan.source_detail_glyph_offsets.iter().zip(detail_text.chars().chain(std::iter::repeat(' ')))
             .map(|(&offset, ch)| {
                 let glyph_id = if ch == ' ' { 1u32 << 16 } else { (1u32 << 16) | (1 + (ch as u32 - 'A' as u32)) };
@@ -3770,6 +3884,9 @@ impl Host {
             }).collect::<Vec<_>>();
         // Commit begins only after every bounded derivation is admitted. The following writes
         // are exactly the address sets frozen by compiler_workbench_cross_view_transaction_plan.
+        self.acknowledged_row_state_table.as_mut()
+            .expect("proved acknowledgement state table remains resident")
+            .words[word_index] |= bit_mask;
         self.state_slot_values[plan.state_index] = next_count;
         self.instances[row_instance].color = plan.source_selected_color;
         self.queue.write_buffer(&self.instance_buffer, row_color_offset as u64, bytemuck::cast_slice(&plan.source_selected_color));
@@ -3780,8 +3897,8 @@ impl Host {
             self.queue.write_buffer(&self.glyph_buffer, *offset as u64, &glyph_id.to_le_bytes());
         }
         self.enqueue_render(RenderRequest::no_packets(plan.tile_mask), "workbench-cross-view-transaction");
-        println!("workbench-cross-view-transaction: id={} origin={} action={} slot={} event={:?} alerts-logical={} physical={} state={}=>{} state-writes=1 row-color-writes=1 detail-glyph-writes={} overview-count-glyph-writes={} tile-mask=0x{:016x} worklist=no-packets",
-                 plan.id, origin, plan.action_id, plan.action_slot_index, event_slot, logical, physical, current_count, next_count,
+        println!("workbench-cross-view-transaction: id={} origin={} action={} slot={} event={:?} alerts-logical={} physical={} ack-word={} ack-bit=0x{:016x} state={}=>{} state-writes=1 row-color-writes=1 detail-glyph-writes={} overview-count-glyph-writes={} tile-mask=0x{:016x} worklist=no-packets",
+                 plan.id, origin, plan.action_id, plan.action_slot_index, event_slot, logical, physical, word_index, bit_mask, current_count, next_count,
                  detail_glyphs.len(), plan.target_count_glyph_offsets.len(), plan.tile_mask);
         Some(true)
     }
@@ -5368,7 +5485,29 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
                             "workbench cross-view transaction has unsupported ABI {}@{}", plan.abi_schema, plan.abi_revision);
         }
     }
-    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} rounded-surface={}@{} shadow-surface={}@{} navigation-selection={}@{} modal-focus={}@{} modal-focus-visual={}@{} workbench={}@{} cross-view-transaction={}@{} frozen",
+    anyhow::ensure!(scene.abi_contracts.acknowledged_row_state_plan.schema == ACKNOWLEDGED_ROW_STATE_PLAN_ABI_SCHEMA
+                    && scene.abi_contracts.acknowledged_row_state_plan.revision == ACKNOWLEDGED_ROW_STATE_PLAN_ABI_REVISION,
+                    "unsupported acknowledged_row_state_plan ABI {}@{}; expected {}@{}",
+                    scene.abi_contracts.acknowledged_row_state_plan.schema, scene.abi_contracts.acknowledged_row_state_plan.revision,
+                    ACKNOWLEDGED_ROW_STATE_PLAN_ABI_SCHEMA, ACKNOWLEDGED_ROW_STATE_PLAN_ABI_REVISION);
+    match &scene.acknowledged_row_state_plan {
+        None => anyhow::ensure!(!scene.acknowledged_row_state_required,
+                                "Scene marked acknowledged_row_state_required may not disable acknowledged_row_state_plan v1"),
+        Some(plan) => {
+            anyhow::ensure!(scene.acknowledged_row_state_required,
+                            "acknowledged row state plan may not be present without its explicit required marker");
+            anyhow::ensure!(plan.abi_schema == ACKNOWLEDGED_ROW_STATE_PLAN_ABI_SCHEMA
+                            && plan.abi_revision == ACKNOWLEDGED_ROW_STATE_PLAN_ABI_REVISION,
+                            "acknowledged row state plan has unsupported ABI {}@{}", plan.abi_schema, plan.abi_revision);
+            anyhow::ensure!(plan.state_domain == ["open", "acknowledged"],
+                            "acknowledged row state plan must use exactly the v1 [open, acknowledged] domain");
+            anyhow::ensure!(plan.logical_capacity > 0 && plan.word_bits == 64
+                            && plan.word_count == (plan.logical_capacity + 63) / 64,
+                            "acknowledged row state plan has invalid fixed u64 table geometry capacity={} word-bits={} word-count={}",
+                            plan.logical_capacity, plan.word_bits, plan.word_count);
+        }
+    }
+    println!("compiler ABI contracts: virtual-list={}@{} row-activation={}@{} scrollbar={}@{} list-navigation={}@{} log-browser={}@{} font-asset={}@{} font-placement={}@{} dynamic-font-cell={}@{} visual-language={}@{} rounded-surface={}@{} shadow-surface={}@{} navigation-selection={}@{} modal-focus={}@{} modal-focus-visual={}@{} workbench={}@{} cross-view-transaction={}@{} acknowledged-row-state={}@{} frozen",
              scene.abi_contracts.virtual_list_plan.schema, scene.abi_contracts.virtual_list_plan.revision,
              scene.abi_contracts.row_activation_plan.schema, scene.abi_contracts.row_activation_plan.revision,
              scene.abi_contracts.scrollbar_plan.schema, scene.abi_contracts.scrollbar_plan.revision,
@@ -5384,7 +5523,8 @@ fn compiler_abi_contracts(scene: &Scene) -> Result<()> {
              scene.abi_contracts.modal_focus_subgraph.schema, scene.abi_contracts.modal_focus_subgraph.revision,
              scene.abi_contracts.modal_focus_visual_plan.schema, scene.abi_contracts.modal_focus_visual_plan.revision,
              scene.abi_contracts.material_observability_workbench_plan.schema, scene.abi_contracts.material_observability_workbench_plan.revision,
-             scene.abi_contracts.workbench_cross_view_transaction_plan.schema, scene.abi_contracts.workbench_cross_view_transaction_plan.revision);
+             scene.abi_contracts.workbench_cross_view_transaction_plan.schema, scene.abi_contracts.workbench_cross_view_transaction_plan.revision,
+             scene.abi_contracts.acknowledged_row_state_plan.schema, scene.abi_contracts.acknowledged_row_state_plan.revision);
     Ok(())
 }
 
@@ -6364,6 +6504,86 @@ fn compiler_workbench_cross_view_transaction_plan(
         source_row_color_offsets: plan.source_row_color_offsets.clone(),
         source_log_browser_index, source_detail_glyph_offsets: plan.source_detail_glyph_offsets.clone(),
         target_count_glyph_offsets: plan.target_count_glyph_offsets.clone(), tile_mask: actual_tile_mask,
+    }))
+}
+
+fn compiler_acknowledged_row_state_plan(
+    scene: &Scene,
+    material_workbench: &Option<CompiledMaterialObservabilityWorkbenchPlan>,
+    transaction: &Option<CompiledWorkbenchCrossViewTransactionPlan>,
+    virtual_lists: &[CompiledVirtualListPlan],
+    log_browser_plans: &[CompiledLogBrowserPlan],
+) -> Result<Option<AcknowledgedRowStateTable>> {
+    let Some(plan) = &scene.acknowledged_row_state_plan else {
+        anyhow::ensure!(!scene.acknowledged_row_state_required,
+                        "Scene marked acknowledged_row_state_required may not disable acknowledged_row_state_plan v1");
+        println!("compiler acknowledged-row-state: disabled table=absent");
+        return Ok(None);
+    };
+    anyhow::ensure!(scene.acknowledged_row_state_required
+                    && plan.abi_schema == ACKNOWLEDGED_ROW_STATE_PLAN_ABI_SCHEMA
+                    && plan.abi_revision == ACKNOWLEDGED_ROW_STATE_PLAN_ABI_REVISION,
+                    "acknowledged row state plan ABI/required marker disagrees");
+    anyhow::ensure!(plan.state_domain == ["open", "acknowledged"] && plan.word_bits == 64
+                    && plan.logical_capacity > 0 && plan.word_count == (plan.logical_capacity + 63) / 64,
+                    "acknowledged row state plan {} violates binary fixed-u64 contract", plan.id);
+    let wire_workbench = scene.material_observability_workbench_plan.as_ref()
+        .context("acknowledged row state requires material_observability_workbench_plan v2")?;
+    let compiled_workbench = material_workbench.as_ref()
+        .context("acknowledged row state requires proved material workbench")?;
+    let transaction = transaction.as_ref()
+        .context("acknowledged row state requires proved workbench cross-view acknowledgement transaction")?;
+    let wire_data_view = wire_workbench.data_views.iter().find(|view| view.id == plan.data_view_id)
+        .with_context(|| format!("acknowledged row state {} data view is absent", plan.id))?;
+    let compiled_data_view = compiled_workbench.data_views.iter().find(|view| view.id == plan.data_view_id)
+        .with_context(|| format!("acknowledged row state {} data view was not proved", plan.id))?;
+    let owner_view = wire_workbench.views.get(compiled_data_view.view_index)
+        .context("acknowledged row state owner view is absent")?;
+    anyhow::ensure!(wire_data_view.list_id == plan.list_id
+                    && wire_data_view.view_id == plan.owner_view_id
+                    && wire_data_view.list_index == compiled_data_view.list_index
+                    && owner_view.view_root_id == plan.owner_view_id && owner_view.target_value == 2,
+                    "acknowledged row state {} owner/list witness disagrees with Alerts resident view", plan.id);
+    // Do not derive ownership from names at runtime: every equality below uses the already
+    // proven transaction/list indices and closed address vectors.
+    anyhow::ensure!(plan.list_id == wire_data_view.list_id
+                    && compiled_data_view.list_index == transaction.source_list_index
+                    && compiled_data_view.view_index == transaction.source_view_index
+                    && plan.acknowledge_action_id == transaction.action_id
+                    && plan.action_slot_index == transaction.action_slot_index
+                    && plan.row_color_offsets == transaction.source_row_color_offsets
+                    && plan.detail_glyph_offsets == transaction.source_detail_glyph_offsets,
+                    "acknowledged row state {} diverges from its proved Alerts acknowledgement transaction", plan.id);
+    let list = virtual_lists.get(compiled_data_view.list_index)
+        .context("acknowledged row state source virtual list is absent")?;
+    anyhow::ensure!(list.logical_capacity == plan.logical_capacity
+                    && list.physical_slots == plan.row_color_offsets.len()
+                    && list.physical_slots == transaction.source_physical_slots
+                    && list.logical_capacity == wire_data_view.logical_capacity,
+                    "acknowledged row state {} fixed logical/physical arena geometry disagrees", plan.id);
+    let browser = log_browser_plans.iter().find(|browser| browser.list_index == compiled_data_view.list_index)
+        .context("acknowledged row state source log-browser is absent")?;
+    anyhow::ensure!(browser.row_color_offsets == plan.row_color_offsets
+                    && browser.detail_glyph_offsets == plan.detail_glyph_offsets,
+                    "acknowledged row state {} recovery addresses escape Alerts log-browser", plan.id);
+    let schedule = scene.render_schedules.first().context("acknowledged row state requires render schedule")?;
+    let tile_mask_value = tile_mask(&plan.tile_ids, schedule.tiles.len(), &format!("acknowledged row state {}", plan.id))?;
+    anyhow::ensure!(tile_mask_value == transaction.tile_mask,
+                    "acknowledged row state {} tile scope must equal canonical acknowledgement transaction scope", plan.id);
+    let words = vec![0u64; plan.word_count].into_boxed_slice();
+    println!("compiler acknowledged-row-state: v1 id={} data-view={} list-index={} owner-view={} capacity={} words={}x{} color-lanes={} detail-glyphs={} tile-mask=0x{:x} table=fixed-zeroed",
+             plan.id, plan.data_view_id, compiled_data_view.list_index, plan.owner_view_id, plan.logical_capacity,
+             plan.word_count, plan.word_bits, plan.row_color_offsets.len(), plan.detail_glyph_offsets.len(), tile_mask_value);
+    Ok(Some(AcknowledgedRowStateTable {
+        plan: CompiledAcknowledgedRowStatePlan {
+            id: plan.id.clone(), data_view_id: plan.data_view_id.clone(), list_index: compiled_data_view.list_index,
+            owner_view_index: compiled_data_view.view_index, logical_capacity: plan.logical_capacity,
+            word_bits: plan.word_bits, word_count: plan.word_count,
+            acknowledge_action_id: plan.acknowledge_action_id.clone(), action_slot_index: plan.action_slot_index,
+            row_color_offsets: plan.row_color_offsets.clone(), detail_glyph_offsets: plan.detail_glyph_offsets.clone(),
+            tile_mask: tile_mask_value,
+        },
+        words,
     }))
 }
 

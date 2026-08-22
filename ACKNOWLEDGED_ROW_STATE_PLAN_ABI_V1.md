@@ -50,7 +50,7 @@ ack_words[word] |= 1_u64 << bit
 
 列表滚动或recycle到逻辑行 `i` 时，执行器仅查询该固定word表的第`i`位，并向对应物理槽的既证明颜色lane写入 `open` 或 `acknowledged` 端点。它不扫描记录、不重新解析文本，也不访问其它data arena。
 
-> 当前交付范围只完成该计划的Racket ABI、应用层宏展开和Scene proof。Rust启动期gate、word表存储、确认state写、recycle恢复执行器与真实X11滚动验证属于后续宿主阶段。
+Rust宿主已实现object-or-false解码、ABI/required gate与关联proof。启动后它只创建一枚不可扩张的 `Box<[u64]>` 固定word表；首次确认置位后才提交既有跨视图状态、1条row颜色lane、29个Alerts detail glyph、8个Overview计数字形和冻结tile。若bit已置位，则动作被消费并输出零state/GPU写入。真实X11/Vulkan回归已验证确认、`PageDown → Home` recycle恢复、重复确认幂等门禁与Overview单次计数。
 
 ## 非目标
 

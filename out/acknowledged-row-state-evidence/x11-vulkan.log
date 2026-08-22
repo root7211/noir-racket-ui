@@ -1,0 +1,423 @@
+compiler ABI contracts: virtual-list=noir-virtual-list-plan-v1@1 row-activation=noir-row-activation-plan-v1@1 scrollbar=noir-scrollbar-plan-v1@1 list-navigation=noir-list-navigation-plan-v1@1 log-browser=noir-log-browser-plan-v1@1 font-asset=noir-font-asset-plan-v1@1 font-placement=noir-font-placement-plan-v1@1 dynamic-font-cell=noir-dynamic-font-cell-plan-v1@1 visual-language=noir-visual-language-plan-v1@1 rounded-surface=noir-rounded-surface-plan-v1@1 shadow-surface=noir-shadow-surface-plan-v1@1 navigation-selection=noir-navigation-selection-plan-v1@1 modal-focus=noir-modal-focus-subgraph-v1@1 modal-focus-visual=noir-modal-focus-visual-plan-v1@1 workbench=noir-material-observability-workbench-plan-v2@2 cross-view-transaction=noir-workbench-cross-view-transaction-plan-v1@1 acknowledged-row-state=noir-acknowledged-row-state-plan-v1@1 frozen
+compiler visual language: preset=desktop-wide canvas=1280x720 margin=32 static-proof=layout-contained
+compiler ABI contracts: virtual-list=noir-virtual-list-plan-v1@1 row-activation=noir-row-activation-plan-v1@1 scrollbar=noir-scrollbar-plan-v1@1 list-navigation=noir-list-navigation-plan-v1@1 log-browser=noir-log-browser-plan-v1@1 font-asset=noir-font-asset-plan-v1@1 font-placement=noir-font-placement-plan-v1@1 dynamic-font-cell=noir-dynamic-font-cell-plan-v1@1 visual-language=noir-visual-language-plan-v1@1 rounded-surface=noir-rounded-surface-plan-v1@1 shadow-surface=noir-shadow-surface-plan-v1@1 navigation-selection=noir-navigation-selection-plan-v1@1 modal-focus=noir-modal-focus-subgraph-v1@1 modal-focus-visual=noir-modal-focus-visual-plan-v1@1 workbench=noir-material-observability-workbench-plan-v2@2 cross-view-transaction=noir-workbench-cross-view-transaction-plan-v1@1 acknowledged-row-state=noir-acknowledged-row-state-plan-v1@1 frozen
+compiler visual language: preset=desktop-wide canvas=1280x720 margin=32 static-proof=layout-contained
+compiler rounded surfaces: v1 surfaces=15 metadata-slots=74 aa-width=1px immutable-instance-slots
+compiler shadow surfaces: v1 layers=12 elevated-sources=6 immutable-shadow-instances=1pass
+compiler build attestation: source=fnv1a64:5a70fbae3a6a325a compiler_abi=noir-racket-ui-abi-v2 scene_abi=noir-scene-json-v2
+compiler font asset: face=noir-desktop-sans-18 page=2 glyphs=102 atlas=512x512 r8 activation=registered-inactive manifest=/home/ubuntu/noir_review/noir-racket-ui-statistical-analysis/assets/fontc/noir-desktop-sans-18/manifest.json atlas=/home/ubuntu/noir_review/noir-racket-ui-statistical-analysis/assets/fontc/noir-desktop-sans-18/atlas.r8
+compiler dynamic font cells: face=noir-table-body-mono-16 page=3 glyphs=37 tables=2 fixed_advance=10 atlas=256x256 manifest=/home/ubuntu/noir_review/noir-racket-ui-statistical-analysis/assets/fontc/noir-table-body-mono-16/manifest.json atlas=/home/ubuntu/noir_review/noir-racket-ui-statistical-analysis/assets/fontc/noir-table-body-mono-16/atlas.r8
+compiler font placement proof: active-page2-glyphs=197 registered-font-assets=1 mode=static-proportional-v1
+compiler visual language: preset=desktop-wide canvas=1280x720 margin=32 static-proof=layout-contained
+compiler virtual lists: operations-systems-stream capacity=4 viewport=4x32 row-tiles=[0, 1, 2, 3]; operations-alerts-stream capacity=3 viewport=3x32 row-tiles=[0, 1, 2]
+compiler state slots: 4 fixed value address(es), lexical ABI
+compiler action slots: 6 fixed action address(es), lexical ABI
+compiler release motion: tracks=5 recipe=80ms-ease-out fixed-fields=pos+color
+compiler visual language: preset=desktop-wide canvas=1280x720 margin=32 static-proof=layout-contained
+compiler scrollbar: id=operations-systems-scrollbar list=operations-systems-stream track=12x144+1196,182 thumb-height=24 max-viewport=9996 tiles=[6] worklist=2
+compiler scrollbar: id=operations-alerts-scrollbar list=operations-alerts-stream track=12x96+1196,182 thumb-height=24 max-viewport=2045 tiles=[6] worklist=2
+compiler list navigation: id=operations-systems-navigation list=operations-systems-stream scrollbar=operations-systems-scrollbar page-step=4 max-viewport=9996 tiles=[6] worklist=2
+compiler list navigation: id=operations-alerts-navigation list=operations-alerts-stream scrollbar=operations-alerts-scrollbar page-step=3 max-viewport=2045 tiles=[6] worklist=2
+compiler log browser: id=operations-systems-browser list=operations-systems-stream append=operations-systems-browser-append records=1 detail=operations-systems-detail glyph-cells=29 tiles=[0] worklist=2
+compiler log browser: id=operations-alerts-browser list=operations-alerts-stream append=operations-alerts-browser-append records=1 detail=operations-alerts-detail glyph-cells=29 tiles=[0] worklist=2
+compiler packet worklists: all-packets#0=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]; dynamic-packets#1=[4, 8, 9, 10, 11, 12, 15, 16, 17, 18]; no-packets#2=[]
+compiler navigation selection: rail=operations-rail state=operations-view slot=3 destinations=3 initial=operations-overview tiles=[4, 8, 16] no-packets
+compiler row activation: list=operations-systems-stream action=operations-open-systems-detail slot=2 batch=coalesced-activate-operations-systems-append-button tile-mask=0x0000000000000001 worklist=2
+compiler row activation: list=operations-alerts-stream action=operations-acknowledge-alert slot=0 batch=coalesced-activate-operations-alerts-ack-button tile-mask=0x0000000000000002 worklist=2
+compiler action tile selection: 6 action mask(s), 5 event transient mask(s), fixed-mask=u64
+compiler focus graph: no focusable fields
+compiler keyboard map: no editable focus fields
+compiler frame coalescing: 10 verified batch(es), 5 event batch pair(s)
+compiler text resources: 24 static shaped run(s), 3 dynamic text-run action(s)
+compiler overlay state: disabled entries=0
+compiler modal focus: disabled entries=0
+compiler modal focus visual: disabled entries=0
+compiler material workbench: v2 id=operations-workbench rail=operations-rail views=3 data-views=2 selected=operations-overview data-arenas=[("operations-systems-data-view", 0, 1, 66), ("operations-alerts-data-view", 1, 2, 66)] fixed-alpha-lanes=57 glyph-alpha-lanes=443 no-runtime-routing
+compiler workbench cross-view transaction: v1 id=operations-acknowledge-alert-transaction action=operations-acknowledge-alert slot=0 event=4 source=operations-alerts-data-view#operations-alerts-stream target=operations-overview-alert-ack-count glyph-lanes=8 row-color-lanes=3 tile-mask=0x43 executor=fixed-patch
+compiler acknowledged-row-state: v1 id=operations-acknowledged-alert-state data-view=operations-alerts-data-view list-index=1 owner-view=operations-alerts-view capacity=2048 words=32x64 color-lanes=3 detail-glyphs=29 tile-mask=0x43 table=fixed-zeroed
+material workbench initial alpha: selected=operations-overview hidden-instance-lanes=46 hidden-glyph-lanes=344 hidden-shadow-lanes=8
+compiler glyph placement resources: 487 placement instance(s), 13 page-aware packet(s), ABI=48 bytes
+compiler tile glyph culling: 7 scissor tile(s), 11 submitted subrange(s), 159 glyph instance(s)
+compiler resident packet worklist table: lists=3 payload_bytes=160 stride_bytes=256 hot_path_uploads=0
+compiler resident packet worklist table: lists=3 payload_bytes=160 stride_bytes=256 hot_path_uploads=0
+packet-activity-differential: selected=Scalar reference=Scalar packets=20 activity+indirect=equal
+font-atlas-upload: face=noir-desktop-sans-18 page=2 bytes=262144 sha256=cefe9a2dca8a41c0079a09db642619c411ef1b25b511b9bda567d9dbf1e3766d renderer=registered-inactive manifest=/home/ubuntu/noir_review/noir-racket-ui-statistical-analysis/assets/fontc/noir-desktop-sans-18/manifest.json atlas=/home/ubuntu/noir_review/noir-racket-ui-statistical-analysis/assets/fontc/noir-desktop-sans-18/atlas.r8
+dynamic-font-cell-atlas-upload: page=3 bytes=65536 glyphs=37 manifest=/home/ubuntu/noir_review/noir-racket-ui-statistical-analysis/assets/fontc/noir-table-body-mono-16/manifest.json atlas=/home/ubuntu/noir_review/noir-racket-ui-statistical-analysis/assets/fontc/noir-table-body-mono-16/atlas.r8
+compiler subgroup packets: 20 width-32 packet(s), vertex-subgroup-supported=false; packet draw fallback is always ABI-equivalent
+compiler packet activity: gpu-driven-indirect=true variant=Scalar adapter-subgroup=true wgsl-subgroup=false fixed activity-word/indirect-command ABI
+compiler timestamp query: supported=true
+scene-data-update-batch: id=operations-systems-bootstrap list=operations-systems-stream table=operations-systems-data updates=1 source=compiler-artifact
+list-interaction-patch: list=operations-systems-stream logical=0 physical=0 color_offset=1512 level=INFO selected=false hovered=false acknowledged=false
+list-interaction-patch: list=operations-systems-stream logical=1 physical=1 color_offset=1600 level=INFO selected=false hovered=false acknowledged=false
+list-interaction-patch: list=operations-systems-stream logical=2 physical=2 color_offset=1688 level=INFO selected=false hovered=false acknowledged=false
+list-interaction-patch: list=operations-systems-stream logical=3 physical=3 color_offset=1776 level=INFO selected=false hovered=false acknowledged=false
+data-update-batch: list=operations-systems-stream updates=1 visible=0 arena-only=1 gpu-glyph-writes=0 render-request=false
+scene-data-update-batch: id=operations-alerts-bootstrap list=operations-alerts-stream table=operations-alerts-data updates=1 source=compiler-artifact
+list-interaction-patch: list=operations-alerts-stream logical=0 physical=0 color_offset=2568 level=INFO selected=false hovered=false acknowledged=false
+list-interaction-patch: list=operations-alerts-stream logical=1 physical=1 color_offset=2656 level=INFO selected=false hovered=false acknowledged=false
+list-interaction-patch: list=operations-alerts-stream logical=2 physical=2 color_offset=2744 level=INFO selected=false hovered=false acknowledged=false
+data-update-batch: list=operations-alerts-stream updates=1 visible=0 arena-only=1 gpu-glyph-writes=0 render-request=false
+packet-activity-dispatch worklist=all-packets index=0 packets=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] workgroups=20 workgroup_size=32 output=activity+indirect
+glyph-direct-draw full packet=0 page=2 placements=[0..24) lanes=24 reason=page2-static-v1
+glyph-direct-draw full packet=1 page=2 placements=[24..44) lanes=20 reason=page2-static-v1
+glyph-direct-draw full packet=2 page=2 placements=[44..76) lanes=32 reason=page2-static-v1
+glyph-direct-draw full packet=2 page=2 placements=[76..77) lanes=1 reason=page2-static-v1
+glyph-direct-draw full packet=3 page=1 placements=[77..85) lanes=8 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw full packet=4 page=2 placements=[85..117) lanes=32 reason=page2-static-v1
+glyph-direct-draw full packet=4 page=2 placements=[117..143) lanes=26 reason=page2-static-v1
+glyph-direct-draw full packet=5 page=2 placements=[143..162) lanes=19 reason=page2-static-v1
+glyph-direct-draw full packet=6 page=3 placements=[162..194) lanes=32 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw full packet=6 page=3 placements=[194..226) lanes=32 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw full packet=6 page=3 placements=[226..258) lanes=32 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw full packet=6 page=3 placements=[258..290) lanes=32 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw full packet=7 page=1 placements=[290..319) lanes=29 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw full packet=8 page=2 placements=[319..330) lanes=11 reason=page2-static-v1
+glyph-direct-draw full packet=9 page=2 placements=[330..351) lanes=21 reason=page2-static-v1
+glyph-direct-draw full packet=10 page=3 placements=[351..383) lanes=32 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw full packet=10 page=3 placements=[383..415) lanes=32 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw full packet=10 page=3 placements=[415..447) lanes=32 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw full packet=11 page=1 placements=[447..476) lanes=29 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw full packet=12 page=2 placements=[476..487) lanes=11 reason=page2-static-v1
+noir-winit-host: 74 quad instances, 487 glyph placement(s), 13 packet(s), profile=noir-static-cost-v1
+material-workbench list-input-gated: active-view=operations-overview requested-list=0 owner-view=operations-systems
+material-workbench list-input-gated: active-view=operations-overview requested-list=1 owner-view=operations-alerts
+material-workbench list-input-gated: active-view=operations-overview requested-list=0 owner-view=operations-systems
+material-workbench list-input-gated: active-view=operations-overview requested-list=1 owner-view=operations-alerts
+event-map hover: slot 2 / operations-alerts$target
+render-request-enqueue hover: mask=0x0000000000000010 strategy=None worklist=2
+coalesced-batch execute: coalesced-press-operations-alerts$target refs=[Transient(0), Transient(5)] worklist_slots=[2, 2]
+coalesced-batch task-worklist-slot: task=Transient(0) index=2
+coalesced-batch task-worklist-slot: task=Transient(5) index=2
+coalesced-winner transient pressed-operations-alerts$target: [484..492)
+coalesced-winner transient pressed-operations-alerts$target: [500..516)
+coalesced-batch composite-worklist: batch=coalesced-press-operations-alerts$target slot=2 members=[] packets=[]
+render-request-coalesce coalesced-press-operations-alerts$target: mask=0x0000000000000010 strategy=None worklist=2
+material-workbench list-input-gated: active-view=operations-overview requested-list=0 owner-view=operations-systems
+material-workbench list-input-gated: active-view=operations-overview requested-list=1 owner-view=operations-alerts
+coalesced-batch execute: coalesced-activate-operations-alerts$target refs=[Transient(10), Action(3)] worklist_slots=[2, 2]
+coalesced-batch task-worklist-slot: task=Transient(10) index=2
+coalesced-winner transient release-operations-alerts$target: [484..492) motion=scheduled
+release-motion start: id=release-operations-alerts$target event-slot=2 duration-ms=80 tile-mask=0x0000000000000010
+coalesced-winner transient release-operations-alerts$target: [500..516) motion=scheduled
+coalesced-batch task-worklist-slot: task=Action(3) index=2
+event-map dispatch: operations-select-alerts
+state-slot write: action=operations-select-alerts state=operations-view index=3 op=set value=2
+coalesced-batch composite-worklist: batch=coalesced-activate-operations-alerts$target slot=2 members=[] packets=[]
+compiler strategy dispatch: batch=coalesced-activate-operations-alerts$target strategy=coalesced worklist=2
+render-request-enqueue coalesced-activate-operations-alerts$target: mask=0x0000000000000010 strategy=Some(Coalesced) worklist=2
+material-workbench view-switch: old=operations-overview new=operations-alerts instance-alpha-patches=33 glyph-alpha-patches=256 shadow-alpha-patches=8 tile-mask=0x0000000000000063
+navigation-selection render-coalesce: mask=0x0000000000000077 worklist=no-packets
+navigation-selection: rail=operations-rail old=operations-overview new=operations-alerts state-slot=3 target=2 color-patches=2 workbench-mask=0x0000000000000063 tile-mask=0x0000000000000077 worklist=no-packets
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+tile-redraw selected-mask=0x0000000000000077
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=7 page=1 placements=[290..319) lanes=29 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw tile=0 packet=11 page=1 placements=[447..476) lanes=29 reason=no-vertex-subgroup-compatible-direct
+tile-submit tile=1
+glyph-direct-draw tile=1 packet=3 page=1 placements=[77..85) lanes=8 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw tile=1 packet=6 page=3 placements=[194..216) lanes=32 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw tile=1 packet=10 page=3 placements=[383..405) lanes=32 reason=no-vertex-subgroup-compatible-direct
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+tile-submit tile=5
+glyph-direct-draw tile=5 packet=8 page=2 placements=[319..330) lanes=11 reason=page2-static-v1
+glyph-direct-draw tile=5 packet=12 page=2 placements=[476..487) lanes=11 reason=page2-static-v1
+tile-submit tile=6
+glyph-direct-draw tile=6 packet=4 page=2 placements=[118..121) lanes=26 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+release-motion complete: id=release-operations-alerts$target event-slot=2 frames=bounded
+render-request-enqueue release-motion: mask=0x0000000000000010 strategy=None worklist=2
+material-workbench list-input-gated: active-view=operations-alerts requested-list=0 owner-view=operations-systems
+list-interaction-patch: list=operations-alerts-stream logical=0 physical=0 color_offset=2568 level=INFO selected=false hovered=true acknowledged=false
+render-request-enqueue list-hover: mask=0x0000000000000000 strategy=None worklist=2
+material-workbench list-input-gated: active-view=operations-alerts requested-list=0 owner-view=operations-systems
+list-interaction-patch: list=operations-alerts-stream logical=0 physical=0 color_offset=2568 level=INFO selected=true hovered=true acknowledged=false
+render-request-enqueue log-browser-detail: mask=0x0000000000000001 strategy=None worklist=2
+log-browser detail: id=operations-alerts-browser logical=0 level=INFO glyph-writes=29 tile-mask=0x0000000000000001 worklist=2 acknowledged=false
+render-request-enqueue list-selection: mask=0x0000000000000000 strategy=None worklist=2
+list-selection: list=operations-alerts-stream logical=0 physical=0
+material-workbench list-input-gated: active-view=operations-alerts requested-list=0 owner-view=operations-systems
+row-activation: list=operations-alerts-stream logical=0 physical=0 action-slot=0 batch=coalesced-activate-operations-alerts-ack-button action-tile-mask=0x0000000000000002 worklist=2
+render-request-enqueue workbench-cross-view-transaction: mask=0x0000000000000043 strategy=None worklist=2
+workbench-cross-view-transaction: id=operations-acknowledge-alert-transaction origin=row-activation action=operations-acknowledge-alert slot=0 event=None alerts-logical=0 physical=0 ack-word=0 ack-bit=0x0000000000000001 state=0=>1 state-writes=1 row-color-writes=1 detail-glyph-writes=29 overview-count-glyph-writes=8 tile-mask=0x0000000000000043 worklist=no-packets
+row-activation cross-view: list=operations-alerts-stream logical=0 physical=0 executed=true
+tile-redraw selected-mask=0x0000000000000010
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+virtual-list scroll-submit: list=operations-alerts-stream viewport=0 scissor=956x96+256,182 quad-ranges=3 quad-instances=6 glyph-subranges=3 glyph-placements=96 worklist=no-packets
+tile-redraw selected-mask=0x0000000000000001
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=7 page=1 placements=[290..319) lanes=29 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw tile=0 packet=11 page=1 placements=[447..476) lanes=29 reason=no-vertex-subgroup-compatible-direct
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+virtual-list scroll-submit: list=operations-alerts-stream viewport=0 scissor=956x96+256,182 quad-ranges=3 quad-instances=6 glyph-subranges=3 glyph-placements=96 worklist=no-packets
+tile-redraw selected-mask=0x0000000000000043
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=7 page=1 placements=[290..319) lanes=29 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw tile=0 packet=11 page=1 placements=[447..476) lanes=29 reason=no-vertex-subgroup-compatible-direct
+tile-submit tile=1
+glyph-direct-draw tile=1 packet=3 page=1 placements=[77..85) lanes=8 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw tile=1 packet=6 page=3 placements=[194..216) lanes=32 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw tile=1 packet=10 page=3 placements=[383..405) lanes=32 reason=no-vertex-subgroup-compatible-direct
+tile-submit tile=6
+glyph-direct-draw tile=6 packet=4 page=2 placements=[118..121) lanes=26 reason=page2-static-v1
+material-workbench list-input-gated: active-view=operations-alerts requested-list=0 owner-view=operations-systems
+list-interaction-patch: list=operations-alerts-stream logical=3 physical=0 color_offset=2568 level=INFO selected=false hovered=false acknowledged=false
+list-interaction-patch: list=operations-alerts-stream logical=4 physical=1 color_offset=2656 level=INFO selected=false hovered=false acknowledged=false
+list-interaction-patch: list=operations-alerts-stream logical=5 physical=2 color_offset=2744 level=INFO selected=false hovered=false acknowledged=false
+compact-register scroll: list=operations-alerts-stream table=operations-alerts-data capacity=2048 target=3 row-tiles=[0, 1, 2] physical-slots=3 glyph-id-patches=96 template=ring-v1
+render-request-enqueue list-navigation-plan: mask=0x0000000000000000 strategy=None worklist=2
+render-request-enqueue scrollbar-thumb-scroll-sync: mask=0x0000000000000040 strategy=None worklist=2
+scrollbar-thumb-sync: id=operations-alerts-scrollbar list=operations-alerts-stream viewport=3 thumb-offset=2860 tile-mask=0x0000000000000040 worklist=no-packets
+list-navigation-plan: id=operations-alerts-navigation key=PageDown list=operations-alerts-stream from=0 to=3 page-step=3 tile-mask=0x0000000000000040 worklist=no-packets
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+virtual-list scroll-submit: list=operations-alerts-stream viewport=3 scissor=956x96+256,182 quad-ranges=3 quad-instances=6 glyph-subranges=3 glyph-placements=96 worklist=no-packets
+tile-redraw selected-mask=0x0000000000000040
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=6
+glyph-direct-draw tile=6 packet=4 page=2 placements=[118..121) lanes=26 reason=page2-static-v1
+material-workbench list-input-gated: active-view=operations-alerts requested-list=0 owner-view=operations-systems
+list-interaction-patch: list=operations-alerts-stream logical=0 physical=0 color_offset=2568 level=INFO selected=true hovered=true acknowledged=true
+list-interaction-patch: list=operations-alerts-stream logical=1 physical=1 color_offset=2656 level=INFO selected=false hovered=false acknowledged=false
+list-interaction-patch: list=operations-alerts-stream logical=2 physical=2 color_offset=2744 level=INFO selected=false hovered=false acknowledged=false
+compact-register scroll: list=operations-alerts-stream table=operations-alerts-data capacity=2048 target=0 row-tiles=[0, 1, 2] physical-slots=3 glyph-id-patches=96 template=ring-v1
+render-request-enqueue list-navigation-plan: mask=0x0000000000000000 strategy=None worklist=2
+render-request-enqueue scrollbar-thumb-scroll-sync: mask=0x0000000000000040 strategy=None worklist=2
+scrollbar-thumb-sync: id=operations-alerts-scrollbar list=operations-alerts-stream viewport=0 thumb-offset=2860 tile-mask=0x0000000000000040 worklist=no-packets
+list-navigation-plan: id=operations-alerts-navigation key=Home list=operations-alerts-stream from=3 to=0 page-step=3 tile-mask=0x0000000000000040 worklist=no-packets
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+virtual-list scroll-submit: list=operations-alerts-stream viewport=0 scissor=956x96+256,182 quad-ranges=3 quad-instances=6 glyph-subranges=3 glyph-placements=96 worklist=no-packets
+tile-redraw selected-mask=0x0000000000000040
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=6
+glyph-direct-draw tile=6 packet=4 page=2 placements=[118..121) lanes=26 reason=page2-static-v1
+material-workbench list-input-gated: active-view=operations-alerts requested-list=0 owner-view=operations-systems
+row-activation: list=operations-alerts-stream logical=0 physical=0 action-slot=0 batch=coalesced-activate-operations-alerts-ack-button action-tile-mask=0x0000000000000002 worklist=2
+workbench-cross-view-transaction-gated: id=operations-acknowledge-alert-transaction origin=row-activation reason=already-acknowledged logical=0 word=0 bit=0x0000000000000001 state-writes=0 gpu-writes=0
+row-activation cross-view: list=operations-alerts-stream logical=0 physical=0 executed=false
+material-workbench list-input-gated: active-view=operations-alerts requested-list=0 owner-view=operations-systems
+list-interaction-patch: list=operations-alerts-stream logical=0 physical=0 color_offset=2568 level=INFO selected=true hovered=false acknowledged=true
+event-map hover: slot 0 / operations-overview$target
+render-request-enqueue hover: mask=0x0000000000000014 strategy=None worklist=2
+coalesced-batch execute: coalesced-press-operations-overview$target refs=[Transient(2), Transient(7)] worklist_slots=[2, 2]
+coalesced-batch task-worklist-slot: task=Transient(2) index=2
+coalesced-batch task-worklist-slot: task=Transient(7) index=2
+coalesced-winner transient pressed-operations-overview$target: [132..140)
+coalesced-winner transient pressed-operations-overview$target: [148..164)
+coalesced-batch composite-worklist: batch=coalesced-press-operations-overview$target slot=2 members=[] packets=[]
+render-request-coalesce coalesced-press-operations-overview$target: mask=0x0000000000000014 strategy=None worklist=2
+material-workbench list-input-gated: active-view=operations-alerts requested-list=0 owner-view=operations-systems
+coalesced-batch execute: coalesced-activate-operations-overview$target refs=[Transient(12), Action(4)] worklist_slots=[2, 2]
+coalesced-batch task-worklist-slot: task=Transient(12) index=2
+coalesced-winner transient release-operations-overview$target: [132..140) motion=scheduled
+release-motion start: id=release-operations-overview$target event-slot=0 duration-ms=80 tile-mask=0x0000000000000004
+coalesced-winner transient release-operations-overview$target: [148..164) motion=scheduled
+coalesced-batch task-worklist-slot: task=Action(4) index=2
+event-map dispatch: operations-select-overview
+state-slot write: action=operations-select-overview state=operations-view index=3 op=set value=0
+coalesced-batch composite-worklist: batch=coalesced-activate-operations-overview$target slot=2 members=[] packets=[]
+compiler strategy dispatch: batch=coalesced-activate-operations-overview$target strategy=coalesced worklist=2
+render-request-enqueue coalesced-activate-operations-overview$target: mask=0x0000000000000004 strategy=Some(Coalesced) worklist=2
+material-workbench view-switch: old=operations-alerts new=operations-overview instance-alpha-patches=33 glyph-alpha-patches=256 shadow-alpha-patches=8 tile-mask=0x0000000000000063
+navigation-selection render-coalesce: mask=0x0000000000000077 worklist=no-packets
+navigation-selection: rail=operations-rail old=operations-alerts new=operations-overview state-slot=3 target=0 color-patches=2 workbench-mask=0x0000000000000063 tile-mask=0x0000000000000077 worklist=no-packets
+tile-redraw selected-mask=0x0000000000000014
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+tile-redraw selected-mask=0x0000000000000077
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=0
+glyph-direct-draw tile=0 packet=7 page=1 placements=[290..319) lanes=29 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw tile=0 packet=11 page=1 placements=[447..476) lanes=29 reason=no-vertex-subgroup-compatible-direct
+tile-submit tile=1
+glyph-direct-draw tile=1 packet=3 page=1 placements=[77..85) lanes=8 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw tile=1 packet=6 page=3 placements=[194..216) lanes=32 reason=no-vertex-subgroup-compatible-direct
+glyph-direct-draw tile=1 packet=10 page=3 placements=[383..405) lanes=32 reason=no-vertex-subgroup-compatible-direct
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+tile-submit tile=4
+glyph-direct-draw tile=4 packet=0 page=2 placements=[17..24) lanes=24 reason=page2-static-v1
+tile-submit tile=5
+glyph-direct-draw tile=5 packet=8 page=2 placements=[319..330) lanes=11 reason=page2-static-v1
+glyph-direct-draw tile=5 packet=12 page=2 placements=[476..487) lanes=11 reason=page2-static-v1
+tile-submit tile=6
+glyph-direct-draw tile=6 packet=4 page=2 placements=[118..121) lanes=26 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2
+tile-redraw selected-mask=0x0000000000000004
+packet-activity-skip worklist=no-packets index=2 packets=[] reason=compiler-empty
+tile-submit tile=2
+glyph-direct-draw tile=2 packet=0 page=2 placements=[0..9) lanes=24 reason=page2-static-v1
+release-motion complete: id=release-operations-overview$target event-slot=0 frames=bounded
+render-request-enqueue release-motion: mask=0x0000000000000004 strategy=None worklist=2

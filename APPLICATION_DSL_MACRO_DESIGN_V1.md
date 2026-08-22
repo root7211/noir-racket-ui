@@ -39,7 +39,7 @@ profile是编译期离散选择，不是任意数值参数。v1故意拒绝裸`#
 
 宏生成的低层计划包括：状态/action、两个list navigation、两个log browser、三view workbench、唯一cross-view transaction、`acknowledged_row_state_plan`、Material rail、Overview计数端点、两个虚拟列表、两张detail card和固定overlay。下游compiler继续从该静态树导出所有glyph、instance、tile、state slot和proof witness。
 
-Alerts的`#:row-state acknowledged`仅表达二值业务域。编译器从profile的Alerts逻辑容量推导`ceil(capacity / 64)`个固定`u64`状态word，并绑定唯一Alerts owner view、当前物理row颜色lane、detail glyph范围和确认事务tile并集。应用作者不写row→word映射、recycle恢复地址或GPU offset。当前交付只完成该计划的Racket lowering与Scene proof；Rust word表、确认写入和滚动recycle恢复执行器将在后续宿主阶段接入。
+Alerts的`#:row-state acknowledged`仅表达二值业务域。编译器从profile的Alerts逻辑容量推导`ceil(capacity / 64)`个固定`u64`状态word，并绑定唯一Alerts owner view、当前物理row颜色lane、detail glyph范围和确认事务tile并集。应用作者不写row→word映射、recycle恢复地址或GPU offset。Rust宿主已将该计划准入为不可扩张的固定word表：首次确认仅置位一枚bit并提交预证明写集；重复确认零写入；滚动recycle按同一bit恢复当前物理槽与详情端点。
 
 ## 拒绝语义
 
