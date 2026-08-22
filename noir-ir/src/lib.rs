@@ -369,3 +369,171 @@ mod tests {
         assert_eq!(ack.logical_capacity.div_ceil(ack.word_bits), 2);
     }
 }
+
+
+/// Semantic subset owned by the first Rust compiler pass. Unlike `CanonicalProjection`,
+/// it intentionally excludes Racket-only layout, glyph-placement and GPU-address details.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileLoweringProjection {
+    pub app_id: String,
+    pub profile: String,
+    pub workbench: ProfileWorkbench,
+    pub transaction: ProfileTransaction,
+    pub acknowledged_row_state: ProfileAcknowledged,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileWorkbench {
+    pub id: String,
+    pub rail_id: String,
+    pub initial_value: usize,
+    pub views: Vec<ProfileView>,
+    pub data_views: Vec<ProfileDataView>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileView {
+    pub id: String,
+    pub value: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileDataView {
+    pub id: String,
+    pub list_id: String,
+    pub owner_view_id: String,
+    pub list_index: usize,
+    pub logical_capacity: usize,
+    pub physical_slots: usize,
+    pub visible_rows: usize,
+    pub scrollbar_id: String,
+    pub navigation_id: String,
+    pub log_browser_id: String,
+    pub row_activation_action: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileTransaction {
+    pub id: String,
+    pub action_id: String,
+    pub action_slot_index: usize,
+    pub state_id: String,
+    pub state_index: usize,
+    pub delta: i64,
+    pub source_data_view_id: String,
+    pub source_list_id: String,
+    pub source_view_id: String,
+    pub target_view_id: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileAcknowledged {
+    pub id: String,
+    pub data_view_id: String,
+    pub list_id: String,
+    pub owner_view_id: String,
+    pub logical_capacity: usize,
+    pub state_domain: Vec<String>,
+    pub word_bits: usize,
+    pub word_count: usize,
+    pub acknowledge_action_id: String,
+    pub action_slot_index: usize,
+}
+
+pub fn canonical_profile_json(projection: &ProfileLoweringProjection) -> Result<String> {
+    Ok(format!("{}\n", serde_json::to_string_pretty(projection).context("serialize canonical profile lowering")?))
+}
+
+pub fn parse_profile_json(text: &str) -> Result<ProfileLoweringProjection> {
+    serde_json::from_str(text).context("deserialize canonical profile lowering")
+}
+
+pub fn validate_profile_projection(projection: &ProfileLoweringProjection) -> Result<()> {
+    if !is_valid_app_id(&projection.app_id) {
+        bail!("noir-ir invalid application identifier {}", projection.app_id);
+    }
+    let expected = match projection.profile.as_str() {
+        "standard" => (10_000, 4, 2_048, 3),
+        "compact" => (2_048, 3, 512, 3),
+        other => bail!("noir-ir unsupported profile {other}"),
+    };
+    if projection.workbench.id != format!("{}-workbench", projection.app_id)
+        || projection.workbench.rail_id != format!("{}-rail", projection.app_id)
+        || projection.workbench.initial_value != 0
+        || projection.workbench.views.len() != 3
+        || projection.workbench.data_views.len() != 2
+    {
+        bail!("noir-ir profile workbench shape mismatch");
+    }
+    let expected_views = [
+        (format!("{}-overview-view", projection.app_id), 0),
+        (format!("{}-systems-view", projection.app_id), 1),
+        (format!("{}-alerts-view", projection.app_id), 2),
+    ];
+    if projection.workbench.views.iter().map(|view| (view.id.clone(), view.value)).collect::<Vec<_>>() != expected_views {
+        bail!("noir-ir profile resident view endpoints mismatch");
+    }
+    let systems = &projection.workbench.data_views[0];
+    let alerts = &projection.workbench.data_views[1];
+    validate_profile_data_view(systems, &projection.app_id, "systems", 0, expected.0, expected.1)?;
+    validate_profile_data_view(alerts, &projection.app_id, "alerts", 1, expected.2, expected.3)?;
+    if projection.transaction.id != format!("{}-acknowledge-alert-transaction", projection.app_id)
+        || projection.transaction.action_id != format!("{}-acknowledge-alert", projection.app_id)
+        || projection.transaction.action_slot_index != 0
+        || projection.transaction.state_id != format!("{}-alert-ack-count", projection.app_id)
+        || projection.transaction.state_index != 0
+        || projection.transaction.delta != 1
+        || projection.transaction.source_data_view_id != alerts.id
+        || projection.transaction.source_list_id != alerts.list_id
+        || projection.transaction.source_view_id != alerts.owner_view_id
+        || projection.transaction.target_view_id != format!("{}-overview-view", projection.app_id)
+    {
+        bail!("noir-ir profile transaction mismatch");
+    }
+    let ack = &projection.acknowledged_row_state;
+    if ack.id != format!("{}-acknowledged-alert-state", projection.app_id)
+        || ack.data_view_id != alerts.id
+        || ack.list_id != alerts.list_id
+        || ack.owner_view_id != alerts.owner_view_id
+        || ack.logical_capacity != alerts.logical_capacity
+        || ack.state_domain != ["open", "acknowledged"]
+        || ack.word_bits != 64
+        || ack.word_count != ack.logical_capacity.div_ceil(ack.word_bits)
+        || ack.acknowledge_action_id != projection.transaction.action_id
+        || ack.action_slot_index != projection.transaction.action_slot_index
+    {
+        bail!("noir-ir profile acknowledged-row-state mismatch");
+    }
+    Ok(())
+}
+
+fn is_valid_app_id(id: &str) -> bool {
+    let mut chars = id.chars();
+    matches!(chars.next(), Some(ch) if ch.is_ascii_lowercase())
+        && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
+}
+
+fn validate_profile_data_view(view: &ProfileDataView, app_id: &str, kind: &str, index: usize, capacity: usize, slots: usize) -> Result<()> {
+    if view.id != format!("{app_id}-{kind}-data-view")
+        || view.list_id != format!("{app_id}-{kind}-stream")
+        || view.owner_view_id != format!("{app_id}-{kind}-view")
+        || view.list_index != index
+        || view.logical_capacity != capacity
+        || view.physical_slots != slots
+        || view.visible_rows != slots
+        || view.scrollbar_id != format!("{app_id}-{kind}-scrollbar")
+        || view.navigation_id != format!("{app_id}-{kind}-navigation")
+        || view.log_browser_id != format!("{app_id}-{kind}-browser")
+    {
+        bail!("noir-ir profile {kind} data-view mismatch");
+    }
+    let expected_action = if kind == "alerts" {
+        format!("{app_id}-acknowledge-alert")
+    } else {
+        format!("{app_id}-open-systems-detail")
+    };
+    if view.row_activation_action != expected_action {
+        bail!("noir-ir profile {kind} row activation mismatch");
+    }
+    Ok(())
+}
