@@ -1,0 +1,20 @@
+[package]
+name = "noir-ir"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.87"
+description = "Canonical Noir Scene IR projection and Racket/Rust differential oracle"
+license = "MIT"
+
+[lib]
+name = "noir_ir"
+path = "src/lib.rs"
+
+[[bin]]
+name = "noir-ir"
+path = "src/bin/noir_ir.rs"
+
+[dependencies]
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

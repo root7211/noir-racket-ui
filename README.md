@@ -226,6 +226,10 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `tools/verify_acknowledged_row_state_executor_v1.sh` | 确认行状态一键回归：双profile Scene oracle、Rust admission、四类篡改拒绝、真实X11/Vulkan确认/recycle/幂等验证。 |
 | `tools/verify_application_layer_dsl_v1.py` | 标准/compact应用层Scene的容量、所有权、stable ID、跨视图事务与确认行状态bitset结构oracle。 |
 | `tools/verify_application_layer_dsl_v1.sh` | 应用层DSL一键回归：禁止应用源码暴露低层资源参数、双profile导出、Racket测试、Rust构建与真实X11/Vulkan启动。 |
+| `noir-ir/` | 纯Rust 1.87的强类型Scene子集、canonical投影和差分CLI；不依赖wgpu、winit或X11。 |
+| `NOIR_IR_DIFFERENTIAL_ORACLE_V1.md` | Racket/Rust Scene差分范围、golden策略和分阶段Rust迁移边界。 |
+| `tools/export_noir_ir_projection.rkt` | 独立Racket canonical投影器；只导出双arena、确认事务与确认状态的迁移关键字段。 |
+| `tools/verify_noir_ir_differential_v1.sh` | 标准/compact应用层Scene的Racket/Rust投影、golden和word几何负例一键差分回归。 |
 | `MODAL_FOCUS_VISUAL_PLAN_ABI_V1.md` | 预分配modal focus ring的Scene ABI、启动期proof、GPU metadata与固定alpha写集规范。 |
 | `MODAL_FOCUS_VISUAL_PLAN_V1_REPORT.md` | focus视觉交付结果、真实X11/Vulkan截图证据、篡改拒绝与兼容回归报告。 |
 | `tools/make_overlay_state_v1_comparison.py` | 将关闭、打开与Escape关闭的真实X11/Vulkan端点生成审阅对照板。 |
