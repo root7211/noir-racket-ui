@@ -537,3 +537,118 @@ fn validate_profile_data_view(view: &ProfileDataView, app_id: &str, kind: &str, 
     }
     Ok(())
 }
+
+
+/// Profile-derived geometry and glyph-budget subset migrated by the second Rust lowering pass.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileLayoutGlyphProjection {
+    pub semantic: ProfileLoweringProjection,
+    pub canvas: ProfileCanvas,
+    pub rail: ProfileRect,
+    pub resident_views: Vec<ProfileRectEndpoint>,
+    pub data_viewports: Vec<ProfileRectEndpoint>,
+    pub acknowledged_count: ProfileGlyphEndpoint,
+    pub glyph_summary: ProfileGlyphSummary,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileCanvas {
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileRect {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileRectEndpoint {
+    pub id: String,
+    pub rect: ProfileRect,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileGlyphEndpoint {
+    pub node_id: String,
+    pub rect: ProfileRect,
+    pub glyph_count: usize,
+    pub first_byte_offset: usize,
+    pub last_byte_offset: usize,
+    pub stride_bytes: usize,
+    pub face_id: Option<String>,
+    pub atlas_page: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileGlyphSummary {
+    pub placement_count: usize,
+    pub dynamic_placement_count: usize,
+    pub face_ids: Vec<String>,
+    pub atlas_pages: Vec<u32>,
+}
+
+pub fn canonical_layout_glyph_json(projection: &ProfileLayoutGlyphProjection) -> Result<String> {
+    Ok(format!("{}\n", serde_json::to_string_pretty(projection).context("serialize canonical layout glyph projection")?))
+}
+
+pub fn parse_layout_glyph_json(text: &str) -> Result<ProfileLayoutGlyphProjection> {
+    serde_json::from_str(text).context("deserialize canonical layout glyph projection")
+}
+
+pub fn validate_layout_glyph_projection(projection: &ProfileLayoutGlyphProjection) -> Result<()> {
+    validate_profile_projection(&projection.semantic)?;
+    if projection.canvas != (ProfileCanvas { width: 1280, height: 720 })
+        || projection.rail != (ProfileRect { x: 32, y: 32, width: 180, height: 656 })
+    {
+        bail!("noir-ir profile canvas or rail geometry mismatch");
+    }
+    let app = &projection.semantic.app_id;
+    let expected_views = vec![
+        ProfileRectEndpoint { id: format!("{app}-overview-view"), rect: ProfileRect { x: 236, y: 104, width: 996, height: 560 } },
+        ProfileRectEndpoint { id: format!("{app}-systems-view"), rect: ProfileRect { x: 236, y: 104, width: 996, height: 560 } },
+        ProfileRectEndpoint { id: format!("{app}-alerts-view"), rect: ProfileRect { x: 236, y: 104, width: 996, height: 560 } },
+    ];
+    if projection.resident_views != expected_views {
+        bail!("noir-ir profile resident view geometry mismatch");
+    }
+    let systems_height = if projection.semantic.profile == "standard" { 128 } else { 96 };
+    let expected_viewports = vec![
+        ProfileRectEndpoint { id: format!("{app}-systems-stream"), rect: ProfileRect { x: 256, y: 182, width: 956, height: systems_height } },
+        ProfileRectEndpoint { id: format!("{app}-alerts-stream"), rect: ProfileRect { x: 256, y: 182, width: 956, height: 96 } },
+    ];
+    if projection.data_viewports != expected_viewports {
+        bail!("noir-ir profile data viewport geometry mismatch");
+    }
+    let (placements, dynamic, first_byte) = if projection.semantic.profile == "standard" {
+        (487, 290, 2464)
+    } else {
+        (463, 258, 2720)
+    };
+    let expected_ack = ProfileGlyphEndpoint {
+        node_id: format!("{app}-overview-alert-ack-count"),
+        rect: ProfileRect { x: 260, y: 228, width: 238, height: 40 },
+        glyph_count: 8,
+        first_byte_offset: first_byte,
+        last_byte_offset: first_byte + 7 * 32,
+        stride_bytes: 32,
+        face_id: None,
+        atlas_page: 1,
+    };
+    if projection.acknowledged_count != expected_ack {
+        bail!("noir-ir profile acknowledged count glyph endpoint mismatch");
+    }
+    let expected_summary = ProfileGlyphSummary {
+        placement_count: placements,
+        dynamic_placement_count: dynamic,
+        face_ids: vec!["noir-desktop-sans-18".into(), "noir-table-body-mono-16".into()],
+        atlas_pages: vec![1, 2, 3],
+    };
+    if projection.glyph_summary != expected_summary {
+        bail!("noir-ir profile glyph summary mismatch");
+    }
+    Ok(())
+}

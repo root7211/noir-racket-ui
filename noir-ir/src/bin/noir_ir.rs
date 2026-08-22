@@ -1,11 +1,11 @@
 use anyhow::{bail, Context, Result};
-use noir_ir::{canonical_json, parse_canonical_json, parse_profile_json, projection_from_scene_path, validate_profile_projection};
+use noir_ir::{canonical_json, parse_canonical_json, parse_layout_glyph_json, parse_profile_json, projection_from_scene_path, validate_layout_glyph_projection, validate_profile_projection};
 use std::env;
 use std::fs;
 use std::path::Path;
 
 fn usage() -> ! {
-    eprintln!("usage:\n  noir-ir project SCENE OUTPUT\n  noir-ir diff LEFT_PROJECTION RIGHT_PROJECTION\n  noir-ir verify-golden SCENE GOLDEN_PROJECTION\n  noir-ir diff-profile LEFT_PROFILE RIGHT_PROFILE\n  noir-ir verify-profile PROFILE");
+    eprintln!("usage:\n  noir-ir project SCENE OUTPUT\n  noir-ir diff LEFT_PROJECTION RIGHT_PROJECTION\n  noir-ir verify-golden SCENE GOLDEN_PROJECTION\n  noir-ir diff-profile LEFT_PROFILE RIGHT_PROFILE\n  noir-ir verify-profile PROFILE\n  noir-ir diff-layout-glyph LEFT RIGHT\n  noir-ir verify-layout-glyph PROJECTION");
     std::process::exit(2);
 }
 
@@ -17,6 +17,11 @@ fn read_projection(path: &Path) -> Result<noir_ir::CanonicalProjection> {
 fn read_profile(path: &Path) -> Result<noir_ir::ProfileLoweringProjection> {
     let text = fs::read_to_string(path).with_context(|| format!("read profile projection {}", path.display()))?;
     parse_profile_json(&text).with_context(|| format!("parse profile projection {}", path.display()))
+}
+
+fn read_layout_glyph(path: &Path) -> Result<noir_ir::ProfileLayoutGlyphProjection> {
+    let text = fs::read_to_string(path).with_context(|| format!("read layout glyph projection {}", path.display()))?;
+    parse_layout_glyph_json(&text).with_context(|| format!("parse layout glyph projection {}", path.display()))
 }
 
 fn main() -> Result<()> {
@@ -61,6 +66,21 @@ fn main() -> Result<()> {
             let profile = read_profile(Path::new(&args[1]))?;
             validate_profile_projection(&profile)?;
             println!("NOIR_IR_PROFILE: PASS profile={}", args[1]);
+        }
+        "diff-layout-glyph" if args.len() == 3 => {
+            let left = read_layout_glyph(Path::new(&args[1]))?;
+            let right = read_layout_glyph(Path::new(&args[2]))?;
+            validate_layout_glyph_projection(&left)?;
+            validate_layout_glyph_projection(&right)?;
+            if left != right {
+                bail!("NOIR_IR_LAYOUT_GLYPH_DIFFERENTIAL: FAIL left={} right={}", args[1], args[2]);
+            }
+            println!("NOIR_IR_LAYOUT_GLYPH_DIFFERENTIAL: PASS left={} right={}", args[1], args[2]);
+        }
+        "verify-layout-glyph" if args.len() == 2 => {
+            let projection = read_layout_glyph(Path::new(&args[1]))?;
+            validate_layout_glyph_projection(&projection)?;
+            println!("NOIR_IR_LAYOUT_GLYPH: PASS projection={}", args[1]);
         }
         _ => usage(),
     }

@@ -230,11 +230,15 @@ Noir的`app-shell`、`surface`、`toolbar`、`table-header`、`status-pill`和`d
 | `NOIR_IR_DIFFERENTIAL_ORACLE_V1.md` | Racket/Rust Scene差分范围、golden策略和分阶段Rust迁移边界。 |
 | `tools/export_noir_ir_projection.rkt` | 独立Racket canonical投影器；只导出双arena、确认事务与确认状态的迁移关键字段。 |
 | `tools/verify_noir_ir_differential_v1.sh` | 标准/compact应用层Scene的Racket/Rust投影、golden和word几何负例一键差分回归。 |
-| `noir-compiler/` | 首个纯Rust前端pass：仅从应用ID与离散profilelower双arena、确认事务和确认状态语义计划；不依赖渲染器。 |
+| `noir-compiler/` | 两个纯Rust 1.87前端pass：先从应用ID与离散profile lower双arena、确认事务和确认状态语义计划，再lower关键静态布局与glyph摘要；均不依赖渲染器。 |
 | `NOIR_COMPILER_PROFILE_LOWERING_V1.md` | Rust profile lowering输入、等价性范围、受限命名规则和完整Scene非目标边界。 |
 | `NOIR_COMPILER_PROFILE_LOWERING_V1_REPORT.md` | 标准/compact Racket-Rust语义等价、非法输入与word几何负例的交付报告。 |
 | `tools/export_noir_compiler_profile_plan.rkt` | 从Racket完整Scene独立抽取Rust首个pass应等价的profile语义计划。 |
 | `tools/verify_noir_compiler_profile_lowering_v1.sh` | 构建两个Rust crate、标准/compact双端profile差分、非法profile/ID和word几何拒绝的一键回归。 |
+| `NOIR_COMPILER_LAYOUT_GLYPH_LOWERING_V1.md` | 第二pass的关键几何、glyph预算与确认计数范围合同，以及完整布局/塑形/GPU资源的明确非目标。 |
+| `NOIR_COMPILER_LAYOUT_GLYPH_LOWERING_V1_REPORT.md` | 第二pass的标准/compact布局–glyph差分、负向篡改与迁移边界交付报告。 |
+| `tools/export_noir_compiler_layout_glyph_plan.rkt` | 从Racket完整Scene独立抽取第二pass应等价的关键矩形、glyph摘要和确认计数范围。 |
+| `tools/verify_noir_compiler_layout_glyph_lowering_v1.sh` | 重建两个Rust crate、标准/compact布局–glyph差分，并拒绝非法输入、viewport几何与确认计数glyph漂移。 |
 | `MODAL_FOCUS_VISUAL_PLAN_ABI_V1.md` | 预分配modal focus ring的Scene ABI、启动期proof、GPU metadata与固定alpha写集规范。 |
 | `MODAL_FOCUS_VISUAL_PLAN_V1_REPORT.md` | focus视觉交付结果、真实X11/Vulkan截图证据、篡改拒绝与兼容回归报告。 |
 | `tools/make_overlay_state_v1_comparison.py` | 将关闭、打开与Escape关闭的真实X11/Vulkan端点生成审阅对照板。 |
